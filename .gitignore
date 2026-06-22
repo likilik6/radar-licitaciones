@@ -1,3 +1,6 @@
 .venv/
 __pycache__/
 *.pyc
+# Web generada por generar_web.py. Ya no se versiona: GitHub Pages la publica
+# vía Actions (upload-pages-artifact lee docs/ del disco, no de Git).
+docs/
