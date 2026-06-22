@@ -1,0 +1,51 @@
+# Criterios para filtrar licitaciones de interés para LODEPA.
+# Categorías (el ORDEN de aquí marca la prioridad: gana la primera que coincida):
+#   - criticas:  coincidencias precisas, lo que más interesa (actuar).
+#   - a_revisar: red más amplia, por si hay algo aprovechable (echar un ojo).
+#   - pruebas:   categoría de ejemplo para comprobar que se procesan todas.
+# Cada licitación se clasifica en la PRIMERA categoría (de arriba abajo) con la que
+# coincida; si no coincide con ninguna, se ignora. Puedes añadir más categorías
+# aquí y el script las procesará automáticamente.
+# Las palabras clave se buscan sin distinguir mayúsculas ni tildes.
+
+criticas:
+  cpv:
+    - "39811200"   # Purificadores de aire
+    - "90731100"   # Gestión de la calidad del aire
+    - "71700000"   # Servicios de monitorización y control
+    - "90731700"   # Seguimiento del dióxido de carbono
+    - "90731800"   # Seguimiento de partículas en suspensión
+    - "90920000"   # Higienización de instalaciones
+    - "90714500"   # Control de la calidad medioambiental
+  palabras_clave:
+    - "purificación del aire"
+    - "monitorización en continuo de la calidad del aire"
+    - "oxidación fotocatalítica"
+    - "fotocatálisis"
+    - "ionización"
+    - "ionización bipolar"
+    - "formaldehído"
+    - "dióxido de silicio"
+    - "biocontaminación"
+    - "bioseguridad ambiental"
+    - "desinfección del aire"
+    - "descontaminación ambiental"
+    - "calidad ambiental interior"
+    - "compuestos orgánicos volátiles"
+
+a_revisar:
+  cpv:
+    - "9073"        # toda la familia de calidad del aire / contaminación atmosférica
+  palabras_clave:
+    - "calidad del aire"
+    - "purificador"
+    - "tratamiento del aire"
+    - "ventilación"
+    - "filtración del aire"
+
+pruebas:
+  cpv:
+    - "9091"          # categoría de prueba (CPV de ejemplo)
+  palabras_clave:
+    - "limpieza"
+    - "desinfeccion"
