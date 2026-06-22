@@ -1,31 +1,32 @@
 # Radar de licitaciones — ejecución automática en GitHub Actions.
-# Qué hace: cada mañana (L-V) descarga y filtra el feed, regenera la web y,
-# si algo cambió, hace commit y push. GitHub Pages se actualiza solo con el push.
+# Qué hace: cada mañana (L-V) descarga y filtra el feed, regenera la web y la
+# publica con el método oficial de GitHub Pages (Actions). La persistencia
+# (data/licitaciones.json) se sigue guardando con commit+push al repositorio.
 
 name: Radar de licitaciones
 
 on:
   # Horario: GitHub usa hora UTC. "0 6 * * 1-5" = 6:00 UTC, de lunes a viernes.
   # En España eso son ~8:00 en verano y ~7:00 en invierno (GitHub no ajusta el
-  # cambio de hora). Nota: las ejecuciones programadas pueden retrasarse algunos
+  # cambio de hora). Las ejecuciones programadas pueden retrasarse algunos
   # minutos cuando GitHub está cargado; es normal.
   schedule:
     - cron: "0 6 * * 1-5"
-  # Botón para lanzarlo a mano desde la pestaña "Actions" de GitHub (útil para probar).
+  # Botón para lanzarlo a mano desde la pestaña "Actions" (útil para probar).
   workflow_dispatch:
 
-# Permiso para que el robot pueda hacer push de los cambios al repositorio.
-permissions:
-  contents: write
-
-# Evita que dos ejecuciones se pisen si una tarda o se solapan.
+# Concurrency recomendada por GitHub Pages: no cancelar un despliegue en curso.
 concurrency:
-  group: radar
+  group: pages
   cancel-in-progress: false
 
 jobs:
-  actualizar:
+  # --- Job 1: genera la web, guarda el JSON y prepara el artefacto de Pages ---
+  generar:
     runs-on: ubuntu-latest
+    # Permiso para hacer push del JSON (la persistencia) al repositorio.
+    permissions:
+      contents: write
     steps:
       # 1. Descarga el repositorio en la máquina de GitHub.
       - name: Descargar el repositorio
@@ -49,16 +50,40 @@ jobs:
       - name: Generar la web
         run: python generar_web.py
 
-      # 6. Si filtrar/generar cambiaron algún archivo, los commitea y publica.
-      #    Si no hay cambios, no hace nada (no ensucia el historial).
-      - name: Publicar cambios (si los hay)
+      # 6. Guarda SOLO la persistencia (data/licitaciones.json) con commit+push.
+      #    docs/ ya NO se sube por push: lo publica el despliegue de Pages (job 2).
+      #    Si el JSON no cambió, no hace nada (no ensucia el historial).
+      - name: Guardar la persistencia (si cambió)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/licitaciones.json docs/index.html
+          git add data/licitaciones.json
           if git diff --staged --quiet; then
-            echo "Sin cambios: no hay nada que publicar."
+            echo "Sin cambios en el JSON: no hay nada que guardar."
           else
-            git commit -m "Actualización automática del radar de licitaciones"
+            git commit -m "Actualización automática de la persistencia (data/licitaciones.json)"
             git push
           fi
+
+      # 7. Empaqueta docs/ como artefacto para que el job de despliegue lo publique.
+      - name: Subir docs/ como artefacto de Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+  # --- Job 2: publica el artefacto en GitHub Pages (método oficial) -----------
+  desplegar:
+    needs: generar
+    runs-on: ubuntu-latest
+    # Permisos que exige el despliegue oficial de Pages.
+    permissions:
+      pages: write
+      id-token: write
+    # Vincula el job al entorno "github-pages" y expone la URL publicada.
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Desplegar en GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
