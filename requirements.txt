@@ -1,0 +1,6 @@
+# Librerías que necesita el pipeline (filtrar.py + generar_web.py) para funcionar.
+# GitHub Actions las instala con: pip install -r requirements.txt
+# Versiones fijadas a las que tienes en tu .venv, para que el robot use lo mismo que tu PC.
+requests==2.34.2
+PyYAML==6.0.3
+lxml==6.1.1

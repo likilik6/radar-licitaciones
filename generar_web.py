@@ -179,7 +179,9 @@ def construye_tarjeta(lic, es_nueva):
     categoria_texto = html.escape(categoria_raw.replace("_", " "))
 
     # La lista de CPV: cada código escapado y metido en su propia etiqueta <code>.
-    cpvs = lic.get("cpv", []) or []
+    # dict.fromkeys quita CPV repetidos conservando el orden (una licitación puede
+    # traer el mismo código dos veces y no queremos pintarlo dos veces).
+    cpvs = list(dict.fromkeys(lic.get("cpv", []) or []))
     if cpvs:
         cpv_html = " ".join(f"<code>{html.escape(c)}</code>" for c in cpvs)
     else:

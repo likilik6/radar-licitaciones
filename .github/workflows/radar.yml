@@ -1,0 +1,64 @@
+# Radar de licitaciones — ejecución automática en GitHub Actions.
+# Qué hace: cada mañana (L-V) descarga y filtra el feed, regenera la web y,
+# si algo cambió, hace commit y push. GitHub Pages se actualiza solo con el push.
+
+name: Radar de licitaciones
+
+on:
+  # Horario: GitHub usa hora UTC. "0 6 * * 1-5" = 6:00 UTC, de lunes a viernes.
+  # En España eso son ~8:00 en verano y ~7:00 en invierno (GitHub no ajusta el
+  # cambio de hora). Nota: las ejecuciones programadas pueden retrasarse algunos
+  # minutos cuando GitHub está cargado; es normal.
+  schedule:
+    - cron: "0 6 * * 1-5"
+  # Botón para lanzarlo a mano desde la pestaña "Actions" de GitHub (útil para probar).
+  workflow_dispatch:
+
+# Permiso para que el robot pueda hacer push de los cambios al repositorio.
+permissions:
+  contents: write
+
+# Evita que dos ejecuciones se pisen si una tarda o se solapan.
+concurrency:
+  group: radar
+  cancel-in-progress: false
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Descarga el repositorio en la máquina de GitHub.
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      # 2. Instala Python.
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 3. Instala las librerías que necesita el pipeline.
+      - name: Instalar librerías
+        run: pip install -r requirements.txt
+
+      # 4. Descarga el feed y clasifica (actualiza data/licitaciones.json).
+      - name: Filtrar licitaciones
+        run: python filtrar.py
+
+      # 5. Regenera la web (docs/index.html) a partir del JSON.
+      - name: Generar la web
+        run: python generar_web.py
+
+      # 6. Si filtrar/generar cambiaron algún archivo, los commitea y publica.
+      #    Si no hay cambios, no hace nada (no ensucia el historial).
+      - name: Publicar cambios (si los hay)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/licitaciones.json docs/index.html
+          if git diff --staged --quiet; then
+            echo "Sin cambios: no hay nada que publicar."
+          else
+            git commit -m "Actualización automática del radar de licitaciones"
+            git push
+          fi
