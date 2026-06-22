@@ -35,9 +35,13 @@ CABECERAS = {
 # Le ponemos un apodo corto a cada uno para poder buscar las etiquetas:
 #   - "atom" es el formato del feed (donde están el título y el enlace).
 #   - "cbc"  es donde vive el código CPV de cada licitación.
+#   - "cac" agrupa bloques (proyecto, presupuesto, proceso de licitación...).
+#   - "place" es la extensión de la Plataforma (donde está la fecha de publicación).
 NS = {
     "atom": "http://www.w3.org/2005/Atom",
     "cbc": "urn:dgpe:names:draft:codice:schema:xsd:CommonBasicComponents-2",
+    "cac": "urn:dgpe:names:draft:codice:schema:xsd:CommonAggregateComponents-2",
+    "place": "urn:dgpe:names:draft:codice-place-ext:schema:xsd:CommonAggregateComponents-2",
 }
 
 
@@ -48,6 +52,28 @@ def normaliza(texto):
     # NFKD separa cada letra de su tilde; nos quedamos con lo que NO es una tilde.
     texto = unicodedata.normalize("NFKD", texto)
     return "".join(c for c in texto if not unicodedata.combining(c))
+
+
+def a_texto(valor):
+    """Limpia un texto del feed. Devuelve None si no venía (para guardar 'null'
+    en el JSON) en vez de una cadena vacía."""
+    if valor is None:
+        return None
+    valor = valor.strip()
+    return valor or None
+
+
+def a_numero(valor):
+    """Convierte un importe del feed (texto como '722654.59') a número (float).
+    Devuelve None si el campo no venía o no se puede convertir, para no romper
+    la ejecución cuando una licitación no trae ese dato."""
+    valor = a_texto(valor)
+    if valor is None:
+        return None
+    try:
+        return float(valor)
+    except ValueError:
+        return None
 
 
 def busca_coincidencia(cpvs, titulo_normalizado, criterios):
@@ -115,6 +141,26 @@ for entrada in entradas:
     # Están en las etiquetas <cbc:ItemClassificationCode> dentro de la entrada.
     cpvs = [c.text for c in entrada.findall(".//cbc:ItemClassificationCode", NS) if c.text]
 
+    # --- Datos económicos y fechas (del mismo bloque CODICE que el CPV) -------
+    # El presupuesto y el valor estimado viven en cac:BudgetAmount, DENTRO del
+    # proyecto principal (cac:ProcurementProject, hijo directo de ContractFolderStatus).
+    # Fijamos la ruta exacta para NO coger por error el presupuesto de un lote
+    # (los lotes cuelgan de cac:ProcurementProjectLot). Si algún campo no viene,
+    # findtext devuelve None y nuestras funciones lo dejan en None (null en el JSON).
+    base_presupuesto = ".//place:ContractFolderStatus/cac:ProcurementProject/cac:BudgetAmount/"
+    presupuesto_con_iva = a_numero(entrada.findtext(base_presupuesto + "cbc:TotalAmount", namespaces=NS))
+    presupuesto_sin_iva = a_numero(entrada.findtext(base_presupuesto + "cbc:TaxExclusiveAmount", namespaces=NS))
+    valor_estimado = a_numero(entrada.findtext(base_presupuesto + "cbc:EstimatedOverallContractAmount", namespaces=NS))
+
+    # Fecha de fin del plazo de presentación de ofertas.
+    fecha_fin_plazo = a_texto(entrada.findtext(
+        ".//place:ContractFolderStatus/cac:TenderingProcess"
+        "/cac:TenderSubmissionDeadlinePeriod/cbc:EndDate", namespaces=NS))
+
+    # Fecha de publicación del anuncio (la fecha de emisión del aviso).
+    fecha_publicacion = a_texto(entrada.findtext(
+        ".//place:ValidNoticeInfo//cbc:IssueDate", namespaces=NS))
+
     # Normalizamos el título una sola vez para comparar palabras clave.
     titulo_normalizado = normaliza(titulo)
 
@@ -125,6 +171,11 @@ for entrada in entradas:
         "titulo": titulo,
         "enlace": enlace,
         "cpv": cpvs,
+        "presupuesto_con_iva": presupuesto_con_iva,
+        "presupuesto_sin_iva": presupuesto_sin_iva,
+        "valor_estimado": valor_estimado,
+        "fecha_fin_plazo": fecha_fin_plazo,
+        "fecha_publicacion": fecha_publicacion,
         "fecha_actualizacion": fecha_actualizacion,
     }
 
@@ -193,16 +244,27 @@ for lic in licitaciones_filtradas:
             "cpv": lic["cpv"],
             "categoria": lic["categoria"],
             "coincidencia": lic["coincidencia"],
+            "presupuesto_con_iva": lic["presupuesto_con_iva"],
+            "presupuesto_sin_iva": lic["presupuesto_sin_iva"],
+            "valor_estimado": lic["valor_estimado"],
+            "fecha_fin_plazo": lic["fecha_fin_plazo"],
+            "fecha_publicacion": lic["fecha_publicacion"],
             "fecha_actualizacion": lic["fecha_actualizacion"],
             "primera_vez": ahora,
             "ultima_vez": ahora,
         }
         nuevas.append(datos[clave])
     else:
-        # Ya la conocíamos: solo refrescamos cuándo la hemos visto por última vez
-        # y su fecha de actualización. NO tocamos "primera_vez".
+        # Ya la conocíamos: refrescamos cuándo la hemos visto por última vez, su
+        # fecha de actualización y los datos económicos/fechas (pueden cambiar:
+        # correcciones de presupuesto, ampliaciones de plazo...). NO tocamos "primera_vez".
         datos[clave]["ultima_vez"] = ahora
         datos[clave]["fecha_actualizacion"] = lic["fecha_actualizacion"]
+        datos[clave]["presupuesto_con_iva"] = lic["presupuesto_con_iva"]
+        datos[clave]["presupuesto_sin_iva"] = lic["presupuesto_sin_iva"]
+        datos[clave]["valor_estimado"] = lic["valor_estimado"]
+        datos[clave]["fecha_fin_plazo"] = lic["fecha_fin_plazo"]
+        datos[clave]["fecha_publicacion"] = lic["fecha_publicacion"]
 
 # Guardamos el diccionario completo.
 # ensure_ascii=False -> conserva tildes y "ñ"; indent=2 -> deja el diff de Git legible.
