@@ -4,3 +4,6 @@
 requests==2.34.2
 PyYAML==6.0.3
 lxml==6.1.1
+# tzdata: datos de zonas horarias para zoneinfo (Europe/Madrid). Imprescindible
+# en Windows (tu PC no trae la base de zonas del sistema) y en el runner de Linux.
+tzdata==2026.2

@@ -6,6 +6,7 @@ import json
 import html
 from pathlib import Path
 from datetime import datetime, date, timedelta
+from zoneinfo import ZoneInfo   # para mostrar la hora en la zona horaria de España
 
 # Hacemos que la consola muestre acentos y "ñ" correctamente en Windows.
 sys.stdout.reconfigure(encoding="utf-8")
@@ -251,7 +252,10 @@ menu_html = "\n        ".join(opciones_html)
 titulo_seccion = html.escape(OPCIONES_MENU[0]["nombre"]) if OPCIONES_MENU else "Inicio"
 
 # --- 6. Montamos la página completa -----------------------------------------
-generado = datetime.now().strftime("%d/%m/%Y %H:%M")
+# Hora local de España. Usamos ZoneInfo("Europe/Madrid") en vez de la hora del
+# sistema (que en GitHub Actions es UTC); así se ajusta solo el horario de
+# verano/invierno y la web siempre muestra la hora correcta de aquí.
+generado = datetime.now(ZoneInfo("Europe/Madrid")).strftime("%d/%m/%Y %H:%M")
 total = len(licitaciones)
 
 # Truco: {CSS}, {JS}, {menu_html}, {cuerpo}... se rellenan con las cadenas de arriba.
