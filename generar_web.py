@@ -26,6 +26,7 @@ DIAS_NUEVO = 7   # se marca como "NUEVO" lo detectado en los últimos 7 días
 OPCIONES_MENU = [
     {"nombre": "Radar", "vista": "radar", "enlace": "#vista-radar", "icono": "📡"},
     {"nombre": "Cartera", "vista": "cartera", "enlace": "#vista-cartera", "icono": "💼"},
+    {"nombre": "Calendario", "vista": "calendario", "enlace": "#vista-calendario", "icono": "📅"},
 ]
 
 
@@ -370,6 +371,44 @@ CSS = """
   }
   .cartera-tabla tbody tr:hover { background:#f8fafc; }
   .cartera-tabla .fila-resuelto { opacity:.5; }      /* estado "Resuelto": atenuada */
+  /* Botón "Docs" de cada fila de la cartera (abre el modal de documentos). */
+  .cart-docs-btn {
+    font:inherit; font-size:.78rem; font-weight:600; cursor:pointer; padding:4px 10px; border-radius:7px;
+    border:1px solid var(--borde); background:var(--panel); color:var(--texto); white-space:nowrap;
+  }
+  .cart-docs-btn:hover { border-color:#c7d2fe; color:var(--acento-2); }
+  /* Sección de documentos cuando va suelta (modal de cartera, sin contrato encima). */
+  .docs-sec-suelta { margin-top:4px; padding-top:0; border-top:0; }
+  /* Columna destacada "Fin de vigencia": el dato que más resalta. */
+  .cartera-tabla .col-venc { white-space:nowrap; }
+  .venc { display:inline-block; padding:4px 9px; border-radius:8px; line-height:1.2; }
+  .venc strong { font-size:.88rem; }
+  .venc small { font-size:.68rem; opacity:.9; }
+  .venc-rojo  { background:#fee2e2; color:#b91c1c; }   /* vencido / rojo */
+  .venc-ambar { background:#fef3c7; color:#b45309; }   /* < 180 días / ámbar */
+  .venc-verde { background:#dcfce7; color:#15803d; }   /* holgado / verde */
+  .venc-na    { color:var(--suave); }                  /* sin fecha: texto en gris */
+
+  /* ---- Calendario: lista de eventos por mes (cartera + radar) ---- */
+  .cal-leyenda { margin:0 0 14px; color:var(--suave); font-size:.82rem;
+    display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .cal-mes-tit { margin:18px 0 8px; font-size:.95rem; color:var(--texto); text-transform:capitalize; }
+  .cal-lista { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+  .cal-evento {
+    display:flex; align-items:center; gap:10px; font-size:.86rem;
+    padding:9px 12px; border:1px solid var(--borde); border-radius:10px; background:#fff;
+  }
+  .cal-evento.cal-urgente { border-color:#fca5a5; background:#fff7f7; }   /* < 30 días: resaltado */
+  .cal-punto { display:inline-block; width:10px; height:10px; border-radius:50%; flex:0 0 auto; }
+  .cal-punto-cierre-presentacion { background:#6366f1; }   /* cierres de presentación: índigo */
+  .cal-punto-fin-contrato        { background:#f59e0b; }   /* fin de contrato/prórroga: ámbar */
+  .cal-fecha { flex:0 0 auto; min-width:56px; font-weight:700; color:var(--texto); }
+  .cal-cuerpo { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; }
+  .cal-titulo { color:var(--texto); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cal-detalle { color:var(--suave); font-size:.78rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cal-plazo { flex:0 0 auto; color:var(--suave); font-size:.78rem; white-space:nowrap; }
+  .cal-urgente .cal-plazo { color:#b91c1c; font-weight:700; }
+  .cal-vacio { color:var(--suave); font-size:.9rem; }
 
   /* ---- Móvil: el menú se oculta y se abre con el botón ☰ ---- */
   @media (max-width:860px) {
@@ -762,8 +801,9 @@ JS_SUPABASE = """
     setTimeout(function () {
       if (!session) {
         limpiarPrivado();
-        if (carteraCont) carteraCont.innerHTML = '';   // no dejar datos privados en el DOM
-        mostrarVista('radar');                          // volver a la vista por defecto
+        if (carteraCont) carteraCont.innerHTML = '';      // no dejar datos privados en el DOM
+        if (calendarioCont) calendarioCont.innerHTML = '';
+        mostrarVista('radar');                            // volver a la vista por defecto
         return;
       }
       // Solo (re)leemos los datos cuando cambia la sesión de verdad. Un refresco
@@ -772,7 +812,8 @@ JS_SUPABASE = """
       // cargarDecisiones y haría PARPADEAR badges/estrellas/colores. Lo evitamos.
       if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
         cargarDecisiones(session);
-        if (vistaActiva === 'cartera') cargarCartera();   // si ya estábamos en la Cartera
+        if (vistaActiva === 'cartera') cargarCartera();        // si ya estábamos en la Cartera
+        if (vistaActiva === 'calendario') cargarCalendario();  // o en el Calendario
       }
     }, 0);
   });
@@ -1011,28 +1052,34 @@ JS_SUPABASE = """
     });
   }
 
-  // ====== Vistas: Radar vs Cartera (entradas del lateral izquierdo) ===========
-  // Solo alternan en el navegador qué bloque se ve (#vista-radar / #vista-cartera);
-  // la cartera (tabla de solo lectura) se lee de Supabase al entrar, SOLO con sesión.
-  const vistaRadar    = document.getElementById('vista-radar');
-  const vistaCartera  = document.getElementById('vista-cartera');
-  const carteraCont   = document.getElementById('cartera-contenido');
-  const tituloSeccion = document.getElementById('titulo-seccion');
-  const metaRadar     = document.getElementById('meta-radar');
+  // ====== Vistas: Radar / Cartera / Calendario (entradas del lateral) =========
+  // Solo alternan en el navegador qué bloque se ve; cartera y calendario se leen de
+  // Supabase al entrar (SOLO con sesión). Radar es la vista por defecto.
+  const vistaRadar      = document.getElementById('vista-radar');
+  const vistaCartera    = document.getElementById('vista-cartera');
+  const vistaCalendario = document.getElementById('vista-calendario');
+  const carteraCont     = document.getElementById('cartera-contenido');
+  const calendarioCont  = document.getElementById('calendario-contenido');
+  const tituloSeccion   = document.getElementById('titulo-seccion');
+  const metaRadar       = document.getElementById('meta-radar');
+  const VISTAS  = ['radar', 'cartera', 'calendario'];
+  const TITULOS = { radar: 'Radar', cartera: 'Cartera', calendario: 'Calendario' };
   let vistaActiva = 'radar';   // vista por defecto
 
   function mostrarVista(nombre) {
-    vistaActiva = (nombre === 'cartera') ? 'cartera' : 'radar';
-    if (vistaRadar)   vistaRadar.hidden   = (vistaActiva !== 'radar');
-    if (vistaCartera) vistaCartera.hidden = (vistaActiva !== 'cartera');
+    vistaActiva = (VISTAS.indexOf(nombre) >= 0) ? nombre : 'radar';
+    if (vistaRadar)      vistaRadar.hidden      = (vistaActiva !== 'radar');
+    if (vistaCartera)    vistaCartera.hidden    = (vistaActiva !== 'cartera');
+    if (vistaCalendario) vistaCalendario.hidden = (vistaActiva !== 'calendario');
     // Marca activa la entrada del lateral y ajusta la cabecera.
     document.querySelectorAll('.sidebar .nav-item[data-vista]').forEach(function (a) {
       a.classList.toggle('activo', a.getAttribute('data-vista') === vistaActiva);
     });
-    if (tituloSeccion) tituloSeccion.textContent = (vistaActiva === 'cartera') ? 'Cartera' : 'Radar';
-    if (metaRadar) metaRadar.hidden = (vistaActiva === 'cartera');   // la meta es del radar
-    // Al entrar en Cartera con sesión, (re)cargamos la tabla.
+    if (tituloSeccion) tituloSeccion.textContent = TITULOS[vistaActiva] || 'Radar';
+    if (metaRadar) metaRadar.hidden = (vistaActiva !== 'radar');   // la meta es solo del radar
+    // Al entrar con sesión, (re)cargamos la fuente correspondiente.
     if (vistaActiva === 'cartera' && sesionActiva) cargarCartera();
+    if (vistaActiva === 'calendario' && sesionActiva) cargarCalendario();
   }
 
   // Clic en las entradas del lateral -> alternar vista (sin saltar por el ancla).
@@ -1046,31 +1093,263 @@ JS_SUPABASE = """
   // --- Cartera: lógica de lectura y pintado (tabla de solo lectura) ---------
   const fmtEur = n => (n == null ? '—' :
     new Intl.NumberFormat('es-ES', { style:'currency', currency:'EUR' }).format(n));
+  const carteraPorId = new Map();   // id de cartera -> fila (para el subtítulo del modal de docs)
+
+  // OJO: el radar ya tiene su propia diasHasta() (ordena por días de plazo). La de la
+  // cartera la llamamos diasHastaVig() para NO pisarla (misma lógica que me diste).
+  function diasHastaVig(iso){ if(!iso) return null; const h=new Date(); h.setHours(0,0,0,0); return Math.round((new Date(iso+'T00:00:00')-h)/86400000); }
+  function badgeVigencia(iso, texto){
+    const d = diasHastaVig(iso);
+    if(d===null) return `<span class="venc-na">${texto||'—'}</span>`;
+    const cls = d<0 ? 'venc-rojo' : (d<180 ? 'venc-ambar' : 'venc-verde');
+    const et  = d<0 ? `vencido hace ${-d} días` : `vence en ${d} días`;
+    const fecha = new Date(iso+'T00:00:00').toLocaleDateString('es-ES');
+    return `<span class="venc ${cls}"><strong>${fecha}</strong><br><small>${et}</small></span>`;
+  }
 
   async function cargarCartera() {
-    const { data, error } = await supabase.from('cartera').select('*').order('cliente');
+    // Ordenamos por fin de vigencia ASC (lo más urgente primero); los vacíos al final.
+    const { data, error } = await supabase.from('cartera').select('*')
+      .order('fin_vigencia_fecha', { ascending: true, nullsFirst: false })
+      .order('cliente');
     if (error) { console.error(error); return; }
     renderCartera(data || []);
   }
 
   function renderCartera(filas) {
     const cont = document.getElementById('cartera-contenido');
+    carteraPorId.clear();
+    filas.forEach(function (f) { carteraPorId.set(String(f.id), f); });   // para el modal de docs
     const total = filas.reduce((s, f) => s + (Number(f.importe_adjudicacion) || 0), 0);
     let html = `<p>${filas.length} adjudicaciones · Total adjudicado (s/IVA): <strong>${fmtEur(total)}</strong></p>`;
     html += `<table class="cartera-tabla"><thead><tr>
-      <th>Cliente</th><th>CCAA</th><th>Objeto</th><th>Expediente</th>
+      <th class="col-venc">Fin de vigencia</th><th>Cliente</th><th>CCAA</th><th>Objeto</th><th>Expediente</th>
       <th>Adjudicación (s/IVA)</th><th>Total (c/IVA)</th><th>Inicio</th>
-      <th>Duración</th><th>Prórrogas</th><th>Fin de vigencia</th><th>Estado</th></tr></thead><tbody>`;
+      <th>Duración</th><th>Prórrogas</th><th>Estado</th><th>Docs</th></tr></thead><tbody>`;
     for (const f of filas) {
       const resuelto = (f.estado || '').toLowerCase().includes('resuelto');
       html += `<tr class="${resuelto ? 'fila-resuelto' : ''}" title="${(f.notas || '').replace(/"/g,'&quot;')}">
+        <td class="col-venc">${badgeVigencia(f.fin_vigencia_fecha, f.fin_vigencia)}</td>
         <td>${f.cliente||''}</td><td>${f.ccaa||''}</td><td>${f.objeto||''}</td><td>${f.expediente||''}</td>
         <td>${fmtEur(f.importe_adjudicacion)}</td><td>${fmtEur(f.importe_total_civa)}</td>
         <td>${f.fecha_inicio||''}</td><td>${f.duracion||''}</td><td>${f.prorrogas||''}</td>
-        <td>${f.fin_vigencia||''}</td><td>${f.estado||''}</td></tr>`;
+        <td>${f.estado||''}</td>
+        <td><button type="button" class="cart-docs-btn" data-cartera-id="${f.id}">Docs</button></td></tr>`;
     }
     html += `</tbody></table>`;
     cont.innerHTML = html;
+  }
+
+  // --- Calendario: combina vencimientos de cartera (privado) y cierres de -----
+  // presentación del radar (público), ordenados por fecha. Reutiliza diasHastaVig.
+  // Las licitaciones del radar las leemos de las TARJETAS ya horneadas (datos
+  // públicos): título = data-titulo; fin de presentación = data-fin-plazo
+  // (fecha_fin_plazo, el EndDate del CODICE). No hay campo "órgano" en los datos.
+  function licitacionesRadar() {
+    return Array.from(document.querySelectorAll('.card[data-licitacion-id]')).map(function (card) {
+      return { titulo: card.dataset.titulo || '', finPresentacion: card.dataset.finPlazo || '' };
+    });
+  }
+
+  function textoPlazo(d) {
+    if (d === null || isNaN(d)) return '';
+    if (d === 0) return 'hoy';
+    if (d === 1) return 'mañana';
+    if (d > 0) return 'en ' + d + ' días';
+    return 'hace ' + (-d) + ' días';
+  }
+
+  async function cargarCalendario() {
+    const eventos = [];
+    // Fuente 1: cartera (privada) -> fin de contrato/prórroga (filas con fecha).
+    const { data, error } = await supabase.from('cartera')
+      .select('cliente,objeto,fin_vigencia_fecha').not('fin_vigencia_fecha', 'is', null);
+    if (error) { console.error(error); }
+    (data || []).forEach(function (f) {
+      eventos.push({ tipo: 'fin-contrato', fecha: f.fin_vigencia_fecha, titulo: f.cliente || '', detalle: f.objeto || '' });
+    });
+    // Fuente 2: radar (público) -> cierre de presentación, TODAS con fin >= hoy.
+    licitacionesRadar().forEach(function (l) {
+      const f = l.finPresentacion;
+      if (f && diasHastaVig(f) >= 0) {
+        eventos.push({ tipo: 'cierre-presentacion', fecha: f, titulo: l.titulo, detalle: '' });
+      }
+    });
+    eventos.sort(function (a, b) { return a.fecha.localeCompare(b.fecha); });   // ISO -> orden cronológico
+    renderCalendario(eventos);
+  }
+
+  function renderCalendario(eventos) {
+    const cont = document.getElementById('calendario-contenido');
+    if (!cont) return;
+    cont.innerHTML = '';
+    if (!eventos.length) {
+      const vacio = document.createElement('p');
+      vacio.className = 'cal-vacio';
+      vacio.textContent = 'No hay eventos en el calendario.';
+      cont.appendChild(vacio);
+      return;
+    }
+    // Leyenda (texto estático, sin datos de usuario).
+    const ley = document.createElement('p');
+    ley.className = 'cal-leyenda';
+    ley.innerHTML = '<span class="cal-punto cal-punto-cierre-presentacion"></span> Cierre de presentación'
+      + ' &nbsp; <span class="cal-punto cal-punto-fin-contrato"></span> Fin de contrato/prórroga';
+    cont.appendChild(ley);
+
+    let mesActual = '';
+    let ul = null;
+    eventos.forEach(function (ev) {
+      const fechaObj = new Date(ev.fecha + 'T00:00:00');
+      const claveMes = String(ev.fecha).slice(0, 7);   // YYYY-MM
+      if (claveMes !== mesActual) {                     // nuevo grupo de mes
+        mesActual = claveMes;
+        const h = document.createElement('h3');
+        h.className = 'cal-mes-tit';
+        h.textContent = fechaObj.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+        cont.appendChild(h);
+        ul = document.createElement('ul');
+        ul.className = 'cal-lista';
+        cont.appendChild(ul);
+      }
+      const d = diasHastaVig(ev.fecha);
+      const li = document.createElement('li');
+      li.className = 'cal-evento';
+      if (d !== null && d >= 0 && d < 30) li.classList.add('cal-urgente');   // < 30 días: resaltado
+
+      const punto = document.createElement('span');
+      punto.className = 'cal-punto cal-punto-' + ev.tipo;   // color por tipo
+      li.appendChild(punto);
+
+      const fecha = document.createElement('span');
+      fecha.className = 'cal-fecha';
+      fecha.textContent = fechaObj.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+      li.appendChild(fecha);
+
+      const cuerpo = document.createElement('span');
+      cuerpo.className = 'cal-cuerpo';
+      const t = document.createElement('span');
+      t.className = 'cal-titulo';
+      t.textContent = ev.titulo || '';                  // textContent: seguro con datos privados
+      cuerpo.appendChild(t);
+      if (ev.detalle) {
+        const dt = document.createElement('span');
+        dt.className = 'cal-detalle';
+        dt.textContent = ev.detalle;
+        cuerpo.appendChild(dt);
+      }
+      li.appendChild(cuerpo);
+
+      const plazo = document.createElement('span');
+      plazo.className = 'cal-plazo';
+      plazo.textContent = textoPlazo(d);
+      li.appendChild(plazo);
+
+      ul.appendChild(li);
+    });
+  }
+
+  // ====== Documentos de una adjudicación de la cartera (cartera_documentos) =====
+  // Mismo patrón que los documentos de las licitaciones (mismo cliente, bucket
+  // 'documentos'), keyed por cartera_id y con ruta cartera/{uuid}.pdf. Subir-antes-
+  // de-insertar (limpia el huérfano si falla), URL firmada 60 s, solo PDF, máx 25 MB.
+  const cdocModal = document.getElementById('cartera-docs-modal');
+  const cdocForm  = document.getElementById('cdoc-form');
+  const cdocSub   = document.getElementById('cdoc-sub');
+  const cdocLista = document.getElementById('cdoc-lista');
+  const cdocVacio = document.getElementById('cdoc-vacio');
+  const cdocFile  = document.getElementById('cdoc-file');
+  const cdocTipo  = document.getElementById('cdoc-tipo');
+  const cdocSubir = document.getElementById('cdoc-subir');
+  let carteraDocsId = null;   // cartera_id del modal de documentos abierto
+
+  async function listarDocsCartera(id){ const {data}=await supabase.from('cartera_documentos').select('*').eq('cartera_id',id).order('subido_en',{ascending:false}); return data||[]; }
+  async function subirDocCartera(carteraId,file,tipo){
+    if(file.type!=='application/pdf'){alert('Solo PDF.');return false;}
+    if(file.size>25*1024*1024){alert('Máx. 25 MB.');return false;}
+    const id=crypto.randomUUID(), ruta=`cartera/${id}.pdf`;
+    const {error:up}=await supabase.storage.from(BUCKET).upload(ruta,file,{contentType:'application/pdf',upsert:false});
+    if(up){console.error(up);alert('Error al subir.');return false;}
+    const {error:ins}=await supabase.from('cartera_documentos').insert({id,cartera_id:carteraId,tipo,nombre:file.name,ruta});
+    if(ins){await supabase.storage.from(BUCKET).remove([ruta]);console.error(ins);alert('Error al guardar.');return false;}
+    return true;
+  }
+  async function abrirDocCartera(ruta){ const {data,error}=await supabase.storage.from(BUCKET).createSignedUrl(ruta,60); if(error){console.error(error);alert('No se pudo abrir.');return;} window.open(data.signedUrl,'_blank'); }
+  async function borrarDocCartera(id,ruta){ if(!confirm('¿Borrar este documento?'))return false; await supabase.storage.from(BUCKET).remove([ruta]); await supabase.from('cartera_documentos').delete().eq('id',id); return true; }
+
+  // Pinta la lista de documentos de esa adjudicación y cablea Abrir/Borrar.
+  async function pintarDocsCartera(carteraId) {
+    if (!cdocLista) return;
+    cdocLista.innerHTML = '';
+    const docs = await listarDocsCartera(carteraId);
+    if (carteraDocsId !== carteraId) return;          // se cambió/cerró entre tanto
+    if (cdocVacio) cdocVacio.hidden = docs.length > 0;
+    docs.forEach(function (d) {
+      const li = document.createElement('li');
+      li.className = 'doc-item';
+      const meta = document.createElement('span');
+      meta.className = 'doc-meta';
+      const fecha = d.subido_en ? String(d.subido_en).slice(0, 10) : '';
+      meta.textContent = (d.tipo || 'otro') + ' · ' + (d.nombre || '') + (fecha ? ' · ' + fecha : '');
+      const acc = document.createElement('span');
+      acc.className = 'doc-acciones';
+      const bAbrir = document.createElement('button');
+      bAbrir.type = 'button'; bAbrir.className = 'doc-btn'; bAbrir.textContent = 'Abrir';
+      bAbrir.addEventListener('click', function () { abrirDocCartera(d.ruta); });
+      const bBorrar = document.createElement('button');
+      bBorrar.type = 'button'; bBorrar.className = 'doc-btn doc-borrar'; bBorrar.textContent = 'Borrar';
+      bBorrar.addEventListener('click', async function () {
+        const ok = await borrarDocCartera(d.id, d.ruta);
+        if (ok) pintarDocsCartera(carteraId);          // recargamos tras borrar
+      });
+      acc.appendChild(bAbrir); acc.appendChild(bBorrar);
+      li.appendChild(meta); li.appendChild(acc);
+      cdocLista.appendChild(li);
+    });
+  }
+
+  function abrirDocsCartera(carteraId) {
+    if (!sesionActiva || !cdocModal || !carteraId) return;
+    carteraDocsId = carteraId;
+    const f = carteraPorId.get(String(carteraId)) || {};
+    if (cdocSub) cdocSub.textContent = (f.cliente || '') + (f.objeto ? ' · ' + f.objeto : '');
+    if (cdocLista) cdocLista.innerHTML = '';
+    cdocModal.hidden = false;
+    pintarDocsCartera(carteraId);
+  }
+  function cerrarDocsCartera() { if (cdocModal) cdocModal.hidden = true; carteraDocsId = null; }
+
+  // Subida: PDF + tipo -> subir y recargar la lista.
+  if (cdocForm) {
+    cdocForm.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      if (!sesionActiva || !carteraDocsId) return;
+      const file = (cdocFile && cdocFile.files) ? cdocFile.files[0] : null;
+      if (!file) { alert('Elige un archivo PDF.'); return; }
+      const tipo = cdocTipo ? cdocTipo.value : 'otro';
+      if (cdocSubir) cdocSubir.disabled = true;
+      try {
+        const ok = await subirDocCartera(carteraDocsId, file, tipo);
+        if (ok) { cdocForm.reset(); pintarDocsCartera(carteraDocsId); }
+      } finally {
+        if (cdocSubir) cdocSubir.disabled = false;
+      }
+    });
+  }
+  const cdocCerrar = document.getElementById('cdoc-cerrar');
+  if (cdocCerrar) cdocCerrar.addEventListener('click', cerrarDocsCartera);
+  if (cdocModal) cdocModal.addEventListener('click', function (e) { if (e.target === cdocModal) cerrarDocsCartera(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && cdocModal && !cdocModal.hidden) cerrarDocsCartera();
+  });
+
+  // Botón "Docs" de cada fila de la cartera (delegado en el contenedor de la tabla).
+  if (carteraCont) {
+    carteraCont.addEventListener('click', function (e) {
+      const btn = e.target.closest('.cart-docs-btn');
+      if (!btn) return;
+      abrirDocsCartera(btn.getAttribute('data-cartera-id'));
+    });
   }
 """
 
@@ -1217,6 +1496,36 @@ CONTRATO_MODAL = """  <div class="modal-fondo" id="contrato-modal" hidden>
             <option value="otro">Otro</option>
           </select>
           <button type="submit" class="btn-pri" id="doc-subir">Subir</button>
+        </form>
+      </section>
+    </div>
+  </div>
+"""
+
+
+# Modal de DOCUMENTOS de una adjudicación de la cartera. Mismo patrón/clases que el
+# modal de las licitaciones (.modal-fondo/.modal-caja/.docs-sec...), pero sin formulario
+# de contrato: solo subir/listar/abrir/borrar PDFs (tabla cartera_documentos, bucket
+# 'documentos'). Se hornea vacío; lo rellena el JS tras login (privado).
+CARTERA_DOCS_MODAL = """  <div class="modal-fondo" id="cartera-docs-modal" hidden>
+    <div class="modal-caja" role="dialog" aria-modal="true" aria-labelledby="cdoc-titulo">
+      <div class="modal-cab">
+        <h2 id="cdoc-titulo">Documentos de la adjudicación</h2>
+        <button type="button" class="modal-cerrar" id="cdoc-cerrar" aria-label="Cerrar panel">✕</button>
+      </div>
+      <p class="modal-sub" id="cdoc-sub"></p>
+      <section class="docs-sec docs-sec-suelta">
+        <ul class="docs-lista" id="cdoc-lista"></ul>
+        <p class="docs-vacio" id="cdoc-vacio" hidden>Aún no hay documentos.</p>
+        <form class="docs-form" id="cdoc-form">
+          <input type="file" accept="application/pdf" id="cdoc-file">
+          <select id="cdoc-tipo" aria-label="Tipo de documento">
+            <option value="contrato">Contrato</option>
+            <option value="pliego">Pliego</option>
+            <option value="oferta">Oferta</option>
+            <option value="otro">Otro</option>
+          </select>
+          <button type="submit" class="btn-pri" id="cdoc-subir">Subir</button>
         </form>
       </section>
     </div>
@@ -1490,9 +1799,12 @@ pagina = f"""<!DOCTYPE html>
     <div id="vista-cartera" hidden>
       <div id="cartera-contenido"></div>
     </div>
+    <div id="vista-calendario" hidden>
+      <div id="calendario-contenido"></div>
+    </div>
   </div>
 </div>
-{CONTRATO_MODAL}</div>
+{CONTRATO_MODAL}{CARTERA_DOCS_MODAL}</div>
 
 <script>{JS}</script>
 <script type="module">{JS_SUPABASE}</script>
