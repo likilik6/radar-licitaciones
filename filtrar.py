@@ -5,7 +5,8 @@
 # - requests: para descargar el feed de internet.
 # - yaml (pyyaml): para leer nuestro archivo intereses.yaml.
 # - lxml: para leer el XML del feed y sacar el código CPV de cada licitación.
-# - unicodedata: para comparar texto ignorando mayúsculas y tildes.
+# - utiles.normaliza: para comparar texto ignorando mayúsculas y tildes
+#   (la misma función la usa generar_web.py; por eso vive en utiles.py).
 # - sys: solo para que los acentos se vean bien al imprimir en Windows.
 # - json: para guardar las licitaciones en un archivo .json (librería estándar).
 # - pathlib (Path): para manejar rutas y crear la carpeta data/ si no existe.
@@ -14,10 +15,12 @@ import sys
 import json
 import requests
 import yaml
-import unicodedata
 from pathlib import Path
 from datetime import datetime
 from lxml import etree
+
+# normaliza() vive en utiles.py para compartirla con generar_web.py sin duplicarla.
+from utiles import normaliza
 
 # Hacemos que la consola muestre los acentos y la "ñ" correctamente.
 sys.stdout.reconfigure(encoding="utf-8")
@@ -43,15 +46,6 @@ NS = {
     "cac": "urn:dgpe:names:draft:codice:schema:xsd:CommonAggregateComponents-2",
     "place": "urn:dgpe:names:draft:codice-place-ext:schema:xsd:CommonAggregateComponents-2",
 }
-
-
-def normaliza(texto):
-    """Devuelve el texto en minúsculas y sin tildes, para poder comparar
-    palabras clave 'sin distinguir mayúsculas ni tildes'."""
-    texto = texto.lower()
-    # NFKD separa cada letra de su tilde; nos quedamos con lo que NO es una tilde.
-    texto = unicodedata.normalize("NFKD", texto)
-    return "".join(c for c in texto if not unicodedata.combining(c))
 
 
 def a_texto(valor):

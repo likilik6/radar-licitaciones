@@ -1,6 +1,12 @@
 # Genera una página web (HTML) con las licitaciones que el filtro ya ha guardado.
 # Este script NO descarga ni filtra nada: solo "pinta" lo que hay en
-# data/licitaciones.json. Usa solo librería estándar: json, html, pathlib y datetime.
+# data/licitaciones.json. Usa solo la librería estándar (json, html, pathlib, datetime).
+#
+# Reparto de responsabilidades sobre el "estado" de cada licitación:
+#   - PÚBLICO  (activa/caducada por fecha): lo calcula ESTE script, como siempre.
+#   - PRIVADO  (ganada/perdida/presentada/descartada + estrella favorita): lo aporta
+#     el NAVEGADOR leyendo la tabla 'decisiones' de Supabase, y solo tras iniciar
+#     sesión (ver el <script type="module">).
 import sys
 import json
 import html
@@ -94,6 +100,7 @@ CSS = """
   /* ---- Tarjetas ---- */
   .grid { display:grid; gap:16px; grid-template-columns:repeat(auto-fill,minmax(330px,1fr)); }
   .card {
+    position:relative; overflow:hidden;   /* para la franja de estado (::after) a la derecha */
     background:var(--panel); border:1px solid var(--borde); border-radius:14px;
     padding:18px; display:flex; flex-direction:column; gap:10px;
     box-shadow:0 1px 2px rgba(15,23,42,.04);
@@ -145,6 +152,100 @@ CSS = """
     background:var(--panel); border:1px dashed var(--borde); border-radius:14px; padding:56px 20px;
   }
   .vacio .emoji { font-size:2.4rem; display:block; margin-bottom:10px; }
+
+  /* ---- Cortina de login: pantalla centrada cuando NO hay sesión ---- */
+  .login-pantalla { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+  .login-pantalla[hidden] { display:none; }      /* gana al display:flex de arriba */
+  .login-caja {
+    width:100%; max-width:380px; display:flex; flex-direction:column; gap:18px;
+    background:var(--panel); border:1px solid var(--borde); border-radius:16px;
+    padding:28px 24px; box-shadow:0 10px 30px rgba(15,23,42,.08);
+  }
+  .login-brand { display:flex; align-items:center; gap:10px; font-weight:700; font-size:1.02rem; }
+  .login-brand .logo {
+    width:40px; height:40px; flex:0 0 auto; border-radius:11px; color:#fff; font-size:1.25rem;
+    display:flex; align-items:center; justify-content:center;
+    background:linear-gradient(135deg,var(--acento),#22d3ee);
+  }
+  .login-caja form { display:flex; flex-direction:column; gap:12px; margin:0; }
+  .login-caja input {
+    font:inherit; font-size:.95rem; padding:11px 13px; border-radius:10px; width:100%;
+    border:1px solid var(--borde); background:#fff; color:var(--texto);
+  }
+  .login-caja input:focus { outline:2px solid var(--acento); outline-offset:1px; }
+  .login-caja button {
+    font:inherit; font-size:.95rem; font-weight:600; padding:11px 14px; border-radius:10px; cursor:pointer;
+    border:1px solid var(--acento-2); background:var(--acento); color:#fff;
+  }
+  .login-caja button:hover { background:var(--acento-2); }
+  .login-caja .auth-error { font-size:.85rem; color:#b91c1c; font-weight:600; }
+
+  /* ---- Estado de sesión (en la barra superior, ya logueado) ---- */
+  .conectado { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-left:auto; }
+  .conectado-tx { font-size:.9rem; color:var(--texto); }
+  .conectado-tx b { color:var(--acento-2); font-weight:700; }
+  .conectado .auth-sec {
+    font:inherit; font-size:.88rem; font-weight:600; padding:8px 14px; border-radius:9px; cursor:pointer;
+    border:1px solid var(--borde); background:var(--panel); color:var(--texto);
+  }
+  .conectado .auth-sec:hover { background:#e2e8f0; }
+
+  /* ---- Estado manual (badge): PRIVADO, lo pinta el navegador tras login ---- */
+  .tag.estado { color:#fff; background:#334155; }   /* fondo por defecto (estado inesperado) */
+  .tag.estado-ganada     { background:#15803d; }   /* verde */
+  .tag.estado-perdida    { background:#b91c1c; }   /* rojo */
+  .tag.estado-presentada { background:#4f46e5; }   /* índigo */
+  .tag.estado-descartada { background:#64748b; }   /* gris */
+
+  /* ---- Fondo de estado en TODA la tarjeta + franja mate a la derecha ----------
+     (PRIVADO: solo con sesión). Fondo = lavado del color del badge (texto legible);
+     franja derecha (::after) = el MISMO color en mate. No tocamos la categoría.
+     Se rige por data-estado, que ya mantiene pintaEstado (carga, guardado, limpieza),
+     y solo con body.sesion: entra y sale con la sesión SIN lógica nueva. 'activa' sin
+     marca no lleva ni fondo ni franja (neutro), para que resalte solo lo marcado.
+     'caducada' (estado por fecha, sin marca) usa gris porque data-estado vale
+     "caducada" (el estadoBase por fecha que ya conoce cada tarjeta). */
+  body.sesion .card[data-estado="ganada"]     { background:#d8f0e1; }   /* verde */
+  body.sesion .card[data-estado="perdida"]    { background:#fbdada; }   /* rojo */
+  body.sesion .card[data-estado="presentada"] { background:#e3e0fb; }   /* índigo */
+  body.sesion .card[data-estado="descartada"] { background:#dfe5ec; }   /* slate */
+  body.sesion .card[data-estado="caducada"]   { background:#e9ecf0; }   /* gris muy tenue */
+
+  /* Franja mate a la derecha (overflow:hidden de .card la recorta al redondeo). */
+  body.sesion .card[data-estado="ganada"]::after,
+  body.sesion .card[data-estado="perdida"]::after,
+  body.sesion .card[data-estado="presentada"]::after,
+  body.sesion .card[data-estado="descartada"]::after,
+  body.sesion .card[data-estado="caducada"]::after {
+    content:""; position:absolute; top:0; right:0; bottom:0; width:6px; pointer-events:none;
+  }
+  body.sesion .card[data-estado="ganada"]::after     { background:#15803d; }
+  body.sesion .card[data-estado="perdida"]::after    { background:#b91c1c; }
+  body.sesion .card[data-estado="presentada"]::after { background:#4f46e5; }
+  body.sesion .card[data-estado="descartada"]::after { background:#64748b; }
+  body.sesion .card[data-estado="caducada"]::after   { background:#94a3b8; }
+
+  /* ---- Controles por tarjeta (estado + estrella): SOLO con sesión ---- */
+  /* Se hornean ocultos; body.sesion los muestra al iniciar sesión. */
+  .card-ctrl { display:none; align-items:center; gap:8px; flex-wrap:wrap; }
+  body.sesion .card-ctrl { display:flex; }
+  .card-ctrl .ctrl-cap {
+    font-size:.72rem; color:var(--suave); text-transform:uppercase; letter-spacing:.04em;
+  }
+  .card-ctrl .ctrl-estado {
+    font:inherit; font-size:.82rem; padding:5px 8px; border-radius:8px; cursor:pointer;
+    border:1px solid var(--borde); background:#fff; color:var(--texto);
+  }
+  .card-ctrl .ctrl-estado:focus { outline:2px solid var(--acento); outline-offset:1px; }
+  .ctrl-estrella {
+    font-size:1.25rem; line-height:1; padding:2px 4px; border:none; background:none;
+    cursor:pointer; color:#cbd5e1; border-radius:6px;   /* vacía (gris) por defecto */
+  }
+  .ctrl-estrella:hover { color:#f59e0b; }
+  .ctrl-estrella.marcada { color:#f59e0b; }              /* llena (ámbar) = favorita */
+  .ctrl-estrella:focus-visible { outline:2px solid var(--acento); outline-offset:1px; }
+  .ctrl-estrella:disabled, .card-ctrl .ctrl-estado:disabled { opacity:.55; cursor:progress; }
+  .card-aviso { width:100%; font-size:.78rem; color:#b91c1c; font-weight:600; }
 
   /* ---- Móvil: el menú se oculta y se abre con el botón ☰ ---- */
   @media (max-width:860px) {
@@ -245,6 +346,245 @@ JS = """
 """
 
 
+# JavaScript de MÓDULO (ESM) para el login con Supabase y el pintado de lo PRIVADO
+# (estados manuales + estrella). Va en un <script type="module"> aparte porque usa
+# import. Es una cadena NORMAL: al insertarla con {JS_SUPABASE} en la f-string de la
+# página, sus llaves { } y sus plantillas ${...} no se reinterpretan.
+JS_SUPABASE = """
+  // ====== Login + leer/guardar estados y estrellas PRIVADOS (Supabase) ======
+  // El radar (datos del feed + activa/caducada por fecha) es PÚBLICO y lo hornea
+  // Python. Los estados manuales (ganada/perdida/presentada/descartada) y la
+  // estrella (favorita) son PRIVADOS: se leen Y se guardan en Supabase SOLO tras
+  // iniciar sesión (los controles de cada tarjeta solo aparecen con sesión).
+  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+  // --- Constantes de conexión (al principio del JS, como pediste) ----------
+  // La clave 'publishable' es PÚBLICA y segura de exponer en el navegador con RLS
+  // activado. Aquí va SOLO la publishable; jamás la clave secreta (la de servidor).
+  const SUPABASE_URL = "https://uzktrhpgkyctlnqgdsys.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_3J3pFbMlNzu-NUDs1-740g_lu8YsRv_";
+  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // Etiqueta legible por estado manual (el color lo pone la clase CSS estado-*).
+  const ESTADOS = { ganada: 'GANADA', perdida: 'PERDIDA', presentada: 'PRESENTADA', descartada: 'DESCARTADA' };
+
+  // Estado en memoria de las decisiones reales: licitacion_id -> {estado, favorita}.
+  // Es el espejo de la tabla 'decisiones'; se rellena al cargar y se mantiene al
+  // guardar, para no tener que releer Supabase en cada cambio.
+  const decisionesPorId = new Map();
+  let sesionActiva = false;   // ¿hay sesión? Gobierna mostrar controles y permitir escribir.
+
+  // --- Referencias al login y a la cortina de presentación -----------------
+  const radar         = document.getElementById('radar');           // todo el radar (oculto sin sesión)
+  const loginPantalla = document.getElementById('login-pantalla');  // formulario de login (siempre en el DOM)
+  const formLogin = document.getElementById('login-form');
+  const inEmail   = document.getElementById('login-email');
+  const inPass    = document.getElementById('login-pass');
+  const errLogin  = document.getElementById('login-error');
+  const lblEmail  = document.getElementById('conectado-email');
+  const btnLogout = document.getElementById('logout-btn');
+
+  // --- Índice tarjeta por id de licitación (data-licitacion-id == entry.id) -
+  // Usamos un Map (no querySelector) porque los id son URIs con ':' y '/' que
+  // romperían un selector de atributo; con el Map casamos por string exacto.
+  const tarjetasPorId = new Map();
+  document.querySelectorAll('.card[data-licitacion-id]').forEach(function (card) {
+    tarjetasPorId.set(card.getAttribute('data-licitacion-id'), card);
+    // Guardamos el estado PÚBLICO base, para restaurarlo al cerrar sesión.
+    card.dataset.estadoBase = card.dataset.estado;
+  });
+
+  // --- Pintado de lo PRIVADO sobre una tarjeta (idempotente) ---------------
+  // Estas dos funciones son la ÚNICA lógica de pintado: las usan tanto la carga
+  // inicial como el guardado y la limpieza al cerrar sesión (no se duplica nada).
+  function pintaEstado(card, estado) {
+    // 'estado' = clave manual (ganada/perdida/presentada/descartada) o null/'' (Activa).
+    const previo = card.querySelector('.tags .tag.estado');
+    if (previo) previo.remove();                       // siempre partimos de cero
+    const clave = estado ? String(estado).toLowerCase() : '';
+    const sel = card.querySelector('.ctrl-estado');
+    if (sel) sel.value = clave || 'activa';            // el menú refleja el estado
+    if (clave) {
+      card.dataset.estado = clave;                     // el manual GANA al público por fecha
+      const badge = document.createElement('span');
+      badge.className = 'tag estado estado-' + clave + ' js-privado';
+      badge.textContent = ESTADOS[clave] || clave.toUpperCase();
+      (card.querySelector('.tags') || card).appendChild(badge);
+    } else {
+      card.dataset.estado = card.dataset.estadoBase || 'activa';  // vuelve al público
+    }
+  }
+
+  function pintaFavorita(card, fav) {
+    const esFav = fav === true;
+    card.dataset.favorita = esFav ? 'true' : 'false';
+    const btn = card.querySelector('.ctrl-estrella');
+    if (btn) {
+      btn.textContent = esFav ? '★' : '☆';
+      btn.classList.toggle('marcada', esFav);
+      btn.setAttribute('aria-pressed', esFav ? 'true' : 'false');
+    }
+  }
+
+  // Aviso de error por tarjeta (para no mentir sobre lo que se guardó).
+  function mostrarAviso(card, msg) {
+    const av = card.querySelector('.card-aviso');
+    if (av) { av.textContent = msg; av.hidden = false; }
+  }
+  function ocultarAviso(card) {
+    const av = card.querySelector('.card-aviso');
+    if (av) { av.hidden = true; av.textContent = ''; }
+  }
+
+  // Devuelve cada tarjeta a su estado público base y vacía el Map (al cerrar sesión).
+  function limpiarPrivado() {
+    tarjetasPorId.forEach(function (card) {
+      pintaEstado(card, null);
+      pintaFavorita(card, false);
+      ocultarAviso(card);
+    });
+    decisionesPorId.clear();
+  }
+
+  // --- Leer la tabla 'decisiones', rellenar el Map y pintar (SOLO con sesión) -
+  async function cargarDecisiones(session) {
+    if (!session) return;                  // el rol anónimo no debe consultar
+    limpiarPrivado();                      // idempotente: parte de cero y repinta
+    const { data, error } = await supabase.from('decisiones').select('*');
+    if (error) { console.error('Error leyendo decisiones:', error.message); return; }
+    (data || []).forEach(function (fila) {
+      const dec = { estado: fila.estado || null, favorita: fila.favorita === true };
+      decisionesPorId.set(fila.licitacion_id, dec);   // espejo en memoria
+      const card = tarjetasPorId.get(fila.licitacion_id);
+      if (!card) return;                   // la decisión no casa con ninguna tarjeta visible
+      pintaEstado(card, dec.estado);
+      pintaFavorita(card, dec.favorita);
+    });
+  }
+
+  // --- Guardar un cambio en Supabase y, si confirma, reflejarlo ------------
+  // 'cambios' es {estado: <clave|null>} o {favorita: <bool>}. Se fusiona con lo
+  // que ya hay en el Map para mandar el objeto COMPLETO y no perder el otro campo.
+  async function guardarDecision(card, cambios) {
+    if (!sesionActiva) return;             // sin sesión no se escribe (RLS lo bloquearía)
+    const id = card.getAttribute('data-licitacion-id');
+    const actual = decisionesPorId.get(id) || { estado: null, favorita: false };
+    const estado = ('estado' in cambios) ? (cambios.estado || null) : (actual.estado || null);
+    const favorita = ('favorita' in cambios) ? (cambios.favorita === true) : (actual.favorita === true);
+    const sinMarca = (estado === null && favorita === false);
+
+    const sel = card.querySelector('.ctrl-estado');
+    const btn = card.querySelector('.ctrl-estrella');
+    if (sel) sel.disabled = true;          // bloqueamos mientras escribimos
+    if (btn) btn.disabled = true;
+    ocultarAviso(card);
+    try {
+      if (sinMarca) {
+        // Sin estado ni favorita: la fila no debe existir -> delete + fuera del Map.
+        const { error } = await supabase.from('decisiones').delete().eq('licitacion_id', id);
+        if (error) throw error;
+        decisionesPorId.delete(id);
+      } else {
+        // Objeto COMPLETO; upsert con conflicto en licitacion_id (no pierde campos).
+        const fila = { licitacion_id: id, estado: estado, favorita: favorita, updated_at: new Date().toISOString() };
+        const { error } = await supabase.from('decisiones').upsert(fila, { onConflict: 'licitacion_id' });
+        if (error) throw error;
+        decisionesPorId.set(id, { estado: estado, favorita: favorita });
+      }
+      // Confirmado por Supabase: AHORA sí reflejamos en la tarjeta (Fase 3 pintado).
+      pintaEstado(card, estado);
+      pintaFavorita(card, favorita);
+    } catch (err) {
+      console.error('Error guardando decisión:', err);
+      mostrarAviso(card, 'No se pudo guardar: ' + (err.message || err));
+      // NO mentimos: revertimos los controles y el badge al último estado guardado.
+      pintaEstado(card, actual.estado || null);
+      pintaFavorita(card, actual.favorita === true);
+    } finally {
+      if (sel) sel.disabled = false;
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  // --- Cortina de presentación: radar vs login según haya sesión -----------
+  // OJO: esto es solo una CORTINA visual, NO seguridad. El radar (datos del feed
+  // y estado por fecha) es PÚBLICO: está en el HTML y cualquiera puede inspeccionarlo
+  // aunque aquí lo ocultemos. Lo que de verdad protege los datos PRIVADOS (estados
+  // manuales y favoritas) es la RLS de Supabase, no este mostrar/ocultar.
+  function pintarSesion(session) {
+    const hay = !!session;
+    radar.hidden = !hay;             // con sesión: se revela el radar completo
+    loginPantalla.hidden = hay;      // con sesión: se oculta el login (y al revés)
+    if (hay) lblEmail.textContent = session.user.email || '';
+    errLogin.hidden = true;
+    errLogin.textContent = '';
+  }
+
+  // --- Iniciar sesión ------------------------------------------------------
+  formLogin.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    errLogin.hidden = true;
+    const { error } = await supabase.auth.signInWithPassword({
+      email: inEmail.value.trim(),
+      password: inPass.value,
+    });
+    if (error) {
+      errLogin.textContent = 'No se pudo iniciar sesión: ' + error.message;
+      errLogin.hidden = false;
+      return;
+    }
+    inPass.value = '';
+    // El pintado lo dispara onAuthStateChange (SIGNED_IN); no hace falta aquí.
+  });
+
+  // --- Cerrar sesión -------------------------------------------------------
+  btnLogout.addEventListener('click', async function () {
+    await supabase.auth.signOut();
+    // El borrado de lo privado lo dispara onAuthStateChange (SIGNED_OUT).
+  });
+
+  // --- Reaccionar a los cambios de sesión ----------------------------------
+  // onAuthStateChange emite INITIAL_SESSION al cargar, así que cubre recargar la
+  // página estando ya logueado (supabase-js persiste la sesión en el navegador).
+  // Diferimos el trabajo async con setTimeout(0): es el patrón recomendado para
+  // no bloquear el lock interno de auth desde dentro del callback.
+  supabase.auth.onAuthStateChange(function (event, session) {
+    sesionActiva = !!session;
+    // body.sesion muestra/oculta los controles de todas las tarjetas a la vez.
+    document.body.classList.toggle('sesion', sesionActiva);
+    pintarSesion(session);
+    setTimeout(function () {
+      if (session) cargarDecisiones(session);
+      else limpiarPrivado();
+    }, 0);
+  });
+
+  // --- Controles de cada tarjeta: guardar al cambiar (solo con sesión) ------
+  // Delegamos en el contenedor del listado: un solo par de listeners sirve para
+  // todas las tarjetas (y para las que se reordenen). Los controles están ocultos
+  // sin sesión, y guardarDecision vuelve a comprobar sesionActiva por seguridad.
+  const listado = document.getElementById('listado');
+  if (listado) {
+    listado.addEventListener('change', function (e) {
+      const sel = e.target.closest('.ctrl-estado');
+      if (!sel) return;
+      const card = sel.closest('.card');
+      // "Activa" -> sin decisión manual (estado null).
+      const estado = (sel.value === 'activa') ? null : sel.value;
+      guardarDecision(card, { estado: estado });
+    });
+    listado.addEventListener('click', function (e) {
+      const btn = e.target.closest('.ctrl-estrella');
+      if (!btn) return;
+      const card = btn.closest('.card');
+      const id = card.getAttribute('data-licitacion-id');
+      const actual = decisionesPorId.get(id) || {};
+      guardarDecision(card, { favorita: !(actual.favorita === true) });
+    });
+  }
+"""
+
+
 def slug(texto):
     """Convierte un texto en algo seguro para usar como clase CSS:
     'a_revisar' -> 'a-revisar'. Lo usamos para dar un color a cada categoría."""
@@ -291,9 +631,63 @@ def o_guion(texto):
     return texto if texto is not None else "—"
 
 
-def construye_tarjeta(lic, es_nueva, hoy):
+# --- Estado PÚBLICO por fecha (activa/caducada) -----------------------------
+# Este es el ÚNICO estado que calcula Python: el público, derivado de la fecha de
+# fin de plazo. Los estados manuales (ganada/perdida/presentada/descartada) y la
+# estrella (favorita) son PRIVADOS y los pinta el navegador desde Supabase tras
+# iniciar sesión; aquí no se tocan.
+
+def _fecha_a_date(valor):
+    """Convierte la fecha de fin de plazo del JSON a un objeto date.
+    El feed la guarda como 'YYYY-MM-DD' (cbc:EndDate del CODICE); por si algún
+    día viniera con hora ('YYYY-MM-DDThh:mm...'), nos quedamos con los 10 primeros
+    caracteres. Devuelve None si falta o no se entiende."""
+    if not valor:
+        return None
+    try:
+        return date.fromisoformat(str(valor)[:10])
+    except ValueError:
+        return None
+
+
+def calcular_estado(fecha_fin, ahora):
+    """Calcula el estado PÚBLICO de una licitación por su fecha de fin de plazo:
+      - tiene fecha y ya pasó (< ahora) -> 'caducada'.
+      - en cualquier otro caso (incluida sin fecha) -> 'activa'.
+    'ahora' es la fecha de hoy en Europe/Madrid (misma zona que las fechas del
+    JSON). Los estados manuales y la favorita NO se calculan aquí: son privados y
+    los aporta el navegador desde Supabase tras login."""
+    fin = _fecha_a_date(fecha_fin)
+    if fin is not None and fin < ahora:
+        return "caducada"
+    return "activa"
+
+
+# Controles por tarjeta (estrella favorita + menú de estado manual). Se HORNEAN
+# en cada tarjeta pero arrancan OCULTOS por CSS: solo se ven con sesión iniciada
+# (body.sesion los muestra). El navegador rellena su valor desde Supabase y guarda
+# los cambios (ver JS_SUPABASE). "Activa" = sin decisión manual (la licitación
+# sigue su estado público por fecha, que puede ser caducada).
+CONTROLES_CARD = """<div class="card-ctrl">
+        <button type="button" class="ctrl-estrella" aria-pressed="false" aria-label="Favorita" title="Marcar como favorita">☆</button>
+        <span class="ctrl-cap">Estado</span>
+        <select class="ctrl-estado" aria-label="Estado manual">
+          <option value="activa">Activa</option>
+          <option value="presentada">Presentada</option>
+          <option value="ganada">Ganada</option>
+          <option value="perdida">Perdida</option>
+          <option value="descartada">Descartada</option>
+        </select>
+        <span class="card-aviso" hidden></span>
+      </div>"""
+
+
+def construye_tarjeta(lic, es_nueva, hoy, estado):
     """Devuelve el HTML (texto) de UNA tarjeta para una licitación.
-    'hoy' es la fecha de hoy en Europe/Madrid, para el contador de días."""
+    'hoy' es la fecha de hoy en Europe/Madrid, para el contador de días.
+    'estado' es el estado PÚBLICO por fecha (activa/caducada). Lo privado (estado
+    manual y estrella) lo añade el navegador desde Supabase tras login; aquí solo
+    se hornean los controles (ocultos) y data-favorita="false" como base."""
     # Escapamos con html.escape TODO lo que venga del JSON, para no romper el HTML.
     titulo = html.escape(lic.get("titulo", "(sin título)"))
     enlace = html.escape(lic.get("enlace", ""))
@@ -368,10 +762,19 @@ def construye_tarjeta(lic, es_nueva, hoy):
         data_fecha_subida = ""
     # data-titulo va dentro de comillas dobles, y 'titulo' ya está escapado: seguro.
 
+    # data-licitacion-id: el MISMO id del JSON (entry.id). Es la clave con la que el
+    # navegador casa cada fila de la tabla 'decisiones' de Supabase con su tarjeta.
+    lic_id = html.escape(lic.get("id", ""))
+
+    # data-estado es el estado PÚBLICO por fecha (activa/caducada); 'estado' siempre
+    # es uno de esos dos: seguro. data-favorita arranca en "false": lo privado (estado
+    # manual y estrella) lo sobrescribe el navegador tras login.
     return f"""    <article class="card"
       data-importe="{data_importe}" data-fin-plazo="{data_fin_plazo}"
       data-fecha-pub="{data_fecha_pub}" data-fecha-subida="{data_fecha_subida}"
-      data-titulo="{titulo}">
+      data-titulo="{titulo}" data-licitacion-id="{lic_id}"
+      data-estado="{estado}" data-favorita="false">
+      {CONTROLES_CARD}
       <h2 class="card-title"><a href="{enlace}" target="_blank" rel="noopener">{titulo}</a></h2>
       <div class="tags"><span class="tag cat {categoria_clase}">{categoria_texto}</span>{etiqueta_nuevo}</div>
       <div class="cpv"><span class="et">CPV</span> {cpv_html}</div>
@@ -422,7 +825,10 @@ if licitaciones:
         # Tomamos solo la parte de fecha de primera_vez y la comparamos con el límite.
         fecha_primera = datetime.fromisoformat(lic["primera_vez"]).date()
         es_nueva = fecha_primera >= fecha_limite
-        tarjetas.append(construye_tarjeta(lic, es_nueva, hoy))
+        # Estado PÚBLICO por fecha (activa/caducada). Lo manual y la estrella son
+        # privados y los pinta el navegador desde Supabase tras login.
+        estado = calcular_estado(lic.get("fecha_fin_plazo"), hoy)
+        tarjetas.append(construye_tarjeta(lic, es_nueva, hoy, estado))
     cuerpo = "\n".join(tarjetas)
     orden_html = ORDEN_HTML          # solo mostramos el desplegable si hay tarjetas
 else:
@@ -464,6 +870,22 @@ pagina = f"""<!DOCTYPE html>
 <style>{CSS}</style>
 </head>
 <body>
+<!-- Cortina de login: SIEMPRE en el DOM. Visible sin sesión; el JS la oculta al
+     entrar y muestra el radar. (No es seguridad: ver el comentario en JS_SUPABASE.) -->
+<div class="login-pantalla" id="login-pantalla">
+  <div class="login-caja">
+    <div class="login-brand"><span class="logo">📡</span><span>{html.escape(TITULO_PAGINA)}</span></div>
+    <form id="login-form">
+      <input type="email" id="login-email" placeholder="Email" autocomplete="username" required>
+      <input type="password" id="login-pass" placeholder="Contraseña" autocomplete="current-password" required>
+      <button type="submit">Iniciar sesión</button>
+      <span class="auth-error" id="login-error" hidden></span>
+    </form>
+  </div>
+</div>
+
+<!-- Radar (público): arranca OCULTO; el JS lo revela cuando hay sesión. -->
+<div id="radar" hidden>
 <aside class="sidebar" id="sidebar">
   <div class="brand"><span class="logo">📡</span><span>{html.escape(TITULO_PAGINA)}</span></div>
   <nav>
@@ -484,14 +906,20 @@ pagina = f"""<!DOCTYPE html>
         <h1>{titulo_seccion}</h1>
         <p class="meta">Generado el {generado} <span class="badge">{total} licitaciones</span></p>
       </div>
+      <div class="conectado" id="conectado">
+        <span class="conectado-tx">Conectado como <b id="conectado-email"></b></span>
+        <button type="button" class="auth-sec" id="logout-btn">Cerrar sesión</button>
+      </div>
     </div>
 {orden_html}    <section id="listado" class="grid">
 {cuerpo}
     </section>
   </div>
 </div>
+</div>
 
 <script>{JS}</script>
+<script type="module">{JS_SUPABASE}</script>
 </body>
 </html>
 """
