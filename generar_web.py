@@ -24,7 +24,8 @@ DIAS_NUEVO = 7   # se marca como "NUEVO" lo detectado en los últimos 7 días
 # Opciones del menú lateral (el "desplegable" de la izquierda). Iremos añadiendo
 # más opciones en el futuro; basta con añadir más diccionarios a esta lista.
 OPCIONES_MENU = [
-    {"nombre": "Listado de Licitaciones", "enlace": "#listado", "icono": "📋"},
+    {"nombre": "Radar", "vista": "radar", "enlace": "#vista-radar", "icono": "📡"},
+    {"nombre": "Cartera", "vista": "cartera", "enlace": "#vista-cartera", "icono": "💼"},
 ]
 
 
@@ -353,6 +354,22 @@ CSS = """
   }
   .docs-form .btn-pri:hover { background:var(--acento-2); }
   .docs-form .btn-pri:disabled { opacity:.6; cursor:progress; }
+
+  /* ---- Vistas Radar / Cartera (se alternan desde el lateral) ---- */
+  #vista-radar[hidden], #vista-cartera[hidden] { display:none; }
+  #cartera-contenido { overflow-x:auto; }            /* tabla ancha: scroll horizontal */
+  #cartera-contenido > p { margin:0 0 14px; color:var(--suave); font-size:.92rem; }
+  #cartera-contenido > p strong { color:var(--texto); }
+  .cartera-tabla { width:100%; border-collapse:collapse; font-size:.85rem; }
+  .cartera-tabla th, .cartera-tabla td {
+    padding:8px 10px; text-align:left; border-bottom:1px solid var(--borde); vertical-align:top;
+  }
+  .cartera-tabla th {
+    color:var(--suave); font-weight:700; font-size:.72rem; text-transform:uppercase;
+    letter-spacing:.03em; white-space:nowrap;
+  }
+  .cartera-tabla tbody tr:hover { background:#f8fafc; }
+  .cartera-tabla .fila-resuelto { opacity:.5; }      /* estado "Resuelto": atenuada */
 
   /* ---- Móvil: el menú se oculta y se abre con el botón ☰ ---- */
   @media (max-width:860px) {
@@ -743,12 +760,20 @@ JS_SUPABASE = """
     // defecto), para no enseñar todas las tarjetas mientras llegan las decisiones.
     if (session) refrescarTodo();
     setTimeout(function () {
-      if (!session) { limpiarPrivado(); return; }
-      // Solo (re)leemos las decisiones cuando cambia la sesión de verdad. Un refresco
+      if (!session) {
+        limpiarPrivado();
+        if (carteraCont) carteraCont.innerHTML = '';   // no dejar datos privados en el DOM
+        mostrarVista('radar');                          // volver a la vista por defecto
+        return;
+      }
+      // Solo (re)leemos los datos cuando cambia la sesión de verdad. Un refresco
       // de token (TOKEN_REFRESHED, ~cada hora) o USER_UPDATED traen 'session' pero NO
       // cambian los datos: recargar repetiría el limpiarPrivado()+await de
       // cargarDecisiones y haría PARPADEAR badges/estrellas/colores. Lo evitamos.
-      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') cargarDecisiones(session);
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+        cargarDecisiones(session);
+        if (vistaActiva === 'cartera') cargarCartera();   // si ya estábamos en la Cartera
+      }
     }, 0);
   });
 
@@ -984,6 +1009,68 @@ JS_SUPABASE = """
       if (!btn) return;
       abrirContrato(btn.closest('.card'));
     });
+  }
+
+  // ====== Vistas: Radar vs Cartera (entradas del lateral izquierdo) ===========
+  // Solo alternan en el navegador qué bloque se ve (#vista-radar / #vista-cartera);
+  // la cartera (tabla de solo lectura) se lee de Supabase al entrar, SOLO con sesión.
+  const vistaRadar    = document.getElementById('vista-radar');
+  const vistaCartera  = document.getElementById('vista-cartera');
+  const carteraCont   = document.getElementById('cartera-contenido');
+  const tituloSeccion = document.getElementById('titulo-seccion');
+  const metaRadar     = document.getElementById('meta-radar');
+  let vistaActiva = 'radar';   // vista por defecto
+
+  function mostrarVista(nombre) {
+    vistaActiva = (nombre === 'cartera') ? 'cartera' : 'radar';
+    if (vistaRadar)   vistaRadar.hidden   = (vistaActiva !== 'radar');
+    if (vistaCartera) vistaCartera.hidden = (vistaActiva !== 'cartera');
+    // Marca activa la entrada del lateral y ajusta la cabecera.
+    document.querySelectorAll('.sidebar .nav-item[data-vista]').forEach(function (a) {
+      a.classList.toggle('activo', a.getAttribute('data-vista') === vistaActiva);
+    });
+    if (tituloSeccion) tituloSeccion.textContent = (vistaActiva === 'cartera') ? 'Cartera' : 'Radar';
+    if (metaRadar) metaRadar.hidden = (vistaActiva === 'cartera');   // la meta es del radar
+    // Al entrar en Cartera con sesión, (re)cargamos la tabla.
+    if (vistaActiva === 'cartera' && sesionActiva) cargarCartera();
+  }
+
+  // Clic en las entradas del lateral -> alternar vista (sin saltar por el ancla).
+  document.querySelectorAll('.sidebar .nav-item[data-vista]').forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      mostrarVista(a.getAttribute('data-vista'));
+    });
+  });
+
+  // --- Cartera: lógica de lectura y pintado (tabla de solo lectura) ---------
+  const fmtEur = n => (n == null ? '—' :
+    new Intl.NumberFormat('es-ES', { style:'currency', currency:'EUR' }).format(n));
+
+  async function cargarCartera() {
+    const { data, error } = await supabase.from('cartera').select('*').order('cliente');
+    if (error) { console.error(error); return; }
+    renderCartera(data || []);
+  }
+
+  function renderCartera(filas) {
+    const cont = document.getElementById('cartera-contenido');
+    const total = filas.reduce((s, f) => s + (Number(f.importe_adjudicacion) || 0), 0);
+    let html = `<p>${filas.length} adjudicaciones · Total adjudicado (s/IVA): <strong>${fmtEur(total)}</strong></p>`;
+    html += `<table class="cartera-tabla"><thead><tr>
+      <th>Cliente</th><th>CCAA</th><th>Objeto</th><th>Expediente</th>
+      <th>Adjudicación (s/IVA)</th><th>Total (c/IVA)</th><th>Inicio</th>
+      <th>Duración</th><th>Prórrogas</th><th>Fin de vigencia</th><th>Estado</th></tr></thead><tbody>`;
+    for (const f of filas) {
+      const resuelto = (f.estado || '').toLowerCase().includes('resuelto');
+      html += `<tr class="${resuelto ? 'fila-resuelto' : ''}" title="${(f.notas || '').replace(/"/g,'&quot;')}">
+        <td>${f.cliente||''}</td><td>${f.ccaa||''}</td><td>${f.objeto||''}</td><td>${f.expediente||''}</td>
+        <td>${fmtEur(f.importe_adjudicacion)}</td><td>${fmtEur(f.importe_total_civa)}</td>
+        <td>${f.fecha_inicio||''}</td><td>${f.duracion||''}</td><td>${f.prorrogas||''}</td>
+        <td>${f.fin_vigencia||''}</td><td>${f.estado||''}</td></tr>`;
+    }
+    html += `</tbody></table>`;
+    cont.innerHTML = html;
   }
 """
 
@@ -1327,7 +1414,7 @@ opciones_html = []
 for i, opcion in enumerate(OPCIONES_MENU):
     clase = "nav-item activo" if i == 0 else "nav-item"
     opciones_html.append(
-        f'<a class="{clase}" href="{html.escape(opcion["enlace"])}">'
+        f'<a class="{clase}" data-vista="{opcion["vista"]}" href="{html.escape(opcion["enlace"])}">'
         f'<span class="nav-icono">{opcion["icono"]}</span>'
         f'<span>{html.escape(opcion["nombre"])}</span></a>'
     )
@@ -1387,17 +1474,22 @@ pagina = f"""<!DOCTYPE html>
     <div class="barra-superior">
       <button class="menu-toggle" aria-label="Abrir o cerrar el menú">☰</button>
       <div class="titulos">
-        <h1>{titulo_seccion}</h1>
-        <p class="meta">Generado el {generado} <span class="badge">{total} licitaciones</span></p>
+        <h1 id="titulo-seccion">{titulo_seccion}</h1>
+        <p class="meta" id="meta-radar">Generado el {generado} <span class="badge">{total} licitaciones</span></p>
       </div>
       <div class="conectado" id="conectado">
         <span class="conectado-tx">Conectado como <b id="conectado-email"></b></span>
         <button type="button" class="auth-sec" id="logout-btn">Cerrar sesión</button>
       </div>
     </div>
+    <div id="vista-radar">
 {TABS_HTML}{orden_html}    <section id="listado" class="grid">
 {cuerpo}{vacio_pestana_html}
     </section>
+    </div>
+    <div id="vista-cartera" hidden>
+      <div id="cartera-contenido"></div>
+    </div>
   </div>
 </div>
 {CONTRATO_MODAL}</div>
