@@ -835,5 +835,67 @@
     "fecha_actualizacion": "2026-06-23T14:22:10.427+02:00",
     "primera_vez": "2026-06-24T09:23:14.737353",
     "ultima_vez": "2026-06-24T09:23:14.737353"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18507051": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18507051",
+    "titulo": "Servicio de realización del análisis de control de la calidad del agua  del municipio de Santa Cruz de Tenerife.",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=%2F73zpYOHNGl%2BF6L2uCfUWg%3D%3D",
+    "cpv": [
+      "71620000",
+      "71900000",
+      "90733100"
+    ],
+    "categoria": "a_revisar",
+    "coincidencia": "CPV 90733100 (coincide con 9073)",
+    "presupuesto_con_iva": 88328.5,
+    "presupuesto_sin_iva": 82550.0,
+    "valor_estimado": 212566.24,
+    "fecha_fin_plazo": "2025-12-17",
+    "fecha_publicacion": "2025-12-02",
+    "fecha_actualizacion": "2026-06-24T18:11:40.133+02:00",
+    "primera_vez": "2026-06-24T19:53:13.030001",
+    "ultima_vez": "2026-06-24T19:53:13.030001"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19697592": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19697592",
+    "titulo": "Servicio de limpieza viaria y recogida de residuos del Cargadero del Mineral en Melilla.",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=0a%2BqFq668v9VkTabT%2FRM8A%3D%3D",
+    "cpv": [
+      "90610000",
+      "90511300"
+    ],
+    "categoria": "pruebas",
+    "coincidencia": "palabra clave «limpieza»",
+    "presupuesto_con_iva": 31096.01,
+    "presupuesto_sin_iva": 29900.01,
+    "valor_estimado": 59800.02,
+    "fecha_fin_plazo": "2026-06-03",
+    "fecha_publicacion": "2026-05-18",
+    "fecha_actualizacion": "2026-06-24T17:32:22.977+02:00",
+    "primera_vez": "2026-06-24T19:53:13.030001",
+    "ultima_vez": "2026-06-24T19:53:13.030001"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19746289": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19746289",
+    "titulo": "El objeto del contrato será la realización del servicio de limpieza de dos (2) centros administrativos de la Consejería paraatender las necesidades ordinarias de funcionamiento del Departamento.",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=2lNXNRbJg6hVq4S9zvaQpQ%3D%3D",
+    "cpv": [
+      "90911200",
+      "90919200",
+      "90911200",
+      "90919200",
+      "90911200",
+      "90919200"
+    ],
+    "categoria": "pruebas",
+    "coincidencia": "CPV 90911200 (coincide con 9091)",
+    "presupuesto_con_iva": 63074.54,
+    "presupuesto_sin_iva": 58948.16,
+    "valor_estimado": 189188.66,
+    "fecha_fin_plazo": "2026-06-09",
+    "fecha_publicacion": "2026-05-25",
+    "fecha_actualizacion": "2026-06-24T16:45:01.339+02:00",
+    "primera_vez": "2026-06-24T19:53:13.030001",
+    "ultima_vez": "2026-06-24T19:53:13.030001"
   }
 }
