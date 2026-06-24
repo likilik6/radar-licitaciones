@@ -379,6 +379,22 @@ CSS = """
   .cart-docs-btn:hover { border-color:#c7d2fe; color:var(--acento-2); }
   /* Sección de documentos cuando va suelta (modal de cartera, sin contrato encima). */
   .docs-sec-suelta { margin-top:4px; padding-top:0; border-top:0; }
+
+  /* Tabla de cartera compacta + chips + detalle en el modal. */
+  .cartera-tabla td, .cartera-tabla th{ padding:.5rem .6rem; }
+  .cartera-tabla td.num, .cartera-tabla th.num{ text-align:right; white-space:nowrap; }
+  .cartera-tabla tbody tr{ cursor:pointer; }
+  .chip{ display:inline-block; padding:.1rem .5rem; border-radius:999px; font-size:.75rem; background:#eef2ff; color:#3730a3; }
+  #cdoc-datos{ margin:4px 0 6px; }
+  .det-fila{ display:flex; gap:.5rem; padding:.25rem 0; border-bottom:1px solid #f1f5f9; }
+  .det-et{ flex:0 0 42%; color:var(--suave); font-size:.85rem; } .det-val{ flex:1; word-break:break-word; }
+  .cdoc-anot{ margin-top:14px; }
+  #cdoc-anotaciones{ width:100%; min-height:70px; margin:.4rem 0; box-sizing:border-box; font:inherit; font-size:.9rem;
+    padding:8px 10px; border-radius:9px; border:1px solid var(--borde); color:var(--texto); resize:vertical; }
+  .cdoc-anot .btn-pri{ font:inherit; font-size:.85rem; font-weight:600; cursor:pointer; padding:7px 14px; border-radius:8px;
+    border:1px solid var(--acento-2); background:var(--acento); color:#fff; }
+  .cdoc-anot .btn-pri:hover{ background:var(--acento-2); }
+  .cdoc-anot .btn-pri:disabled{ opacity:.6; cursor:progress; }
   /* Columna destacada "Fin de vigencia": el dato que más resalta. */
   .cartera-tabla .col-venc { white-space:nowrap; }
   .venc { display:inline-block; padding:4px 9px; border-radius:8px; line-height:1.2; }
@@ -1141,18 +1157,17 @@ JS_SUPABASE = """
     const total = filas.reduce((s, f) => s + (Number(f.importe_adjudicacion) || 0), 0);
     let html = `<p>${filas.length} adjudicaciones · Total adjudicado (s/IVA): <strong>${fmtEur(total)}</strong></p>`;
     html += `<table class="cartera-tabla"><thead><tr>
-      <th class="col-venc">Fin de vigencia</th><th>Cliente</th><th>CCAA</th><th>Objeto</th><th>Expediente</th>
-      <th>Adjudicación (s/IVA)</th><th>Total (c/IVA)</th><th>Inicio</th>
-      <th>Duración</th><th>Prórrogas</th><th>Estado</th><th>Docs</th></tr></thead><tbody>`;
+      <th class="col-venc">Fin de vigencia</th><th>Cliente</th><th>CCAA</th>
+      <th class="num">Adjudicación (s/IVA)</th><th>Estado</th><th>Ver</th></tr></thead><tbody>`;
     for (const f of filas) {
       const resuelto = (f.estado || '').toLowerCase().includes('resuelto');
       html += `<tr class="${resuelto ? 'fila-resuelto' : ''}" data-cartera-id="${f.id}" title="${(f.notas || '').replace(/"/g,'&quot;')}">
         <td class="col-venc">${badgeVigencia(f.fin_vigencia_fecha, f.fin_vigencia)}</td>
-        <td>${f.cliente||''}</td><td>${f.ccaa||''}</td><td>${f.objeto||''}</td><td>${f.expediente||''}</td>
-        <td>${fmtEur(f.importe_adjudicacion)}</td><td>${fmtEur(f.importe_total_civa)}</td>
-        <td>${f.fecha_inicio||''}</td><td>${f.duracion||''}</td><td>${f.prorrogas||''}</td>
-        <td>${f.estado||''}</td>
-        <td><button type="button" class="cart-docs-btn" data-cartera-id="${f.id}">Docs</button></td></tr>`;
+        <td>${f.cliente||''}</td>
+        <td>${f.ccaa ? '<span class="chip">'+f.ccaa+'</span>' : ''}</td>
+        <td class="num">${fmtEur(f.importe_adjudicacion)}</td>
+        <td>${f.estado ? '<span class="chip">'+f.estado+'</span>' : ''}</td>
+        <td><button type="button" class="cart-docs-btn">Ver</button></td></tr>`;
     }
     html += `</tbody></table>`;
     cont.innerHTML = html;
@@ -1377,11 +1392,32 @@ JS_SUPABASE = """
     });
   }
 
+  // Detalle (campos completos) + anotación editable del registro de cartera.
+  function filaDato(et, val){ return val ? `<div class="det-fila"><span class="det-et">${et}</span><span class="det-val">${val}</span></div>` : ''; }
+  function pintarDetalle(f){
+    document.getElementById('cdoc-datos').innerHTML =
+      filaDato('Objeto', f.objeto) + filaDato('Expediente', f.expediente) +
+      filaDato('Procedimiento', f.procedimiento) +
+      filaDato('Presupuesto licitación', fmtEur(f.presupuesto_licitacion)) +
+      filaDato('Adjudicación (s/IVA)', fmtEur(f.importe_adjudicacion)) +
+      filaDato('Total (c/IVA)', fmtEur(f.importe_total_civa)) +
+      filaDato('Inicio', f.fecha_inicio) + filaDato('Duración', f.duracion) +
+      filaDato('Prórrogas', f.prorrogas) + filaDato('Fin de vigencia', f.fin_vigencia) +
+      filaDato('Notas', f.notas);
+    document.getElementById('cdoc-anotaciones').value = f.anotaciones || '';
+  }
+  async function guardarAnotacion(carteraId, texto){
+    const { error } = await supabase.from('cartera').update({ anotaciones: texto }).eq('id', carteraId);
+    if(error){ console.error(error); alert('No se pudo guardar.'); return; }
+    const f = carteraPorId.get(String(carteraId)); if(f) f.anotaciones = texto;
+  }
+
   function abrirDocsCartera(carteraId) {
     if (!sesionActiva || !cdocModal || !carteraId) return;
     carteraDocsId = carteraId;
     const f = carteraPorId.get(String(carteraId)) || {};
     if (cdocSub) cdocSub.textContent = (f.cliente || '') + (f.objeto ? ' · ' + f.objeto : '');
+    pintarDetalle(f);                    // rellena #cdoc-datos y la anotación
     if (cdocLista) cdocLista.innerHTML = '';
     cdocModal.hidden = false;
     pintarDocsCartera(carteraId);
@@ -1405,6 +1441,17 @@ JS_SUPABASE = """
       }
     });
   }
+  // Guardar la anotación del registro abierto.
+  const cdocGuardarAnot = document.getElementById('cdoc-guardar-anot');
+  if (cdocGuardarAnot) {
+    cdocGuardarAnot.addEventListener('click', async function () {
+      if (!sesionActiva || !carteraDocsId) return;
+      const ta = document.getElementById('cdoc-anotaciones');
+      cdocGuardarAnot.disabled = true;
+      try { await guardarAnotacion(carteraDocsId, ta ? ta.value : ''); }
+      finally { cdocGuardarAnot.disabled = false; }
+    });
+  }
   const cdocCerrar = document.getElementById('cdoc-cerrar');
   if (cdocCerrar) cdocCerrar.addEventListener('click', cerrarDocsCartera);
   if (cdocModal) cdocModal.addEventListener('click', function (e) { if (e.target === cdocModal) cerrarDocsCartera(); });
@@ -1412,12 +1459,12 @@ JS_SUPABASE = """
     if (e.key === 'Escape' && cdocModal && !cdocModal.hidden) cerrarDocsCartera();
   });
 
-  // Botón "Docs" de cada fila de la cartera (delegado en el contenedor de la tabla).
+  // Clic en una fila de la cartera (o en su botón "Ver") -> abre el detalle.
   if (carteraCont) {
     carteraCont.addEventListener('click', function (e) {
-      const btn = e.target.closest('.cart-docs-btn');
-      if (!btn) return;
-      abrirDocsCartera(btn.getAttribute('data-cartera-id'));
+      const tr = e.target.closest('tr[data-cartera-id]');
+      if (!tr) return;
+      abrirDocsCartera(tr.getAttribute('data-cartera-id'));
     });
   }
 """
@@ -1579,11 +1626,18 @@ CONTRATO_MODAL = """  <div class="modal-fondo" id="contrato-modal" hidden>
 CARTERA_DOCS_MODAL = """  <div class="modal-fondo" id="cartera-docs-modal" hidden>
     <div class="modal-caja" role="dialog" aria-modal="true" aria-labelledby="cdoc-titulo">
       <div class="modal-cab">
-        <h2 id="cdoc-titulo">Documentos de la adjudicación</h2>
+        <h2 id="cdoc-titulo">Detalle de la adjudicación</h2>
         <button type="button" class="modal-cerrar" id="cdoc-cerrar" aria-label="Cerrar panel">✕</button>
       </div>
       <p class="modal-sub" id="cdoc-sub"></p>
+      <div id="cdoc-datos"></div>
+      <div class="cdoc-anot">
+        <h3 class="docs-titulo">Anotaciones</h3>
+        <textarea id="cdoc-anotaciones" placeholder="Notas privadas sobre esta adjudicación…"></textarea>
+        <button type="button" class="btn-pri" id="cdoc-guardar-anot">Guardar anotación</button>
+      </div>
       <section class="docs-sec docs-sec-suelta">
+        <h3 class="docs-titulo">Documentos</h3>
         <ul class="docs-lista" id="cdoc-lista"></ul>
         <p class="docs-vacio" id="cdoc-vacio" hidden>Aún no hay documentos.</p>
         <form class="docs-form" id="cdoc-form">
