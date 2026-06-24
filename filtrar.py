@@ -126,6 +126,40 @@ def lee_config_radar():
     return {}
 
 
+def _terminos_activos(lista):
+    """Normaliza una lista de términos del panel a una lista de textos ACTIVOS.
+    Acepta términos como texto suelto ("limpieza") o como objeto {"v": texto,
+    "on": true/false} (lo que guarda el panel para poder seleccionar/deseleccionar
+    sin borrar). Descarta los desactivados (on=false) y los vacíos."""
+    activos = []
+    for item in lista or []:
+        if isinstance(item, dict):
+            if item.get("on", True) and item.get("v"):
+                activos.append(item["v"])
+        elif isinstance(item, str) and item.strip():
+            activos.append(item.strip())
+    return activos
+
+
+def categorias_desde_config(config):
+    """Convierte config['categorias'] (lo que edita el panel) al MISMO formato que
+    intereses.yaml: {nombre: {'cpv': [...], 'palabras_clave': [...]}} con solo los
+    términos activos. Devuelve None si la config no trae categorías usables (para
+    caer entonces a intereses.yaml)."""
+    categorias = config.get("categorias")
+    if not isinstance(categorias, dict) or not categorias:
+        return None
+    efectivas = {}
+    for nombre, crit in categorias.items():
+        if not isinstance(crit, dict):
+            continue
+        efectivas[nombre] = {
+            "cpv": _terminos_activos(crit.get("cpv")),
+            "palabras_clave": _terminos_activos(crit.get("palabras_clave")),
+        }
+    return efectivas or None
+
+
 # --- 1. Cargamos los criterios desde intereses.yaml -------------------------
 # Lo abrimos con encoding utf-8 porque tiene acentos y "ñ".
 with open("intereses.yaml", encoding="utf-8") as f:
@@ -141,28 +175,22 @@ with open("intereses.yaml", encoding="utf-8") as f:
 # decidimos QUÉ caza el radar. Si no hay config (o Supabase no responde), todo cae
 # a intereses.yaml y a todas las fuentes: el comportamiento de siempre.
 config_radar = lee_config_radar()
-cpv_config = _lista(config_radar, "cpv")                # CPV elegidos en el panel
 fuentes_config = _lista(config_radar, "fuentes")        # qué feeds leer
 plataformas_config = _lista(config_radar, "plataformas")  # "Estado" = estatal
 regiones_config = _lista(config_radar, "regiones")      # códigos NUTS (ES220...)
 
-# Criterios EFECTIVOS de "qué cazar":
-#  - SIN CPV en la config -> se usan los del intereses.yaml tal cual (cpv + palabras).
-#  - CON CPV en la config -> esos CPV SUSTITUYEN a los del YAML: para clasificar se
-#    usan solo las PALABRAS CLAVE del YAML (sus cpv se ignoran), y se añade una
-#    categoría implícita "seleccionados" que caza por los CPV elegidos en el panel.
-if cpv_config:
-    criterios_efectivos = {
-        nombre: {"cpv": [], "palabras_clave": crit.get("palabras_clave", []) or []}
-        for nombre, crit in intereses.items()
-    }
-    criterios_efectivos["seleccionados"] = {"cpv": cpv_config, "palabras_clave": []}
-else:
-    criterios_efectivos = intereses
+# Criterios EFECTIVOS de "qué cazar": si la config trae "categorias" (editadas
+# desde el panel: mismos grupos criticas/a_revisar/pruebas, con sus CPV y palabras),
+# SUSTITUYEN por completo a las de intereses.yaml. Si no, usamos el YAML tal cual.
+categorias_panel = categorias_desde_config(config_radar)
+intereses_efectivos = categorias_panel or intereses
 
 if config_radar:
+    n_cpv = sum(len(crit["cpv"]) for crit in intereses_efectivos.values())
+    n_kw = sum(len(crit["palabras_clave"]) for crit in intereses_efectivos.values())
+    origen = "panel" if categorias_panel else "intereses.yaml"
     print("Config del radar (Supabase) aplicada:")
-    print(f"  CPV elegidos: {len(cpv_config)} (0 = los de intereses.yaml)")
+    print(f"  Criterios ({origen}): {n_cpv} CPV + {n_kw} palabras en {len(intereses_efectivos)} grupos")
     print(f"  Fuentes: {fuentes_config or 'todas'}")
     print(f"  Plataformas: {plataformas_config or 'todas'}")
     print(f"  Regiones (NUTS): {regiones_config or 'todas'}")
@@ -185,7 +213,7 @@ def pasa_territorio(plataforma_lic, region_codigo_lic):
 
 # Una lista de resultados por CADA categoría efectiva, en el mismo orden.
 # (un diccionario: nombre_de_categoria -> lista de licitaciones de esa categoría)
-resultados = {nombre: [] for nombre in criterios_efectivos}
+resultados = {nombre: [] for nombre in intereses_efectivos}
 
 # --- 2. Recorremos la LISTA de feeds (estatal + agregadas) ------------------
 # Cada feed se descarga y pagina con el MISMO extractor (feeds.descarga_entradas)
@@ -293,8 +321,8 @@ for feed in FEEDS:
 
         # Clasificamos recorriendo las categorías EFECTIVAS EN ORDEN. La PRIMERA con
         # la que coincida se queda con la licitación; el orden marca la prioridad
-        # (las del YAML primero; "seleccionados" —los CPV del panel— al final).
-        for nombre, criterios in criterios_efectivos.items():
+        # (criticas > a_revisar > pruebas, o lo que defina el panel).
+        for nombre, criterios in intereses_efectivos.items():
             motivo = busca_coincidencia(cpvs, titulo_normalizado, criterios)
             if motivo:
                 # Está cazada por interés; ahora debe pasar el filtro de TERRITORIO

@@ -48,12 +48,19 @@ create policy "radar_config_update" on public.radar_config
 -- ============================================================================
 -- Forma del JSON de "config" (lo rellenará el panel ⚙️; aquí solo de referencia):
 --   {
---     "cpv":         ["39811200", "9073"],          -- CPV que caza el radar
---     "fuentes":     ["estatal", "agregadas"],       -- qué feeds leer
---     "plataformas": ["Estado", "Gobierno de Navarra"],  -- "Estado" = estatal
---     "regiones":    ["ES220", "ES300"],             -- códigos NUTS (vacío = todas)
+--     "categorias": {                                -- mismos grupos que intereses.yaml
+--       "criticas":  { "cpv": [ {"v":"39811200","on":true} ],
+--                      "palabras_clave": [ {"v":"fotocatálisis","on":true} ] },
+--       "a_revisar": { "cpv": [...], "palabras_clave": [...] },
+--       "pruebas":   { "cpv": [...], "palabras_clave": [...] }
+--     },
+--     "fuentes":     ["estatal", "agregadas"],        -- qué feeds leer
+--     "plataformas": ["Estado", "Gobierno de Navarra"],   -- "Estado" = estatal
+--     "regiones":    ["ES220", "ES300"],              -- códigos NUTS (vacío = todas)
 --     "vista": { "ocultar_caducadas": true, "pestana_inicial": "activas",
 --                "orden_inicial": "dias", "dias_nuevo": 7 }
 --   }
--- Una lista vacía o ausente = "no filtrar por eso" (p.ej. sin "cpv" -> usa intereses.yaml).
+-- Cada término de cpv/palabras_clave puede ser texto suelto o {"v":texto,"on":bool}
+-- (on=false = deseleccionado, se conserva pero no caza). Si "categorias" no está,
+-- el radar usa intereses.yaml. Una lista vacía/ausente = "no filtrar por eso".
 -- ============================================================================
