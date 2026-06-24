@@ -7,6 +7,10 @@ docs/
 
 # DATOS PRIVADOS DE LA CARTERA: el repo es PÚBLICO, así que nunca deben subirse
 # (importes, clientes, adjudicatarios). Estos ficheros viven solo en local / Supabase.
-*.xlsx                    # hoja origen de la cartera
-cartera_*.sql             # cartera_supabase.sql, cartera_fin_vigencia.sql, etc. (con importes)
-subir_pdfs_cartera.py     # utilidad local (email + rutas de tu PC)
+# OJO: en .gitignore los comentarios van en su PROPIA línea (no al final del patrón).
+# Hoja origen de la cartera:
+*.xlsx
+# cartera_supabase.sql, cartera_fin_vigencia.sql, etc. (con importes):
+cartera_*.sql
+# Utilidad local (email + rutas de tu PC):
+subir_pdfs_cartera.py
