@@ -7,6 +7,7 @@
 
 # Librerías que usamos:
 # - yaml (pyyaml): para leer nuestro archivo intereses.yaml.
+# - requests: para leer la configuración del radar desde Supabase (por HTTP).
 # - utiles.normaliza: para comparar texto ignorando mayúsculas y tildes
 #   (la misma función la usa generar_web.py; por eso vive en utiles.py).
 # - feeds: la LISTA de feeds y el extractor común (descarga + paginación rel="next").
@@ -18,6 +19,7 @@
 import sys
 import json
 import yaml
+import requests
 from pathlib import Path
 from datetime import datetime
 from collections import Counter
@@ -43,6 +45,14 @@ NS = {
     "cac": "urn:dgpe:names:draft:codice:schema:xsd:CommonAggregateComponents-2",
     "place": "urn:dgpe:names:draft:codice-place-ext:schema:xsd:CommonAggregateComponents-2",
 }
+
+# --- Configuración del radar guardada en Supabase ---------------------------
+# El panel web (con tu login) escribe la config; el robot la LEE aquí con la clave
+# "publishable" (pública, la MISMA que ya usa generar_web.py en su JS). Leerla solo
+# necesita permiso de lectura, que es público por diseño (la config no es secreta:
+# equivale a que intereses.yaml, que ya es público, defina qué busca el radar).
+SUPABASE_URL = "https://uzktrhpgkyctlnqgdsys.supabase.co"
+SUPABASE_KEY = "sb_publishable_3J3pFbMlNzu-NUDs1-740g_lu8YsRv_"
 
 
 def a_texto(valor):
@@ -88,6 +98,34 @@ def busca_coincidencia(cpvs, titulo_normalizado, criterios):
     return None
 
 
+def _lista(config, clave):
+    """Devuelve config[clave] si es una lista; si no (falta, o tipo raro), [].
+    Así el resto del código puede asumir siempre una lista sin comprobar."""
+    valor = config.get(clave)
+    return valor if isinstance(valor, list) else []
+
+
+def lee_config_radar():
+    """Lee la configuración del radar desde Supabase (tabla radar_config, fila id=1).
+    Devuelve el dict de config, o {} si no se puede leer (Supabase caído, tabla aún
+    no creada, sin conexión...). En ese caso el resto del programa cae a intereses.yaml
+    y a todas las fuentes, así que el robot NUNCA se rompe por esto."""
+    try:
+        respuesta = requests.get(
+            f"{SUPABASE_URL}/rest/v1/radar_config",
+            params={"id": "eq.1", "select": "config"},
+            headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"},
+            timeout=30,
+        )
+        respuesta.raise_for_status()
+        filas = respuesta.json()
+        if filas and isinstance(filas[0].get("config"), dict):
+            return filas[0]["config"]
+    except Exception as error:
+        print(f"AVISO: no se pudo leer radar_config de Supabase ({error}); uso intereses.yaml.")
+    return {}
+
+
 # --- 1. Cargamos los criterios desde intereses.yaml -------------------------
 # Lo abrimos con encoding utf-8 porque tiene acentos y "ñ".
 with open("intereses.yaml", encoding="utf-8") as f:
@@ -98,9 +136,56 @@ with open("intereses.yaml", encoding="utf-8") as f:
 # marca la prioridad: una licitación se queda en la PRIMERA categoría con la que
 # coincide. Así no hay nombres de categoría fijos en el código.
 
-# Una lista de resultados por CADA categoría del YAML, en el mismo orden.
+# --- 1.bis Configuración del radar (Supabase) -------------------------------
+# La config la pone el panel web (con login) y vive en Supabase. Aquí la leemos y
+# decidimos QUÉ caza el radar. Si no hay config (o Supabase no responde), todo cae
+# a intereses.yaml y a todas las fuentes: el comportamiento de siempre.
+config_radar = lee_config_radar()
+cpv_config = _lista(config_radar, "cpv")                # CPV elegidos en el panel
+fuentes_config = _lista(config_radar, "fuentes")        # qué feeds leer
+plataformas_config = _lista(config_radar, "plataformas")  # "Estado" = estatal
+regiones_config = _lista(config_radar, "regiones")      # códigos NUTS (ES220...)
+
+# Criterios EFECTIVOS de "qué cazar":
+#  - SIN CPV en la config -> se usan los del intereses.yaml tal cual (cpv + palabras).
+#  - CON CPV en la config -> esos CPV SUSTITUYEN a los del YAML: para clasificar se
+#    usan solo las PALABRAS CLAVE del YAML (sus cpv se ignoran), y se añade una
+#    categoría implícita "seleccionados" que caza por los CPV elegidos en el panel.
+if cpv_config:
+    criterios_efectivos = {
+        nombre: {"cpv": [], "palabras_clave": crit.get("palabras_clave", []) or []}
+        for nombre, crit in intereses.items()
+    }
+    criterios_efectivos["seleccionados"] = {"cpv": cpv_config, "palabras_clave": []}
+else:
+    criterios_efectivos = intereses
+
+if config_radar:
+    print("Config del radar (Supabase) aplicada:")
+    print(f"  CPV elegidos: {len(cpv_config)} (0 = los de intereses.yaml)")
+    print(f"  Fuentes: {fuentes_config or 'todas'}")
+    print(f"  Plataformas: {plataformas_config or 'todas'}")
+    print(f"  Regiones (NUTS): {regiones_config or 'todas'}")
+else:
+    print("Sin config en Supabase (o no disponible): uso intereses.yaml y todas las fuentes.")
+
+
+def pasa_territorio(plataforma_lic, region_codigo_lic):
+    """¿La licitación encaja con el territorio elegido en la config? Si una lista
+    de la config está vacía, no filtra por ese criterio (pasa todo)."""
+    # Plataforma efectiva: la agregadora (p.ej. "Gobierno de Navarra"), o "Estado"
+    # cuando es del feed estatal (que no trae AgentParty, plataforma=None).
+    plat = plataforma_lic or "Estado"
+    if plataformas_config and plat not in plataformas_config:
+        return False
+    if regiones_config and region_codigo_lic not in regiones_config:
+        return False
+    return True
+
+
+# Una lista de resultados por CADA categoría efectiva, en el mismo orden.
 # (un diccionario: nombre_de_categoria -> lista de licitaciones de esa categoría)
-resultados = {nombre: [] for nombre in intereses}
+resultados = {nombre: [] for nombre in criterios_efectivos}
 
 # --- 2. Recorremos la LISTA de feeds (estatal + agregadas) ------------------
 # Cada feed se descarga y pagina con el MISMO extractor (feeds.descarga_entradas)
@@ -110,6 +195,12 @@ leidas_por_fuente = {}       # cuántas entradas trajo cada feed (para el log)
 
 for feed in FEEDS:
     fuente = feed["fuente"]
+
+    # Si la config limita las fuentes y esta no está, nos saltamos el feed entero.
+    if fuentes_config and fuente not in fuentes_config:
+        print(f"Feed «{fuente}»: omitido (no está en la config del radar).")
+        leidas_por_fuente[fuente] = 0
+        continue
 
     # Descarga + paginación rel="next" (hasta agotarla o hasta el tope de páginas).
     entradas, paginas, tope = descarga_entradas(feed["url"])
@@ -200,16 +291,19 @@ for feed in FEEDS:
             "fecha_actualizacion": fecha_actualizacion,
         }
 
-        # Clasificamos recorriendo las categorías EN ORDEN (criticas, a_revisar,
-        # pruebas...). La PRIMERA con la que coincida se queda con la licitación; por
-        # eso el orden del YAML define la prioridad (de más a menos específica).
-        for nombre, criterios in intereses.items():
+        # Clasificamos recorriendo las categorías EFECTIVAS EN ORDEN. La PRIMERA con
+        # la que coincida se queda con la licitación; el orden marca la prioridad
+        # (las del YAML primero; "seleccionados" —los CPV del panel— al final).
+        for nombre, criterios in criterios_efectivos.items():
             motivo = busca_coincidencia(cpvs, titulo_normalizado, criterios)
             if motivo:
-                registro["categoria"] = nombre            # el nombre de la categoría del YAML
-                registro["coincidencia"] = motivo
-                resultados[nombre].append(registro)
-                break  # ya está clasificada: no miramos categorías de menor prioridad
+                # Está cazada por interés; ahora debe pasar el filtro de TERRITORIO
+                # (plataforma/región) elegido en la config. Si no, NO se guarda.
+                if pasa_territorio(plataforma, region_codigo):
+                    registro["categoria"] = nombre        # categoría efectiva
+                    registro["coincidencia"] = motivo
+                    resultados[nombre].append(registro)
+                break  # ya decidida (guardada o descartada por territorio)
         # Si ninguna categoría coincide, la licitación se ignora (no la guardamos).
 
 # --- 3. Mostramos los resultados agrupados, una sección por categoría --------
