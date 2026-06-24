@@ -10,6 +10,8 @@
 import sys
 import json
 import html
+import yaml          # para leer intereses.yaml (semilla del panel de ajustes)
+import requests      # para leer la config del radar (dias_nuevo) desde Supabase
 from pathlib import Path
 from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo   # para mostrar la hora en la zona horaria de España
@@ -19,7 +21,34 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 # --- Constantes que puedes cambiar a tu gusto -------------------------------
 TITULO_PAGINA = "Radar de licitaciones — LODEPA"
-DIAS_NUEVO = 7   # se marca como "NUEVO" lo detectado en los últimos 7 días
+DIAS_NUEVO = 7   # por defecto: "NUEVO" = detectado en los últimos 7 días (el panel
+                 # de ajustes puede cambiar este número; ver lee_dias_nuevo()).
+
+# Conexión a Supabase (la MISMA clave publishable pública que usa el JS del panel).
+# Solo la usamos para LEER la config del radar (dias_nuevo); todo lo demás es local.
+SUPABASE_URL = "https://uzktrhpgkyctlnqgdsys.supabase.co"
+SUPABASE_KEY = "sb_publishable_3J3pFbMlNzu-NUDs1-740g_lu8YsRv_"
+
+
+def lee_dias_nuevo():
+    """Lee 'vista.dias_nuevo' de la config del radar (Supabase). Si no se puede
+    (Supabase caído, tabla vacía, valor raro), devuelve DIAS_NUEVO por defecto."""
+    try:
+        r = requests.get(
+            f"{SUPABASE_URL}/rest/v1/radar_config",
+            params={"id": "eq.1", "select": "config"},
+            headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"},
+            timeout=20,
+        )
+        r.raise_for_status()
+        filas = r.json()
+        if filas:
+            valor = (filas[0].get("config") or {}).get("vista", {}).get("dias_nuevo")
+            if isinstance(valor, int) and valor > 0:
+                return valor
+    except Exception:
+        pass
+    return DIAS_NUEVO
 
 # Opciones del menú lateral (el "desplegable" de la izquierda). Iremos añadiendo
 # más opciones en el futuro; basta con añadir más diccionarios a esta lista.
@@ -322,6 +351,39 @@ CSS = """
   .modal-pie .btn-pri:disabled { opacity:.6; cursor:progress; }
   .modal-pie .btn-sec { border:1px solid var(--borde); background:var(--panel); color:var(--texto); }
   .modal-pie .btn-sec:hover { background:#e2e8f0; }
+
+  /* ---- Panel de ajustes del radar (⚙️) ---- */
+  .ajustes-btn { font-size:1rem; line-height:1; padding:6px 9px; }
+  .aj-caja { max-width:720px; }
+  .aj-sec { border-top:1px solid var(--borde); margin-top:14px; padding-top:12px; }
+  .aj-sec:first-of-type { border-top:none; margin-top:6px; }
+  .aj-h { margin:0 0 4px; font-size:1rem; }
+  .aj-ayuda { margin:0 0 10px; color:var(--suave); font-size:.78rem; }
+  .aj-grupo { margin-bottom:14px; }
+  .aj-grupo-tit { font-weight:700; font-size:.82rem; text-transform:uppercase; letter-spacing:.03em; margin-bottom:6px; }
+  .aj-sub2 { color:var(--suave); font-size:.72rem; font-weight:600; text-transform:uppercase; letter-spacing:.03em; margin:8px 0 4px; }
+  .aj-chips { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .aj-chips:empty::after { content:'(ninguno)'; color:var(--suave); font-size:.8rem; }
+  .aj-chip {
+    display:inline-flex; align-items:center; gap:6px; font-size:.82rem; padding:4px 9px;
+    border-radius:999px; border:1px solid var(--borde); background:#fff; cursor:pointer; user-select:none;
+  }
+  .aj-chip.off { opacity:.45; text-decoration:line-through; }
+  .aj-chip .x { color:var(--suave); font-weight:700; padding:0 1px; }
+  .aj-chip .x:hover { color:#b91c1c; }
+  .aj-add { display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; }
+  .aj-add input { font:inherit; font-size:.82rem; padding:6px 9px; border-radius:8px; border:1px solid var(--borde); background:#fff; }
+  .aj-add input.cpv { min-width:min(320px, 100%); }
+  .aj-add button { font:inherit; font-size:.82rem; padding:6px 11px; border-radius:8px; border:1px solid var(--borde); background:var(--panel); cursor:pointer; }
+  .aj-add button:hover { background:#e2e8f0; }
+  .aj-bloque { margin-bottom:10px; }
+  .aj-et { display:block; font-size:.72rem; color:var(--suave); font-weight:600; text-transform:uppercase; letter-spacing:.03em; margin-bottom:4px; }
+  .aj-checks { display:flex; flex-wrap:wrap; gap:6px 14px; }
+  .aj-checks label { display:inline-flex; align-items:center; gap:5px; font-size:.85rem; }
+  .aj-linea { display:flex; align-items:center; gap:10px; font-size:.88rem; margin:8px 0; flex-wrap:wrap; }
+  .aj-linea select, .aj-linea input[type=number] { font:inherit; font-size:.85rem; padding:6px 9px; border-radius:8px; border:1px solid var(--borde); background:#fff; }
+  .aj-msg { font-size:.82rem; font-weight:600; margin-right:auto; }
+  .aj-msg.ok { color:#15803d; } .aj-msg.err { color:#b91c1c; }
   .contrato-aviso { font-size:.82rem; color:#b91c1c; font-weight:600; margin-right:auto; }
   .contrato-ok { font-size:.82rem; color:#15803d; font-weight:700; margin-right:auto; }
   @media (max-width:560px) { .contrato-form { grid-template-columns:1fr; } }
@@ -643,10 +705,19 @@ JS_SUPABASE = """
     return (card.dataset.cpv || '').split(' ').indexOf(cpvActivo) !== -1;
   }
 
-  // Muestra/oculta cada tarjeta según pestaña activa Y categoría Y CPV. Solo en el navegador.
+  // Ajuste "ocultar caducadas por defecto" (panel ⚙️). Cuando está activo, las
+  // tarjetas caducadas no se muestran, salvo si estás en la pestaña "Caducadas".
+  let ocultarCaducadas = false;
+  function caducadasVisible(card) {
+    if (!ocultarCaducadas || pestanaActiva === 'caducadas') return true;
+    return card.dataset.estado !== 'caducada';
+  }
+
+  // Muestra/oculta cada tarjeta según pestaña activa Y categoría Y CPV Y caducadas.
   function aplicarFiltro() {
     cards().forEach(function (c) {
-      const visible = perteneceAPestana(c, pestanaActiva) && categoriaVisible(c) && cpvVisible(c);
+      const visible = perteneceAPestana(c, pestanaActiva) && categoriaVisible(c)
+                      && cpvVisible(c) && caducadasVisible(c);
       c.classList.toggle('oculta-filtro', !visible);
     });
   }
@@ -1485,6 +1556,216 @@ JS_SUPABASE = """
       abrirDocsCartera(tr.getAttribute('data-cartera-id'));
     });
   }
+
+  // ====== Panel de Ajustes del radar (⚙️) =================================
+  // Lee/escribe la tabla radar_config (misma 'supabase' y sesión). Los grupos
+  // (criticas/a_revisar/pruebas) con sus CPV y palabras se editan aquí y, al
+  // guardar, SUSTITUYEN a intereses.yaml en la próxima recogida del robot.
+  const ajModal = document.getElementById('ajustes-modal');
+  const ajBtn = document.getElementById('btn-ajustes');
+  const ajGrupos = document.getElementById('aj-grupos');
+  const ajFuentes = document.getElementById('aj-fuentes');
+  const ajPlataformas = document.getElementById('aj-plataformas');
+  const ajRegiones = document.getElementById('aj-regiones');
+  const ajMsg = document.getElementById('aj-msg');
+  const ajCatalogo = document.getElementById('aj-cpv-catalogo');
+  const ajGuardar = document.getElementById('aj-guardar');
+  const FUENTES = ['estatal', 'agregadas'];
+  let ajCfg = null;          // estado de edición en memoria
+  let ajCatCargado = false;  // catálogo CPV ya volcado en el datalist
+  let ajCpvNombres = {};     // codigo -> nombre
+
+  function ajEsc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function ajTerm(x) {
+    if (x && typeof x === 'object') return { v: String(x.v), on: x.on !== false };
+    return { v: String(x), on: true };
+  }
+  function ajSoloDigitos(s) {
+    let d = '';
+    for (let i = 0; i < s.length; i++) { const c = s[i]; if (c >= '0' && c <= '9') d += c; }
+    return d;
+  }
+
+  // Carga el catálogo de CPV (data->docs) para buscar por nombre en el datalist.
+  async function ajCargarCatalogo() {
+    if (ajCatCargado) return;
+    ajCatCargado = true;
+    try {
+      const r = await fetch('cpv_nombres.json');
+      ajCpvNombres = await r.json();
+      const frag = document.createDocumentFragment();
+      for (const c in ajCpvNombres) {
+        const o = document.createElement('option');
+        o.value = c + ' — ' + ajCpvNombres[c];
+        frag.appendChild(o);
+      }
+      ajCatalogo.appendChild(frag);
+    } catch (e) { ajCpvNombres = {}; }
+  }
+
+  function ajChip(grupo, tipo, idx, t) {
+    const nombre = (tipo === 'cpv') ? (ajCpvNombres[t.v] || '') : '';
+    const etq = nombre ? (t.v + ' · ' + nombre) : t.v;
+    const tit = nombre ? ' title="' + ajEsc(nombre) + '"' : '';
+    return '<span class="aj-chip ' + (t.on ? '' : 'off') + '" data-g="' + ajEsc(grupo) +
+      '" data-t="' + tipo + '" data-i="' + idx + '"' + tit + '>' +
+      '<span class="lbl">' + ajEsc(etq) + '</span><span class="x" data-x="1">✕</span></span>';
+  }
+  function ajCajaAdd(grupo, tipo, placeholder, esCpv) {
+    return '<div class="aj-add"><input ' + (esCpv ? 'class="cpv" list="aj-cpv-catalogo" ' : '') +
+      'placeholder="' + placeholder + '" data-add="' + tipo + '" data-g="' + ajEsc(grupo) + '">' +
+      '<button data-addbtn="' + tipo + '" data-g="' + ajEsc(grupo) + '">Añadir</button></div>';
+  }
+  function ajRenderGrupos() {
+    let h = '';
+    for (const g in ajCfg.categorias) {
+      const cat = ajCfg.categorias[g];
+      h += '<div class="aj-grupo"><div class="aj-grupo-tit">' + ajEsc(g.replace(/_/g, ' ')) + '</div>';
+      h += '<div class="aj-sub2">CPV</div><div class="aj-chips">';
+      cat.cpv.forEach(function (t, i) { h += ajChip(g, 'cpv', i, t); });
+      h += '</div>' + ajCajaAdd(g, 'cpv', 'Añadir CPV (código o nombre)', true);
+      h += '<div class="aj-sub2">Palabras clave</div><div class="aj-chips">';
+      cat.palabras_clave.forEach(function (t, i) { h += ajChip(g, 'palabras_clave', i, t); });
+      h += '</div>' + ajCajaAdd(g, 'palabras_clave', 'Añadir palabra', false);
+      h += '</div>';
+    }
+    ajGrupos.innerHTML = h;
+  }
+  function ajRenderChecks() {
+    ajFuentes.innerHTML = FUENTES.map(function (f) {
+      return '<label><input type="checkbox" value="' + f + '"' + (ajCfg.fuentes.indexOf(f) >= 0 ? ' checked' : '') + '> ' + f + '</label>';
+    }).join('');
+    const plats = window.RADAR_PLATAFORMAS || [];
+    ajPlataformas.innerHTML = plats.map(function (p) {
+      return '<label><input type="checkbox" value="' + ajEsc(p) + '"' + (ajCfg.plataformas.indexOf(p) >= 0 ? ' checked' : '') + '> ' + ajEsc(p) + '</label>';
+    }).join('') || '<span class="aj-ayuda">— (aún sin datos)</span>';
+    const regs = window.RADAR_REGIONES || {};
+    ajRegiones.innerHTML = Object.keys(regs).map(function (code) {
+      return '<label><input type="checkbox" value="' + ajEsc(code) + '"' + (ajCfg.regiones.indexOf(code) >= 0 ? ' checked' : '') + '> ' + ajEsc(regs[code]) + '</label>';
+    }).join('') || '<span class="aj-ayuda">— (aún sin datos)</span>';
+  }
+  function ajRenderVista() {
+    document.getElementById('aj-ocultar-caducadas').checked = !!ajCfg.vista.ocultar_caducadas;
+    document.getElementById('aj-pestana').value = ajCfg.vista.pestana_inicial || 'activas';
+    document.getElementById('aj-orden').value = ajCfg.vista.orden_inicial || 'dias';
+    document.getElementById('aj-dias-nuevo').value = ajCfg.vista.dias_nuevo || 7;
+  }
+  function ajRender() { ajRenderGrupos(); ajRenderChecks(); ajRenderVista(); }
+
+  function ajNormalizaCats(cats) {
+    const out = {};
+    for (const g in cats) {
+      const c = cats[g] || {};
+      out[g] = { cpv: (c.cpv || []).map(ajTerm), palabras_clave: (c.palabras_clave || []).map(ajTerm) };
+    }
+    return out;
+  }
+  async function ajLeerConfig() {
+    try {
+      const { data } = await supabase.from('radar_config').select('config').eq('id', 1).maybeSingle();
+      return (data && data.config) || {};
+    } catch (e) { return {}; }
+  }
+  async function ajAbrir() {
+    ajMsg.textContent = ''; ajMsg.className = 'aj-msg';
+    await ajCargarCatalogo();
+    const g = await ajLeerConfig();
+    const cats = (g.categorias && Object.keys(g.categorias).length) ? g.categorias : (window.RADAR_DEFAULTS || {});
+    ajCfg = {
+      categorias: ajNormalizaCats(cats),
+      fuentes: Array.isArray(g.fuentes) ? g.fuentes.slice() : [],
+      plataformas: Array.isArray(g.plataformas) ? g.plataformas.slice() : [],
+      regiones: Array.isArray(g.regiones) ? g.regiones.slice() : [],
+      vista: Object.assign({ ocultar_caducadas: false, pestana_inicial: 'activas', orden_inicial: 'dias', dias_nuevo: 7 }, g.vista || {})
+    };
+    ajRender();
+    ajModal.hidden = false;
+  }
+  function ajCerrar() { ajModal.hidden = true; }
+
+  // Clics dentro de los grupos: activar/desactivar, borrar, añadir.
+  ajGrupos.addEventListener('click', function (e) {
+    const chip = e.target.closest('.aj-chip');
+    if (chip) {
+      const g = chip.dataset.g, tipo = chip.dataset.t, i = +chip.dataset.i;
+      if (e.target.dataset.x) { ajCfg.categorias[g][tipo].splice(i, 1); }
+      else { ajCfg.categorias[g][tipo][i].on = !ajCfg.categorias[g][tipo][i].on; }
+      ajRenderGrupos();
+      return;
+    }
+    const btn = e.target.closest('[data-addbtn]');
+    if (btn) {
+      const g = btn.dataset.g, tipo = btn.dataset.addbtn;
+      const input = ajGrupos.querySelector('input[data-add="' + tipo + '"][data-g="' + g + '"]');
+      let val = (input.value || '').trim();
+      if (tipo === 'cpv') { val = ajSoloDigitos(val.split(' ')[0]); }
+      if (val) { ajCfg.categorias[g][tipo].push({ v: val, on: true }); input.value = ''; ajRenderGrupos(); }
+    }
+  });
+  ajGrupos.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && e.target.dataset && e.target.dataset.add) {
+      e.preventDefault();
+      const sel = '[data-addbtn="' + e.target.dataset.add + '"][data-g="' + e.target.dataset.g + '"]';
+      const b = ajGrupos.querySelector(sel); if (b) b.click();
+    }
+  });
+
+  function ajMarcados(cont) {
+    return Array.from(cont.querySelectorAll('input:checked')).map(function (i) { return i.value; });
+  }
+  function ajRecoge() {
+    return {
+      categorias: ajCfg.categorias,
+      fuentes: ajMarcados(ajFuentes),
+      plataformas: ajMarcados(ajPlataformas),
+      regiones: ajMarcados(ajRegiones),
+      vista: {
+        ocultar_caducadas: document.getElementById('aj-ocultar-caducadas').checked,
+        pestana_inicial: document.getElementById('aj-pestana').value,
+        orden_inicial: document.getElementById('aj-orden').value,
+        dias_nuevo: Math.max(1, parseInt(document.getElementById('aj-dias-nuevo').value, 10) || 7)
+      }
+    };
+  }
+  async function ajGuardarCfg() {
+    if (!sesionActiva) { ajMsg.textContent = 'Inicia sesión para guardar.'; ajMsg.className = 'aj-msg err'; return; }
+    const cfg = ajRecoge();
+    ajGuardar.disabled = true; ajMsg.textContent = 'Guardando…'; ajMsg.className = 'aj-msg';
+    try {
+      const { error } = await supabase.from('radar_config')
+        .upsert({ id: 1, config: cfg, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+      if (error) throw error;
+      ajMsg.textContent = 'Guardado ✓ — el robot lo usará en su próxima recogida.';
+      ajMsg.className = 'aj-msg ok';
+      aplicarVistaInicial(cfg.vista);   // aplica ya los ajustes de vista
+    } catch (e) {
+      ajMsg.textContent = 'Error al guardar: ' + (e.message || e);
+      ajMsg.className = 'aj-msg err';
+    } finally { ajGuardar.disabled = false; }
+  }
+
+  if (ajBtn) ajBtn.addEventListener('click', ajAbrir);
+  document.getElementById('aj-cerrar').addEventListener('click', ajCerrar);
+  document.getElementById('aj-cancelar').addEventListener('click', ajCerrar);
+  ajGuardar.addEventListener('click', ajGuardarCfg);
+  ajModal.addEventListener('click', function (e) { if (e.target === ajModal) ajCerrar(); });
+
+  // Aplica los ajustes de VISTA (pestaña/orden/ocultar caducadas) a la vista actual.
+  function aplicarVistaInicial(vista) {
+    if (!vista) return;
+    ocultarCaducadas = !!vista.ocultar_caducadas;
+    if (selectOrden && vista.orden_inicial) selectOrden.value = vista.orden_inicial;
+    if (vista.pestana_inicial) seleccionarPestana(vista.pestana_inicial);
+    else actualizarVista();
+  }
+  // Al cargar la página: lee la config (lectura pública) y aplica la vista guardada.
+  (async function () {
+    const g = await ajLeerConfig();
+    if (g && g.vista) aplicarVistaInicial(g.vista);
+  })();
 """
 
 
@@ -1674,6 +1955,64 @@ CARTERA_DOCS_MODAL = """  <div class="modal-fondo" id="cartera-docs-modal" hidde
 """
 
 
+# Panel de AJUSTES del radar (⚙️, privado tras login). El JS (JS_SUPABASE) lo rellena
+# (grupos/CPV/palabras, plataformas, regiones) al abrirlo y guarda en radar_config.
+AJUSTES_MODAL = """  <div class="modal-fondo" id="ajustes-modal" hidden>
+    <div class="modal-caja aj-caja" role="dialog" aria-modal="true" aria-labelledby="aj-titulo">
+      <div class="modal-cab">
+        <h2 id="aj-titulo">⚙️ Ajustes del radar</h2>
+        <button type="button" class="modal-cerrar" id="aj-cerrar" aria-label="Cerrar ajustes">✕</button>
+      </div>
+      <p class="modal-sub">Configura qué busca el radar y cómo se ve. Lo de "qué caza" afecta a la próxima recogida del robot.</p>
+
+      <section class="aj-sec">
+        <h3 class="aj-h">Qué caza el radar</h3>
+        <p class="aj-ayuda">Por grupo: sus CPV y palabras clave. Clic en un término para activarlo/desactivarlo; ✕ para borrarlo.</p>
+        <div id="aj-grupos"></div>
+      </section>
+
+      <section class="aj-sec">
+        <h3 class="aj-h">Dónde busca</h3>
+        <div class="aj-bloque"><span class="aj-et">Fuentes</span><div class="aj-checks" id="aj-fuentes"></div></div>
+        <div class="aj-bloque"><span class="aj-et">Plataformas</span><div class="aj-checks" id="aj-plataformas"></div></div>
+        <div class="aj-bloque"><span class="aj-et">Regiones</span><div class="aj-checks" id="aj-regiones"></div></div>
+        <p class="aj-ayuda">Sin marcar nada en un bloque = no filtra por eso (entra todo).</p>
+      </section>
+
+      <section class="aj-sec">
+        <h3 class="aj-h">Vista</h3>
+        <label class="aj-linea"><input type="checkbox" id="aj-ocultar-caducadas"> Ocultar caducadas por defecto</label>
+        <label class="aj-linea">Pestaña inicial
+          <select id="aj-pestana">
+            <option value="favoritas">Favoritas</option><option value="activas">Activas</option>
+            <option value="presentadas">Presentadas</option><option value="ganadas">Ganadas</option>
+            <option value="perdidas">Perdidas</option><option value="descartadas">Descartadas</option>
+            <option value="caducadas">Caducadas</option><option value="todas">Todas</option>
+          </select>
+        </label>
+        <label class="aj-linea">Orden inicial
+          <select id="aj-orden">
+            <option value="dias">Días restantes</option><option value="pub">Fecha de publicación</option>
+            <option value="nombre">Nombre (A–Z)</option><option value="subida">Fecha de subida</option>
+            <option value="importe">Importe</option>
+          </select>
+        </label>
+        <label class="aj-linea">Días para marcar «NUEVO»
+          <input type="number" id="aj-dias-nuevo" min="1" max="60" step="1" style="width:70px">
+        </label>
+      </section>
+
+      <div class="modal-pie">
+        <span class="aj-msg" id="aj-msg"></span>
+        <button type="button" class="btn-sec" id="aj-cancelar">Cancelar</button>
+        <button type="button" class="btn-pri" id="aj-guardar">Guardar</button>
+      </div>
+      <datalist id="aj-cpv-catalogo"></datalist>
+    </div>
+  </div>
+"""
+
+
 def construye_tarjeta(lic, es_nueva, hoy, estado):
     """Devuelve el HTML (texto) de UNA tarjeta para una licitación.
     'hoy' es la fecha de hoy en Europe/Madrid, para el contador de días.
@@ -1814,8 +2153,43 @@ licitaciones.sort(key=lambda lic: datetime.fromisoformat(lic["primera_vez"]), re
 # --- 3. ¿A partir de qué fecha algo cuenta como "nuevo"? --------------------
 # Comparamos SOLO fechas (sin horas). 'hoy' en zona Europe/Madrid (igual que el
 # contador de días de las tarjetas), para no usar la hora UTC del runner de Actions.
+# El umbral (días) sale de la config del radar (panel de ajustes); por defecto 7.
 hoy = datetime.now(ZoneInfo("Europe/Madrid")).date()
-fecha_limite = hoy - timedelta(days=DIAS_NUEVO)
+dias_nuevo = lee_dias_nuevo()
+fecha_limite = hoy - timedelta(days=dias_nuevo)
+
+# --- 3.bis Datos que necesita el panel de ajustes (⚙️) ----------------------
+# Semilla de criterios (la primera vez que abras el panel, antes de guardar nada):
+# los grupos/cpv/palabras de intereses.yaml, para no arrancar en blanco.
+try:
+    with open("intereses.yaml", encoding="utf-8") as f:
+        criterios_defecto = yaml.safe_load(f) or {}
+except (OSError, yaml.YAMLError):
+    criterios_defecto = {}
+
+# Plataformas y regiones PRESENTES en los datos, para los selectores de territorio.
+# "Estado" representa el feed estatal (sus licitaciones no traen plataforma agregadora).
+_plataformas = set()
+_regiones = {}     # código NUTS -> nombre legible (texto si lo hay; si no, el código)
+for _lic in licitaciones:
+    _plat = _lic.get("plataforma") or ("Estado" if _lic.get("fuente") == "estatal" else None)
+    if _plat:
+        _plataformas.add(_plat)
+    _cod = _lic.get("region_codigo")
+    if _cod:
+        _regiones.setdefault(_cod, _cod)
+        if _lic.get("region"):                 # si viene el nombre en texto, lo preferimos
+            _regiones[_cod] = _lic["region"]
+plataformas_panel = sorted(_plataformas)
+regiones_panel = dict(sorted(_regiones.items(), key=lambda kv: kv[1].lower()))
+
+# Lo dejamos disponible al JS como variables globales window.RADAR_* (un <script>
+# aparte, antes del JS principal). json.dumps escapa solo lo necesario.
+DATOS_CONFIG_JS = (
+    "window.RADAR_DEFAULTS = " + json.dumps(criterios_defecto, ensure_ascii=False) + ";\n"
+    "window.RADAR_PLATAFORMAS = " + json.dumps(plataformas_panel, ensure_ascii=False) + ";\n"
+    "window.RADAR_REGIONES = " + json.dumps(regiones_panel, ensure_ascii=False) + ";\n"
+)
 
 # Barra de PESTAÑAS por estado (filtra la vista en el navegador; la rellena/activa
 # el JS). Orden fijo y etiqueta; la pestaña activa por defecto es "Activas". El
@@ -1979,6 +2353,7 @@ pagina = f"""<!DOCTYPE html>
       </div>
       <div class="conectado" id="conectado">
         <span class="conectado-tx">Conectado como <b id="conectado-email"></b></span>
+        <button type="button" class="auth-sec ajustes-btn" id="btn-ajustes" title="Ajustes del radar" aria-label="Ajustes del radar">⚙️</button>
         <button type="button" class="auth-sec" id="logout-btn">Cerrar sesión</button>
       </div>
     </div>
@@ -1998,8 +2373,9 @@ pagina = f"""<!DOCTYPE html>
     </div>
   </div>
 </div>
-{CONTRATO_MODAL}{CARTERA_DOCS_MODAL}</div>
+{CONTRATO_MODAL}{CARTERA_DOCS_MODAL}{AJUSTES_MODAL}</div>
 
+<script>{DATOS_CONFIG_JS}</script>
 <script>{JS}</script>
 <script type="module">{JS_SUPABASE}</script>
 </body>
@@ -2011,5 +2387,11 @@ ruta_docs = Path("docs")
 ruta_docs.mkdir(parents=True, exist_ok=True)
 ruta_salida = ruta_docs / "index.html"
 ruta_salida.write_text(pagina, encoding="utf-8")
+
+# Copiamos el catálogo de nombres de CPV a docs/ para que el panel de ajustes
+# pueda buscar CPV por nombre (el navegador lo descarga con fetch('cpv_nombres.json')).
+_cat_cpv = Path("data") / "cpv_nombres.json"
+if _cat_cpv.exists():
+    (ruta_docs / "cpv_nombres.json").write_text(_cat_cpv.read_text(encoding="utf-8"), encoding="utf-8")
 
 print(f"OK: pagina generada en {ruta_salida} con {total} licitaciones.")
