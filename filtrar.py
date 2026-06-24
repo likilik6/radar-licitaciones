@@ -1,38 +1,35 @@
-# Filtra las licitaciones del feed de la Plataforma de Contratación
+# Filtra las licitaciones de los feeds de la Plataforma de Contratación
 # según los criterios que tenemos guardados en intereses.yaml.
+#
+# Procesa una LISTA de feeds (estatal 643 + agregadas 1044) con el MISMO extractor:
+# la descarga y la paginación viven en feeds.py; aquí extraemos los datos de cada
+# entrada, clasificamos por categoría y guardamos en data/licitaciones.json.
 
 # Librerías que usamos:
-# - requests: para descargar el feed de internet.
 # - yaml (pyyaml): para leer nuestro archivo intereses.yaml.
-# - lxml: para leer el XML del feed y sacar el código CPV de cada licitación.
 # - utiles.normaliza: para comparar texto ignorando mayúsculas y tildes
 #   (la misma función la usa generar_web.py; por eso vive en utiles.py).
+# - feeds: la LISTA de feeds y el extractor común (descarga + paginación rel="next").
 # - sys: solo para que los acentos se vean bien al imprimir en Windows.
 # - json: para guardar las licitaciones en un archivo .json (librería estándar).
 # - pathlib (Path): para manejar rutas y crear la carpeta data/ si no existe.
 # - datetime: para apuntar cuándo vemos cada licitación por primera y última vez.
+# - collections.Counter: para contar cuántas licitaciones hay por fuente.
 import sys
 import json
-import requests
 import yaml
 from pathlib import Path
 from datetime import datetime
-from lxml import etree
+from collections import Counter
 
 # normaliza() vive en utiles.py para compartirla con generar_web.py sin duplicarla.
 from utiles import normaliza
+# La lista de feeds y el extractor (descarga + paginación) viven en feeds.py
+# para compartirlos con fetch.py y no duplicar la descarga.
+from feeds import FEEDS, descarga_entradas
 
 # Hacemos que la consola muestre los acentos y la "ñ" correctamente.
 sys.stdout.reconfigure(encoding="utf-8")
-
-# La misma dirección y la misma cabecera de navegador que en fetch.py
-# (el servidor bloquea las peticiones que no parezcan de un navegador).
-URL = "https://contrataciondelsectorpublico.gob.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3.atom"
-CABECERAS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                  "AppleWebKit/537.36 (KHTML, like Gecko) "
-                  "Chrome/120.0.0.0 Safari/537.36"
-}
 
 # El feed usa "espacios de nombres" (namespaces) para etiquetar el XML.
 # Le ponemos un apodo corto a cada uno para poder buscar las etiquetas:
@@ -101,91 +98,100 @@ with open("intereses.yaml", encoding="utf-8") as f:
 # marca la prioridad: una licitación se queda en la PRIMERA categoría con la que
 # coincide. Así no hay nombres de categoría fijos en el código.
 
-# --- 2. Descargamos el feed -------------------------------------------------
-respuesta = requests.get(URL, headers=CABECERAS)
-
-# --- 3. Lo leemos como XML con lxml -----------------------------------------
-# Le pasamos los bytes (respuesta.content); lxml detecta solo la codificación.
-raiz = etree.fromstring(respuesta.content)
-
-# Cada licitación es una etiqueta <entry> dentro del feed.
-entradas = raiz.findall("atom:entry", NS)
-
 # Una lista de resultados por CADA categoría del YAML, en el mismo orden.
 # (un diccionario: nombre_de_categoria -> lista de licitaciones de esa categoría)
 resultados = {nombre: [] for nombre in intereses}
 
-# --- 4. Recorremos las licitaciones una a una -------------------------------
-for entrada in entradas:
-    # Título de la licitación.
-    titulo = entrada.findtext("atom:title", default="(sin título)", namespaces=NS).strip()
+# --- 2. Recorremos la LISTA de feeds (estatal + agregadas) ------------------
+# Cada feed se descarga y pagina con el MISMO extractor (feeds.descarga_entradas)
+# y cada licitación queda etiquetada con su "fuente" para poder distinguirla.
+total_entradas = 0           # cuántas entradas hemos leído en total (todos los feeds)
+leidas_por_fuente = {}       # cuántas entradas trajo cada feed (para el log)
 
-    # Enlace (está en el atributo "href" de la etiqueta <link>).
-    link = entrada.find("atom:link", NS)
-    enlace = link.get("href") if link is not None else "(sin enlace)"
+for feed in FEEDS:
+    fuente = feed["fuente"]
 
-    # Id único de la licitación. En el XML es la etiqueta <id> (equivale al
-    # entry.id de feedparser). Si por lo que fuera no viniera, usamos el enlace.
-    id_unico = entrada.findtext("atom:id", default="", namespaces=NS).strip() or enlace
+    # Descarga + paginación rel="next" (hasta agotarla o hasta el tope de páginas).
+    entradas, paginas, tope = descarga_entradas(feed["url"])
+    leidas_por_fuente[fuente] = len(entradas)
+    total_entradas += len(entradas)
 
-    # Fecha de actualización: etiqueta <updated> (equivale a entry.get("updated", "")).
-    fecha_actualizacion = entrada.findtext("atom:updated", default="", namespaces=NS).strip()
+    aviso_tope = "  [TOPE de páginas alcanzado: puede faltar histórico]" if tope else ""
+    print(f"Feed «{fuente}»: {len(entradas)} entradas en {paginas} página(s){aviso_tope}")
 
-    # Códigos CPV: pueden ser varios, así que los recogemos todos en una lista.
-    # Están en las etiquetas <cbc:ItemClassificationCode> dentro de la entrada.
-    cpvs = [c.text for c in entrada.findall(".//cbc:ItemClassificationCode", NS) if c.text]
+    # --- Recorremos las licitaciones de ESTE feed una a una -----------------
+    for entrada in entradas:
+        # Título de la licitación.
+        titulo = entrada.findtext("atom:title", default="(sin título)", namespaces=NS).strip()
 
-    # --- Datos económicos y fechas (del mismo bloque CODICE que el CPV) -------
-    # El presupuesto y el valor estimado viven en cac:BudgetAmount, DENTRO del
-    # proyecto principal (cac:ProcurementProject, hijo directo de ContractFolderStatus).
-    # Fijamos la ruta exacta para NO coger por error el presupuesto de un lote
-    # (los lotes cuelgan de cac:ProcurementProjectLot). Si algún campo no viene,
-    # findtext devuelve None y nuestras funciones lo dejan en None (null en el JSON).
-    base_presupuesto = ".//place:ContractFolderStatus/cac:ProcurementProject/cac:BudgetAmount/"
-    presupuesto_con_iva = a_numero(entrada.findtext(base_presupuesto + "cbc:TotalAmount", namespaces=NS))
-    presupuesto_sin_iva = a_numero(entrada.findtext(base_presupuesto + "cbc:TaxExclusiveAmount", namespaces=NS))
-    valor_estimado = a_numero(entrada.findtext(base_presupuesto + "cbc:EstimatedOverallContractAmount", namespaces=NS))
+        # Enlace (está en el atributo "href" de la etiqueta <link>).
+        link = entrada.find("atom:link", NS)
+        enlace = link.get("href") if link is not None else "(sin enlace)"
 
-    # Fecha de fin del plazo de presentación de ofertas.
-    fecha_fin_plazo = a_texto(entrada.findtext(
-        ".//place:ContractFolderStatus/cac:TenderingProcess"
-        "/cac:TenderSubmissionDeadlinePeriod/cbc:EndDate", namespaces=NS))
+        # Id único de la licitación. En el XML es la etiqueta <id> (equivale al
+        # entry.id de feedparser). Si por lo que fuera no viniera, usamos el enlace.
+        id_unico = entrada.findtext("atom:id", default="", namespaces=NS).strip() or enlace
 
-    # Fecha de publicación del anuncio (la fecha de emisión del aviso).
-    fecha_publicacion = a_texto(entrada.findtext(
-        ".//place:ValidNoticeInfo//cbc:IssueDate", namespaces=NS))
+        # Fecha de actualización: etiqueta <updated> (equivale a entry.get("updated", "")).
+        fecha_actualizacion = entrada.findtext("atom:updated", default="", namespaces=NS).strip()
 
-    # Normalizamos el título una sola vez para comparar palabras clave.
-    titulo_normalizado = normaliza(titulo)
+        # Códigos CPV: pueden ser varios, así que los recogemos todos en una lista.
+        # Están en las etiquetas <cbc:ItemClassificationCode> dentro de la entrada.
+        cpvs = [c.text for c in entrada.findall(".//cbc:ItemClassificationCode", NS) if c.text]
 
-    # Datos que guardaremos de esta licitación. La "categoria" y la "coincidencia"
-    # se añaden justo abajo, cuando sepamos en qué grupo cae.
-    registro = {
-        "id": id_unico,
-        "titulo": titulo,
-        "enlace": enlace,
-        "cpv": cpvs,
-        "presupuesto_con_iva": presupuesto_con_iva,
-        "presupuesto_sin_iva": presupuesto_sin_iva,
-        "valor_estimado": valor_estimado,
-        "fecha_fin_plazo": fecha_fin_plazo,
-        "fecha_publicacion": fecha_publicacion,
-        "fecha_actualizacion": fecha_actualizacion,
-    }
+        # --- Datos económicos y fechas (del mismo bloque CODICE que el CPV) ---
+        # El presupuesto y el valor estimado viven en cac:BudgetAmount, DENTRO del
+        # proyecto principal (cac:ProcurementProject, hijo directo de ContractFolderStatus).
+        # Fijamos la ruta exacta para NO coger por error el presupuesto de un lote
+        # (los lotes cuelgan de cac:ProcurementProjectLot). Si algún campo no viene,
+        # findtext devuelve None y nuestras funciones lo dejan en None (null en el JSON).
+        base_presupuesto = ".//place:ContractFolderStatus/cac:ProcurementProject/cac:BudgetAmount/"
+        presupuesto_con_iva = a_numero(entrada.findtext(base_presupuesto + "cbc:TotalAmount", namespaces=NS))
+        presupuesto_sin_iva = a_numero(entrada.findtext(base_presupuesto + "cbc:TaxExclusiveAmount", namespaces=NS))
+        valor_estimado = a_numero(entrada.findtext(base_presupuesto + "cbc:EstimatedOverallContractAmount", namespaces=NS))
 
-    # Clasificamos recorriendo las categorías EN ORDEN (criticas, a_revisar,
-    # pruebas...). La PRIMERA con la que coincida se queda con la licitación; por
-    # eso el orden del YAML define la prioridad (de más a menos específica).
-    for nombre, criterios in intereses.items():
-        motivo = busca_coincidencia(cpvs, titulo_normalizado, criterios)
-        if motivo:
-            registro["categoria"] = nombre            # el nombre de la categoría del YAML
-            registro["coincidencia"] = motivo
-            resultados[nombre].append(registro)
-            break  # ya está clasificada: no miramos categorías de menor prioridad
-    # Si ninguna categoría coincide, la licitación se ignora (no la guardamos).
+        # Fecha de fin del plazo de presentación de ofertas.
+        fecha_fin_plazo = a_texto(entrada.findtext(
+            ".//place:ContractFolderStatus/cac:TenderingProcess"
+            "/cac:TenderSubmissionDeadlinePeriod/cbc:EndDate", namespaces=NS))
 
-# --- 5. Mostramos los resultados agrupados, una sección por categoría --------
+        # Fecha de publicación del anuncio (la fecha de emisión del aviso).
+        fecha_publicacion = a_texto(entrada.findtext(
+            ".//place:ValidNoticeInfo//cbc:IssueDate", namespaces=NS))
+
+        # Normalizamos el título una sola vez para comparar palabras clave.
+        titulo_normalizado = normaliza(titulo)
+
+        # Datos que guardaremos de esta licitación. La "categoria" y la "coincidencia"
+        # se añaden justo abajo, cuando sepamos en qué grupo cae. "fuente" indica de
+        # qué feed salió (estatal / agregadas).
+        registro = {
+            "id": id_unico,
+            "titulo": titulo,
+            "enlace": enlace,
+            "cpv": cpvs,
+            "fuente": fuente,
+            "presupuesto_con_iva": presupuesto_con_iva,
+            "presupuesto_sin_iva": presupuesto_sin_iva,
+            "valor_estimado": valor_estimado,
+            "fecha_fin_plazo": fecha_fin_plazo,
+            "fecha_publicacion": fecha_publicacion,
+            "fecha_actualizacion": fecha_actualizacion,
+        }
+
+        # Clasificamos recorriendo las categorías EN ORDEN (criticas, a_revisar,
+        # pruebas...). La PRIMERA con la que coincida se queda con la licitación; por
+        # eso el orden del YAML define la prioridad (de más a menos específica).
+        for nombre, criterios in intereses.items():
+            motivo = busca_coincidencia(cpvs, titulo_normalizado, criterios)
+            if motivo:
+                registro["categoria"] = nombre            # el nombre de la categoría del YAML
+                registro["coincidencia"] = motivo
+                resultados[nombre].append(registro)
+                break  # ya está clasificada: no miramos categorías de menor prioridad
+        # Si ninguna categoría coincide, la licitación se ignora (no la guardamos).
+
+# --- 3. Mostramos los resultados agrupados, una sección por categoría --------
 for nombre, lista in resultados.items():
     # Título de la sección a partir del nombre: "a_revisar" -> "A REVISAR".
     titulo_seccion = nombre.upper().replace("_", " ")
@@ -198,13 +204,16 @@ for nombre, lista in resultados.items():
         print(f"  Motivo: {lic['coincidencia']}")
         print()
 
-# --- 6. Resumen de esta ejecución -------------------------------------------
+# --- 4. Resumen de esta ejecución -------------------------------------------
 print("=" * 70)
 # Un trocito de texto por categoría: "0 en criticas, 0 en a_revisar, 5 en pruebas".
 detalle = ", ".join(f"{len(lista)} en {nombre}" for nombre, lista in resultados.items())
-print(f"Resumen: {detalle}; sobre {len(entradas)} licitaciones en total.")
+print(f"Resumen: {detalle}; sobre {total_entradas} licitaciones leídas en total.")
+# Cuántas entradas trajo cada feed (antes de filtrar).
+detalle_feeds = ", ".join(f"{n} de {fuente}" for fuente, n in leidas_por_fuente.items())
+print(f"Entradas leídas por fuente: {detalle_feeds}.")
 
-# --- 7. Guardamos las licitaciones en data/licitaciones.json ----------------
+# --- 5. Guardamos las licitaciones en data/licitaciones.json ----------------
 # Juntamos en una sola lista todas las que han pasado el filtro (todas las categorías,
 # en orden de prioridad: primero las de "criticas", luego "a_revisar", etc.).
 licitaciones_filtradas = [lic for lista in resultados.values() for lic in lista]
@@ -236,6 +245,7 @@ for lic in licitaciones_filtradas:
             "titulo": lic["titulo"],
             "enlace": lic["enlace"],
             "cpv": lic["cpv"],
+            "fuente": lic["fuente"],
             "categoria": lic["categoria"],
             "coincidencia": lic["coincidencia"],
             "presupuesto_con_iva": lic["presupuesto_con_iva"],
@@ -251,7 +261,9 @@ for lic in licitaciones_filtradas:
     else:
         # Ya la conocíamos: refrescamos cuándo la hemos visto por última vez, su
         # fecha de actualización y los datos económicos/fechas (pueden cambiar:
-        # correcciones de presupuesto, ampliaciones de plazo...). NO tocamos "primera_vez".
+        # correcciones de presupuesto, ampliaciones de plazo...). NO tocamos
+        # "primera_vez" ni "fuente" (el origen de una licitación no cambia; si
+        # apareciera en los dos feeds, se queda con el primero que la vio).
         datos[clave]["ultima_vez"] = ahora
         datos[clave]["fecha_actualizacion"] = lic["fecha_actualizacion"]
         datos[clave]["presupuesto_con_iva"] = lic["presupuesto_con_iva"]
@@ -260,14 +272,25 @@ for lic in licitaciones_filtradas:
         datos[clave]["fecha_fin_plazo"] = lic["fecha_fin_plazo"]
         datos[clave]["fecha_publicacion"] = lic["fecha_publicacion"]
 
+# Migración: las entradas guardadas ANTES de existir el campo "fuente" no lo
+# tienen. Como hasta ahora el único feed era el estatal, las dejamos como
+# "estatal" por defecto (setdefault solo lo pone si falta; no pisa las que ya
+# lo tengan).
+for registro_guardado in datos.values():
+    registro_guardado.setdefault("fuente", "estatal")
+
 # Guardamos el diccionario completo.
 # ensure_ascii=False -> conserva tildes y "ñ"; indent=2 -> deja el diff de Git legible.
 with open(ruta_json, "w", encoding="utf-8") as f:
     json.dump(datos, f, ensure_ascii=False, indent=2)
 
-# --- 8. Resumen de la persistencia ------------------------------------------
+# --- 6. Resumen de la persistencia ------------------------------------------
 print("=" * 70)
 print(f"Total de licitaciones en el archivo: {len(datos)}")
+# Conteo por fuente de TODO lo guardado (cumple "nº de licitaciones por fuente").
+conteo_fuente = Counter(registro["fuente"] for registro in datos.values())
+detalle_guardadas = ", ".join(f"{n} {fuente}" for fuente, n in sorted(conteo_fuente.items()))
+print(f"Por fuente en el archivo: {detalle_guardadas}.")
 print(f"Nuevas en esta ejecución: {len(nuevas)}")
 for lic in nuevas:
-    print(f"  - [{lic['categoria']}] {lic['titulo']}")
+    print(f"  - [{lic['fuente']}/{lic['categoria']}] {lic['titulo']}")

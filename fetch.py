@@ -1,31 +1,35 @@
-# Importamos las librerías que vamos a usar:
-# - requests: para descargar contenido de internet
-# - feedparser: para leer y entender el feed ATOM (un formato de noticias/datos)
-import requests
-import feedparser
+# fetch.py — script de EXPLORACIÓN para mirar rápido qué trae cada feed.
+#
+# OJO: esto NO es la automatización. El pipeline real es filtrar.py (descarga,
+# clasifica y guarda) + generar_web.py (construye la web). Este script solo sirve
+# para echar un vistazo a mano: descarga la LISTA de feeds con el mismo extractor
+# (feeds.py) y muestra un resumen por fuente y la primera entrada de cada uno.
+import sys
 
-# Esta es la dirección del feed ATOM de la Plataforma de Contratación del Sector Público.
-URL = "https://contrataciondelsectorpublico.gob.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3.atom"
+# La lista de feeds, el extractor (descarga + paginación) y el namespace ATOM
+# viven en feeds.py, compartidos con filtrar.py para no duplicar la descarga.
+from feeds import FEEDS, descarga_entradas, ATOM_NS
 
-# El servidor rechaza las peticiones que no parezcan venir de un navegador.
-# Por eso enviamos una cabecera "User-Agent" que imita a un navegador real.
-cabeceras = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                  "AppleWebKit/537.36 (KHTML, like Gecko) "
-                  "Chrome/120.0.0.0 Safari/537.36"
-}
+# Hacemos que la consola muestre los acentos y la "ñ" correctamente.
+sys.stdout.reconfigure(encoding="utf-8")
 
-# Descargamos el feed. El resultado se guarda en la variable "respuesta".
-respuesta = requests.get(URL, headers=cabeceras)
+# Recorremos los feeds (estatal + agregadas) y mostramos un resumen de cada uno.
+for feed in FEEDS:
+    entradas, paginas, tope = descarga_entradas(feed["url"])
 
-# Le pasamos el texto descargado a feedparser para que lo analice (lo "parsee").
-feed = feedparser.parse(respuesta.content)
+    print("=" * 70)
+    print(f"Feed «{feed['fuente']}»  —  {feed['url']}")
+    aviso_tope = "  [TOPE de páginas alcanzado]" if tope else ""
+    print(f"Entradas: {len(entradas)} en {paginas} página(s){aviso_tope}")
 
-# Mostramos cuántas entradas (licitaciones) hay en el feed.
-print("Número de entradas:", len(feed.entries))
-
-# Cogemos la primera entrada de la lista y mostramos algunos de sus datos.
-primera = feed.entries[0]
-print("Título:", primera.title)
-print("Enlace:", primera.link)
-print("Fecha de actualización:", primera.updated)
+    # Mostramos algunos datos de la PRIMERA entrada, a modo de muestra.
+    if entradas:
+        primera = entradas[0]
+        titulo = primera.findtext("atom:title", default="(sin título)", namespaces=ATOM_NS).strip()
+        link = primera.find("atom:link", ATOM_NS)
+        enlace = link.get("href") if link is not None else "(sin enlace)"
+        actualizado = primera.findtext("atom:updated", default="", namespaces=ATOM_NS).strip()
+        print("Primera entrada:")
+        print("  Título:", titulo)
+        print("  Enlace:", enlace)
+        print("  Actualización:", actualizado)
