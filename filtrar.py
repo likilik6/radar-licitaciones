@@ -159,6 +159,23 @@ for feed in FEEDS:
         fecha_publicacion = a_texto(entrada.findtext(
             ".//place:ValidNoticeInfo//cbc:IssueDate", namespaces=NS))
 
+        # --- Territorio: quién contrata y dónde (para poder filtrar por zona) ----
+        # Todo cuelga de la parte contratante (LocatedContractingParty) y del lugar
+        # de ejecución (RealizedLocation), dentro del ContractFolderStatus.
+        #   - organismo: el cuerpo que licita (p.ej. "Junta de Gobierno Local",
+        #     "Dirección General de Mercados Centrales"). Casi siempre viene.
+        #   - plataforma: la entidad agregadora (cac:AgentParty), p.ej. "Gobierno de
+        #     Navarra". Aparece en las agregadas; en muchas estatales no viene (None).
+        #   - region / region_codigo: la zona donde se ejecuta el contrato, como
+        #     texto ("Madrid", "Navarra") y como código NUTS ("ES300", "ES220").
+        #     El texto no siempre viene; el código es más constante.
+        base_parte = ".//place:ContractFolderStatus/place:LocatedContractingParty/cac:Party/"
+        organismo = a_texto(entrada.findtext(base_parte + "cac:PartyName/cbc:Name", namespaces=NS))
+        plataforma = a_texto(entrada.findtext(base_parte + "cac:AgentParty/cac:PartyName/cbc:Name", namespaces=NS))
+        base_lugar = ".//place:ContractFolderStatus/cac:ProcurementProject/cac:RealizedLocation/"
+        region = a_texto(entrada.findtext(base_lugar + "cbc:CountrySubentity", namespaces=NS))
+        region_codigo = a_texto(entrada.findtext(base_lugar + "cbc:CountrySubentityCode", namespaces=NS))
+
         # Normalizamos el título una sola vez para comparar palabras clave.
         titulo_normalizado = normaliza(titulo)
 
@@ -171,6 +188,10 @@ for feed in FEEDS:
             "enlace": enlace,
             "cpv": cpvs,
             "fuente": fuente,
+            "organismo": organismo,
+            "plataforma": plataforma,
+            "region": region,
+            "region_codigo": region_codigo,
             "presupuesto_con_iva": presupuesto_con_iva,
             "presupuesto_sin_iva": presupuesto_sin_iva,
             "valor_estimado": valor_estimado,
@@ -246,6 +267,10 @@ for lic in licitaciones_filtradas:
             "enlace": lic["enlace"],
             "cpv": lic["cpv"],
             "fuente": lic["fuente"],
+            "organismo": lic["organismo"],
+            "plataforma": lic["plataforma"],
+            "region": lic["region"],
+            "region_codigo": lic["region_codigo"],
             "categoria": lic["categoria"],
             "coincidencia": lic["coincidencia"],
             "presupuesto_con_iva": lic["presupuesto_con_iva"],
@@ -271,13 +296,23 @@ for lic in licitaciones_filtradas:
         datos[clave]["valor_estimado"] = lic["valor_estimado"]
         datos[clave]["fecha_fin_plazo"] = lic["fecha_fin_plazo"]
         datos[clave]["fecha_publicacion"] = lic["fecha_publicacion"]
+        # Territorio: lo refrescamos también (y de paso rellena las entradas
+        # antiguas que aún no lo tuvieran, cuando se las vuelve a ver).
+        datos[clave]["organismo"] = lic["organismo"]
+        datos[clave]["plataforma"] = lic["plataforma"]
+        datos[clave]["region"] = lic["region"]
+        datos[clave]["region_codigo"] = lic["region_codigo"]
 
-# Migración: las entradas guardadas ANTES de existir el campo "fuente" no lo
-# tienen. Como hasta ahora el único feed era el estatal, las dejamos como
-# "estatal" por defecto (setdefault solo lo pone si falta; no pisa las que ya
-# lo tengan).
+# Migración: las entradas guardadas ANTES de existir estos campos no los tienen.
+# El "fuente" lo dejamos en "estatal" (hasta ahora el único feed era ese); los de
+# territorio quedan en None si nunca se vuelve a ver la licitación. setdefault solo
+# pone el valor si falta; no pisa los que ya estén.
 for registro_guardado in datos.values():
     registro_guardado.setdefault("fuente", "estatal")
+    registro_guardado.setdefault("organismo", None)
+    registro_guardado.setdefault("plataforma", None)
+    registro_guardado.setdefault("region", None)
+    registro_guardado.setdefault("region_codigo", None)
 
 # Guardamos el diccionario completo.
 # ensure_ascii=False -> conserva tildes y "ñ"; indent=2 -> deja el diff de Git legible.
