@@ -409,6 +409,18 @@ CSS = """
   .cal-plazo { flex:0 0 auto; color:var(--suave); font-size:.78rem; white-space:nowrap; }
   .cal-urgente .cal-plazo { color:#b91c1c; font-weight:700; }
   .cal-vacio { color:var(--suave); font-size:.9rem; }
+  /* Calendario en dos mitades: rejilla (izq) + lista de próximos (der). */
+  .cal-split{ display:flex; gap:1rem; align-items:flex-start; }
+  .cal-mes-panel{ flex:1 1 50%; } .cal-lista-panel{ flex:1 1 50%; max-height:72vh; overflow:auto; }
+  @media(max-width:800px){ .cal-split{ flex-direction:column; } }
+  .cal-nav{ display:flex; justify-content:space-between; align-items:center; margin-bottom:.4rem; font-weight:600; text-transform:capitalize; }
+  .cal-nav button{ cursor:pointer; border:1px solid #ddd; border-radius:6px; background:#fff; padding:0 .5rem; }
+  .cal-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
+  .cal-dow{ text-align:center; font-size:.7rem; color:var(--suave); font-weight:600; }
+  .cal-dia{ min-height:42px; border:1px solid #eee; border-radius:6px; padding:2px 4px; font-size:.78rem; position:relative; }
+  .cal-dia-evt{ cursor:pointer; background:#f8fafc; } .cal-vacia{ border:none; }
+  .cal-dia-puntos{ position:absolute; bottom:3px; left:4px; display:flex; gap:2px; }
+  .resaltado{ outline:2px solid #f59e0b; outline-offset:2px; }
 
   /* ---- Móvil: el menú se oculta y se abre con el botón ☰ ---- */
   @media (max-width:860px) {
@@ -664,18 +676,23 @@ JS_SUPABASE = """
   // contadores y re-aplica filtro + orden, para que vista y números no se desfasen.
   function refrescarTodo() { actualizarContadores(); actualizarVista(); }
 
+  // Activa una pestaña por nombre (marca el botón y re-filtra). La usan el click
+  // del usuario y el salto desde el Calendario (para que la tarjeta destino se vea).
+  function seleccionarPestana(nombre) {
+    pestanaActiva = nombre;
+    if (barraTabs) barraTabs.querySelectorAll('.tab').forEach(function (t) {
+      const act = (t.dataset.pestana === nombre);
+      t.classList.toggle('activa', act);
+      t.setAttribute('aria-selected', act ? 'true' : 'false');
+    });
+    actualizarVista();
+  }
   // Click en una pestaña: cambia la activa y re-filtra (los contadores no cambian).
   if (barraTabs) {
     barraTabs.addEventListener('click', function (e) {
       const btn = e.target.closest('.tab');
       if (!btn) return;
-      pestanaActiva = btn.dataset.pestana;
-      barraTabs.querySelectorAll('.tab').forEach(function (t) {
-        const act = (t === btn);
-        t.classList.toggle('activa', act);
-        t.setAttribute('aria-selected', act ? 'true' : 'false');
-      });
-      actualizarVista();
+      seleccionarPestana(btn.dataset.pestana);
     });
   }
   // Cambiar el desplegable de orden: solo re-ordena (filtro y contadores no cambian).
@@ -1094,6 +1111,7 @@ JS_SUPABASE = """
   const fmtEur = n => (n == null ? '—' :
     new Intl.NumberFormat('es-ES', { style:'currency', currency:'EUR' }).format(n));
   const carteraPorId = new Map();   // id de cartera -> fila (para el subtítulo del modal de docs)
+  let resaltarPendiente = null;     // selector a resaltar tras pintar la cartera (salto del Calendario)
 
   // OJO: el radar ya tiene su propia diasHasta() (ordena por días de plazo). La de la
   // cartera la llamamos diasHastaVig() para NO pisarla (misma lógica que me diste).
@@ -1128,7 +1146,7 @@ JS_SUPABASE = """
       <th>Duración</th><th>Prórrogas</th><th>Estado</th><th>Docs</th></tr></thead><tbody>`;
     for (const f of filas) {
       const resuelto = (f.estado || '').toLowerCase().includes('resuelto');
-      html += `<tr class="${resuelto ? 'fila-resuelto' : ''}" title="${(f.notas || '').replace(/"/g,'&quot;')}">
+      html += `<tr class="${resuelto ? 'fila-resuelto' : ''}" data-cartera-id="${f.id}" title="${(f.notas || '').replace(/"/g,'&quot;')}">
         <td class="col-venc">${badgeVigencia(f.fin_vigencia_fecha, f.fin_vigencia)}</td>
         <td>${f.cliente||''}</td><td>${f.ccaa||''}</td><td>${f.objeto||''}</td><td>${f.expediente||''}</td>
         <td>${fmtEur(f.importe_adjudicacion)}</td><td>${fmtEur(f.importe_total_civa)}</td>
@@ -1138,6 +1156,9 @@ JS_SUPABASE = """
     }
     html += `</tbody></table>`;
     cont.innerHTML = html;
+    // Si venimos de pinchar un evento del Calendario, resaltamos su fila AHORA que
+    // ya está pintada (sin carrera contra la latencia de la consulta a Supabase).
+    if (resaltarPendiente) { const s = resaltarPendiente; resaltarPendiente = null; resaltarEn(s); }
   }
 
   // --- Calendario: combina vencimientos de cartera (privado) y cierres de -----
@@ -1147,7 +1168,7 @@ JS_SUPABASE = """
   // (fecha_fin_plazo, el EndDate del CODICE). No hay campo "órgano" en los datos.
   function licitacionesRadar() {
     return Array.from(document.querySelectorAll('.card[data-licitacion-id]')).map(function (card) {
-      return { titulo: card.dataset.titulo || '', finPresentacion: card.dataset.finPlazo || '' };
+      return { titulo: card.dataset.titulo || '', finPresentacion: card.dataset.finPlazo || '', id: card.dataset.licitacionId };
     });
   }
 
@@ -1162,21 +1183,25 @@ JS_SUPABASE = """
   async function cargarCalendario() {
     const eventos = [];
     // Fuente 1: cartera (privada) -> fin de contrato/prórroga (filas con fecha).
+    // Llevamos el id de cartera para poder navegar al evento (carteraId).
     const { data, error } = await supabase.from('cartera')
-      .select('cliente,objeto,fin_vigencia_fecha').not('fin_vigencia_fecha', 'is', null);
+      .select('id,cliente,objeto,fin_vigencia_fecha').not('fin_vigencia_fecha', 'is', null);
     if (error) { console.error(error); }
     (data || []).forEach(function (f) {
-      eventos.push({ tipo: 'fin-contrato', fecha: f.fin_vigencia_fecha, titulo: f.cliente || '', detalle: f.objeto || '' });
+      eventos.push({ tipo: 'fin-contrato', fecha: f.fin_vigencia_fecha, titulo: f.cliente || '', detalle: f.objeto || '', carteraId: String(f.id) });
     });
     // Fuente 2: radar (público) -> cierre de presentación, TODAS con fin >= hoy.
+    // Llevamos el id de licitación (entry.id) para navegar a su tarjeta.
     licitacionesRadar().forEach(function (l) {
       const f = l.finPresentacion;
       if (f && diasHastaVig(f) >= 0) {
-        eventos.push({ tipo: 'cierre-presentacion', fecha: f, titulo: l.titulo, detalle: '' });
+        eventos.push({ tipo: 'cierre-presentacion', fecha: f, titulo: l.titulo, detalle: '', licitacionId: l.id });
       }
     });
     eventos.sort(function (a, b) { return a.fecha.localeCompare(b.fecha); });   // ISO -> orden cronológico
-    renderCalendario(eventos);
+    calendarioEventos = eventos;
+    renderRejilla(calendarioEventos);     // mitad izquierda: rejilla mensual
+    renderCalendario(calendarioEventos);  // mitad derecha: lista de próximos (igual que antes)
   }
 
   function renderCalendario(eventos) {
@@ -1245,9 +1270,53 @@ JS_SUPABASE = """
       plazo.textContent = textoPlazo(d);
       li.appendChild(plazo);
 
+      li.style.cursor = 'pointer';                          // clicable: salta a su info
+      li.addEventListener('click', function () { irAEvento(ev); });
       ul.appendChild(li);
     });
   }
+
+  // --- Rejilla mensual (mitad izquierda) -------------------------------------
+  let calendarioEventos = [];   // eventos del calendario (lista + rejilla comparten)
+  let calMes = null;
+  function renderRejilla(eventos){
+    const cont = document.getElementById('cal-mes'); if(!cont) return;
+    if(!calMes){ const f = eventos.length ? new Date(eventos[0].fecha+'T00:00:00') : new Date(); calMes = {y:f.getFullYear(), m:f.getMonth()}; }
+    const {y,m} = calMes, porDia = {};
+    eventos.forEach(e => (porDia[e.fecha] = porDia[e.fecha]||[]).push(e));
+    const primero = new Date(y,m,1), inicio = (primero.getDay()+6)%7, diasMes = new Date(y,m+1,0).getDate();
+    let html = `<div class="cal-nav"><button type="button" id="cal-prev">‹</button><span>${primero.toLocaleDateString('es-ES',{month:'long',year:'numeric'})}</span><button type="button" id="cal-next">›</button></div><div class="cal-grid">`;
+    ['L','M','X','J','V','S','D'].forEach(d => html += `<div class="cal-dow">${d}</div>`);
+    for(let i=0;i<inicio;i++) html += `<div class="cal-dia cal-vacia"></div>`;
+    for(let dia=1; dia<=diasMes; dia++){
+      const iso = `${y}-${String(m+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`, evs = porDia[iso]||[];
+      const puntos = [...new Set(evs.map(e=>e.tipo))].map(t=>`<span class="cal-punto cal-punto-${t}"></span>`).join('');
+      html += `<div class="cal-dia${evs.length?' cal-dia-evt':''}" data-fecha="${iso}">${dia}<div class="cal-dia-puntos">${puntos}</div></div>`;
+    }
+    cont.innerHTML = html + `</div>`;
+    document.getElementById('cal-prev').onclick = () => { if(--calMes.m<0){calMes.m=11;calMes.y--;} renderRejilla(eventos); };
+    document.getElementById('cal-next').onclick = () => { if(++calMes.m>11){calMes.m=0;calMes.y++;} renderRejilla(eventos); };
+    cont.querySelectorAll('.cal-dia-evt').forEach(el => el.onclick = () => { const e=(porDia[el.dataset.fecha]||[])[0]; if(e) irAEvento(e); });
+  }
+
+  // --- Click en un evento -> ir a su información (Cartera o Radar) ------------
+  function irAEvento(ev){
+    if(ev.tipo==='fin-contrato' && ev.carteraId){
+      // La tabla de cartera se re-fetchea (async) al entrar; en vez de competir con
+      // un setTimeout fijo, dejamos marcado el destino y lo resalta renderCartera al
+      // terminar de pintar (ver resaltarPendiente).
+      resaltarPendiente = '#cartera-contenido tr[data-cartera-id="'+ev.carteraId+'"]';
+      mostrarVista('cartera');
+    }
+    else if(ev.tipo==='cierre-presentacion' && ev.licitacionId){
+      // La tarjeta puede estar oculta por el filtro de pestaña (display:none); pasamos
+      // a "Todas" para que se vea, y la resaltamos cuando el radar ya está visible.
+      mostrarVista('radar');
+      seleccionarPestana('todas');
+      setTimeout(()=>resaltarEn('.card[data-licitacion-id="'+ev.licitacionId+'"]'),80);
+    }
+  }
+  function resaltarEn(sel){ const el=document.querySelector(sel); if(!el) return; el.scrollIntoView({behavior:'smooth',block:'center'}); el.classList.add('resaltado'); setTimeout(()=>el.classList.remove('resaltado'),2500); }
 
   // ====== Documentos de una adjudicación de la cartera (cartera_documentos) =====
   // Mismo patrón que los documentos de las licitaciones (mismo cliente, bucket
@@ -1800,7 +1869,10 @@ pagina = f"""<!DOCTYPE html>
       <div id="cartera-contenido"></div>
     </div>
     <div id="vista-calendario" hidden>
-      <div id="calendario-contenido"></div>
+      <div class="cal-split">
+        <div id="cal-mes" class="cal-mes-panel"></div>
+        <div id="calendario-contenido" class="cal-lista-panel"></div>
+      </div>
     </div>
   </div>
 </div>
