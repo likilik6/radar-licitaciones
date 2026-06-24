@@ -583,6 +583,7 @@ JS_SUPABASE = """
   // todo esto vive dentro de #radar, que solo se ve con sesión.
   const grid = document.getElementById('listado');
   const selectOrden = document.getElementById('orden');
+  const selectCpv = document.getElementById('filtro-cpv');   // desplegable de filtro por CPV
   const barraTabs = document.getElementById('tabs');
   const vacioPestana = document.getElementById('vacio-pestana');   // mensaje "pestaña vacía"
   let pestanaActiva = 'activas';   // pestaña activa por defecto
@@ -633,10 +634,19 @@ JS_SUPABASE = """
   // visibilidad será (pertenece a la pestaña) Y (pasa el filtro de categoría).
   function categoriaVisible(card) { return true; }
 
-  // Muestra/oculta cada tarjeta según pestaña activa Y categoría. Solo en el navegador.
+  // Filtro por CPV (desplegable). cpvActivo = "" significa "Todos los CPV" (no filtra).
+  // Cada tarjeta lleva sus códigos en data-cpv separados por espacio; pasa el filtro
+  // si entre ellos está el CPV elegido.
+  let cpvActivo = '';
+  function cpvVisible(card) {
+    if (!cpvActivo) return true;
+    return (card.dataset.cpv || '').split(' ').indexOf(cpvActivo) !== -1;
+  }
+
+  // Muestra/oculta cada tarjeta según pestaña activa Y categoría Y CPV. Solo en el navegador.
   function aplicarFiltro() {
     cards().forEach(function (c) {
-      const visible = perteneceAPestana(c, pestanaActiva) && categoriaVisible(c);
+      const visible = perteneceAPestana(c, pestanaActiva) && categoriaVisible(c) && cpvVisible(c);
       c.classList.toggle('oculta-filtro', !visible);
     });
   }
@@ -714,6 +724,14 @@ JS_SUPABASE = """
   // Cambiar el desplegable de orden: solo re-ordena (filtro y contadores no cambian).
   if (selectOrden) {
     selectOrden.addEventListener('change', function () { ordenar(ordenActual()); });
+  }
+  // Cambiar el desplegable de CPV: re-aplica el filtro (la pestaña activa y los
+  // contadores globales no cambian; solo qué tarjetas se ven dentro de la pestaña).
+  if (selectCpv) {
+    selectCpv.addEventListener('change', function () {
+      cpvActivo = selectCpv.value;
+      actualizarVista();
+    });
   }
 
   // --- Leer la tabla 'decisiones', rellenar el Map y pintar (SOLO con sesión) -
@@ -1675,9 +1693,17 @@ def construye_tarjeta(lic, es_nueva, hoy, estado):
     # traer el mismo código dos veces y no queremos pintarlo dos veces).
     cpvs = list(dict.fromkeys(lic.get("cpv", []) or []))
     if cpvs:
-        cpv_html = " ".join(f"<code>{html.escape(c)}</code>" for c in cpvs)
+        # En cada <code> ponemos el NOMBRE del CPV como title (tooltip al pasar el
+        # ratón); si no lo conocemos, queda vacío. cpv_nombres es el mapa global.
+        cpv_html = " ".join(
+            f'<code title="{html.escape(cpv_nombres.get(c, ""))}">{html.escape(c)}</code>'
+            for c in cpvs
+        )
     else:
         cpv_html = "—"
+    # data-cpv: los códigos (sin repetir) separados por espacio, para que el JS
+    # pueda filtrar las tarjetas por CPV. Son numéricos, pero escapamos por higiene.
+    data_cpv = html.escape(" ".join(cpvs))
 
     # --- Datos económicos y fechas (ya guardados en el JSON por filtrar.py) ----
     # Los formateamos para mostrarlos. Si un campo es null, mostramos "—" (con
@@ -1746,6 +1772,7 @@ def construye_tarjeta(lic, es_nueva, hoy, estado):
     return f"""    <article class="card"
       data-importe="{data_importe}" data-fin-plazo="{data_fin_plazo}"
       data-fecha-pub="{data_fecha_pub}" data-fecha-subida="{data_fecha_subida}"
+      data-cpv="{data_cpv}"
       data-titulo="{titulo}" data-licitacion-id="{lic_id}"
       data-estado="{estado}" data-favorita="false">
       {CONTROLES_CARD}
@@ -1766,6 +1793,18 @@ if ruta_json.exists():
     contenido = ruta_json.read_text(encoding="utf-8").strip()
     if contenido:                       # solo si el archivo tiene algo dentro
         datos = json.loads(contenido)
+
+# Nombres de los CPV (código -> nombre en español), para el desplegable de filtro
+# y el tooltip de cada CPV en las tarjetas. Lo genera actualizar_cpv.py desde la
+# lista oficial. Si el archivo no está, seguimos sin nombres (mostramos solo el
+# código): la web se genera igual.
+ruta_cpv = Path("data") / "cpv_nombres.json"
+cpv_nombres = {}
+if ruta_cpv.exists():
+    try:
+        cpv_nombres = json.loads(ruta_cpv.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        cpv_nombres = {}
 
 # --- 2. Pasamos los valores a una lista y la ordenamos ----------------------
 # De más RECIENTE a más antigua según "primera_vez" (por eso reverse=True).
@@ -1815,6 +1854,35 @@ ORDEN_HTML = """    <div class="orden-barra">
       </select>
     </div>
 """
+
+# Desplegable para FILTRAR por CPV. Recogemos los CPV que aparecen en las
+# licitaciones (sin repetir dentro de cada una) y cuántas los tienen, y los
+# listamos como "código — nombre (N)", ordenados por código (las familias quedan
+# juntas). El JS usa el atributo data-cpv de cada tarjeta para ocultar/mostrar.
+# Solo se muestra si hay CPV que filtrar (si no hay datos, queda como "").
+conteo_cpv = {}
+for _lic in licitaciones:
+    for _codigo in dict.fromkeys(_lic.get("cpv", []) or []):
+        conteo_cpv[_codigo] = conteo_cpv.get(_codigo, 0) + 1
+
+if conteo_cpv:
+    _opciones_cpv = []
+    for _codigo in sorted(conteo_cpv):
+        _nombre = cpv_nombres.get(_codigo, "")
+        _texto = f"{_codigo} — {_nombre}" if _nombre else _codigo
+        _texto += f" ({conteo_cpv[_codigo]})"
+        _opciones_cpv.append(
+            f'<option value="{html.escape(_codigo)}">{html.escape(_texto)}</option>'
+        )
+    FILTRO_CPV_HTML = ('    <div class="orden-barra">\n'
+                       '      <label for="filtro-cpv">Filtrar por CPV</label>\n'
+                       '      <select id="filtro-cpv">\n'
+                       '        <option value="">Todos los CPV</option>\n'
+                       '        ' + "\n        ".join(_opciones_cpv) + "\n"
+                       '      </select>\n'
+                       '    </div>\n')
+else:
+    FILTRO_CPV_HTML = ""
 
 # --- 4. Construimos el cuerpo: las tarjetas, o un mensaje si no hay nada -----
 if licitaciones:
@@ -1915,7 +1983,7 @@ pagina = f"""<!DOCTYPE html>
       </div>
     </div>
     <div id="vista-radar">
-{TABS_HTML}{orden_html}    <section id="listado" class="grid">
+{TABS_HTML}{FILTRO_CPV_HTML}{orden_html}    <section id="listado" class="grid">
 {cuerpo}{vacio_pestana_html}
     </section>
     </div>
