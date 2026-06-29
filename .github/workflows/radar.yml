@@ -87,3 +87,41 @@ jobs:
       - name: Desplegar en GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  # --- Job 3: catálogo del BUSCADOR (independiente del Radar) -----------------
+  # Ingesta incremental diaria del feed a public.licitaciones + purga de la ventana
+  # de 3 años. NO tiene "needs": corre EN PARALELO a generar/desplegar, así que si
+  # falla NO impide que el Radar se publique. NO toca data/licitaciones.json ni la
+  # cortina de login: es otro destino (la base consultable del buscador en Supabase).
+  catalogo:
+    runs-on: ubuntu-latest
+    # Solo lectura del repo (checkout). Las credenciales van por secrets, no por el repo.
+    permissions:
+      contents: read
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar librerías
+        run: pip install -r requirements.txt
+
+      # 1) Ingesta incremental: upsert de TODO el feed en vivo (estatal + agregadas).
+      - name: Ingesta diaria al catálogo
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+        run: python backfill_catalogo.py --diario
+
+      # 2) Purga de la ventana de 3 años (requiere haber creado la función
+      #    public.purga_catalogo con purga_catalogo.sql). Borra lo viejo salvo lo
+      #    abierto, lo que esté en public.contratos y lo que esté en public.decisiones.
+      - name: Purga de la ventana (3 años)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+        run: python backfill_catalogo.py --purgar --ventana-anios 3

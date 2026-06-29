@@ -16,6 +16,11 @@ consultable completa), no el destilado estático.
 MODOS
   · dry-run (POR DEFECTO): NO escribe. Cuenta únicas por fuente/año, rango de
     fechas y estima el tamaño. (Para sondear sin bajar años: --muestra.)
+  · diaria (--diario): ingesta incremental. Lee los feeds EN VIVO (como el radar) y
+    hace UPSERT de TODAS las licitaciones (no solo las de interés). Para el cron.
+  · purga (--purgar): borra del catálogo lo más viejo que la ventana, salvo lo
+    abierto y lo que esté en public.contratos o public.decisiones (vía RPC
+    purga_catalogo). --simular solo cuenta lo que se borraría. --ventana-anios N.
   · carga (--cargar): upsert idempotente por licitacion_id (conserva primera_vez,
     actualiza ultima_vez; tsv lo pone el trigger). En STREAMING (baja un ZIP →
     parsea → upsert → borra el ZIP antes del siguiente, para no llenar el disco) y
@@ -57,7 +62,7 @@ from lxml import etree
 # Reutilizamos del radar: la cabecera de navegador (obligatoria), el namespace
 # ATOM para localizar las <entry> y el EXTRACTOR de campos CODICE (único punto de
 # extracción del proyecto). Nada de esto se duplica aquí.
-from feeds import CABECERAS, ATOM_NS, extrae_entrada
+from feeds import CABECERAS, ATOM_NS, FEEDS, descarga_entradas, extrae_entrada
 
 # Acentos y "ñ" correctos en la consola de Windows.
 sys.stdout.reconfigure(encoding="utf-8")
@@ -372,17 +377,15 @@ def _sube_lote(sesion, url, headers, filas, reintentos=4):
     raise SystemExit(f"Fallo subiendo un lote tras {reintentos} intentos: {ultimo}")
 
 
-def carga(unidades, limpiar=True):
-    """Procesa las unidades (fuente, periodo) en STREAMING: descarga un ZIP →
-    parsea sus .atom → upsert → libera el ZIP antes del siguiente, para no llenar
-    el disco del runner. Reanudable por checkpoint (unidad y .atom)."""
+def _preparar_upsert():
+    """Prepara la sesión de upsert: lee la service_role y la URL de Supabase de las
+    variables de entorno (NUNCA del repo) y devuelve (sesion, headers, endpoint,
+    url_base) listos para POST con merge-duplicates (upsert por licitacion_id)."""
     token = os.environ.get("SUPABASE_SERVICE_ROLE")
     if not token:
-        sys.exit("ERROR: falta la service_role. Defínela en la variable de entorno "
-                 "SUPABASE_SERVICE_ROLE (NUNCA en el repo). El dry-run/muestra no la necesitan.")
+        sys.exit("ERROR: falta la service_role. Defínela en SUPABASE_SERVICE_ROLE "
+                 "(NUNCA en el repo). El dry-run/muestra no la necesitan.")
     url_base = os.environ.get("SUPABASE_URL") or SUPABASE_URL
-
-    unidades_ok, atoms_ok = _carga_estado()
     sesion = requests.Session()
     headers = {
         "apikey": token,
@@ -393,6 +396,15 @@ def carga(unidades, limpiar=True):
         "Prefer": "resolution=merge-duplicates,return=minimal",
     }
     endpoint = f"{url_base}/rest/v1/{TABLA}?on_conflict=licitacion_id"
+    return sesion, headers, endpoint, url_base
+
+
+def carga(unidades, limpiar=True):
+    """Procesa las unidades (fuente, periodo) en STREAMING: descarga un ZIP →
+    parsea sus .atom → upsert → libera el ZIP antes del siguiente, para no llenar
+    el disco del runner. Reanudable por checkpoint (unidad y .atom)."""
+    sesion, headers, endpoint, url_base = _preparar_upsert()
+    unidades_ok, atoms_ok = _carga_estado()
 
     print("=" * 78)
     print("CARGA a Supabase (upsert idempotente por licitacion_id, en streaming)")
@@ -508,6 +520,74 @@ def _resumen_post_carga(sesion, url_base, headers):
     print("Tamaño REAL de la tabla — la API REST no expone el tamaño físico; ejecútalo")
     print("en el SQL Editor de Supabase:")
     print("  select pg_size_pretty(pg_total_relation_size('public.licitaciones'));")
+
+
+# --- INGESTA DIARIA (incremental, desde el feed EN VIVO) --------------------
+def diario(fuentes):
+    """Ingesta incremental DIARIA para el cron: lee los feeds EN VIVO (estatal +
+    agregadas) con la MISMA descarga del radar (feeds.descarga_entradas) y hace
+    UPSERT en el catálogo de TODAS las licitaciones (no solo las de interés),
+    conservando primera_vez y actualizando ultima_vez (el tsv lo pone el trigger).
+    Reutiliza el extractor feeds.extrae_entrada y la maquinaria de upsert."""
+    sesion, headers, endpoint, url_base = _preparar_upsert()
+    print("=" * 78)
+    print("INGESTA DIARIA del catálogo (upsert de TODO el feed en vivo)")
+    print(f"Fuentes: {fuentes}")
+    print("=" * 78)
+
+    total = 0
+    vistos = set()   # dedup por ejecución: el feed trae cada licitación en varias páginas
+    for feed in FEEDS:
+        if feed["fuente"] not in fuentes:
+            continue
+        entradas, paginas, tope = descarga_entradas(feed["url"])
+        aviso = "  [TOPE de páginas: puede faltar histórico reciente]" if tope else ""
+        print(f"feed «{feed['fuente']}»: {len(entradas):,} entradas en {paginas} pág{aviso}")
+        # La primera aparición de un id es su snapshot más reciente (el feed va de lo
+        # más nuevo a lo más viejo): nos quedamos con esa.
+        por_id = {}
+        for entrada in entradas:
+            reg = extrae_entrada(entrada, feed["fuente"])
+            if reg["id"] in vistos:
+                continue
+            por_id[reg["id"]] = fila_para_tabla(reg)
+        filas = list(por_id.values())
+        for i in range(0, len(filas), 500):
+            lote = filas[i:i + 500]
+            _sube_lote(sesion, endpoint, headers, lote)
+            total += len(lote)
+        vistos.update(por_id.keys())
+        print(f"  upsert «{feed['fuente']}»: {len(filas):,} filas (acumulado {total:,})")
+
+    print("=" * 78)
+    print(f"Ingesta diaria terminada. Filas upsertadas: {total:,}")
+    _resumen_post_carga(sesion, url_base, headers)
+
+
+# --- PURGA de la ventana (vía RPC en Supabase) ------------------------------
+def purgar(anios=3, simular=False):
+    """Llama a la función RPC public.purga_catalogo(anios, simular). Borra del
+    catálogo lo publicado hace más de 'anios' años, SALVO lo que siga abierto
+    (fecha_fin_plazo >= hoy), lo que esté en public.contratos y lo que esté en
+    public.decisiones. Con simular=True solo CUENTA lo que se borraría (no borra)."""
+    token = os.environ.get("SUPABASE_SERVICE_ROLE")
+    if not token:
+        sys.exit("ERROR: falta la service_role en SUPABASE_SERVICE_ROLE (NUNCA en el repo).")
+    url_base = os.environ.get("SUPABASE_URL") or SUPABASE_URL
+    accion = "SIMULACIÓN (no borra)" if simular else "PURGA (borra)"
+    print(f"{accion} · ventana de {anios} años · RPC public.purga_catalogo ...")
+    try:
+        r = requests.post(
+            f"{url_base}/rest/v1/rpc/purga_catalogo",
+            headers={"apikey": token, "Authorization": f"Bearer {token}",
+                     "Content-Type": "application/json"},
+            json={"anios": anios, "simular": simular}, timeout=600,
+        )
+    except requests.RequestException as e:
+        sys.exit(f"Purga: error de red ({e}).")
+    if r.status_code != 200:
+        sys.exit(f"Purga falló: HTTP {r.status_code}: {r.text[:300]}")
+    print(f"{accion}: {r.text.strip()} filas afectadas.")
 
 
 # --- MUESTREO (estimación por meses, sin bajar años enteros) ----------------
@@ -637,6 +717,14 @@ def main():
     ap = argparse.ArgumentParser(description="Backfill del histórico reciente al buscador (BG-2a).")
     ap.add_argument("--cargar", action="store_true",
                     help="Sube a Supabase (upsert). Sin esta opción: dry-run (no escribe).")
+    ap.add_argument("--diario", action="store_true",
+                    help="Ingesta incremental: upsert de TODO el feed EN VIVO (estatal+agregadas). Para el cron.")
+    ap.add_argument("--purgar", action="store_true",
+                    help="Purga la ventana (RPC purga_catalogo): borra lo viejo salvo abierto/en contratos.")
+    ap.add_argument("--simular", action="store_true",
+                    help="Con --purgar: solo CUENTA lo que se borraría, sin borrar.")
+    ap.add_argument("--ventana-anios", type=int, default=3,
+                    help="Años de la ventana para --purgar (por defecto 3).")
     ap.add_argument("--muestra", action="store_true",
                     help="Estimación por muestreo de meses recientes (no baja años; no escribe).")
     ap.add_argument("--meses", type=int, default=3,
@@ -667,6 +755,10 @@ def main():
 
     if args.muestra:
         muestra(args.meses, fuentes)
+    elif args.diario:
+        diario(fuentes)
+    elif args.purgar:
+        purgar(args.ventana_anios, args.simular)
     elif args.cargar:
         carga(construir_unidades(args.solo, args.periodos), limpiar=not args.conservar_zip)
     else:
