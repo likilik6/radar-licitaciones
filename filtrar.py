@@ -436,6 +436,31 @@ for registro_guardado in datos.values():
     registro_guardado.setdefault("region", None)
     registro_guardado.setdefault("region_codigo", None)
 
+# --- Poda: quitar lo que YA NO encaja con la config ACTUAL -------------------
+# El archivo ACUMULA histórico (para conservar primera_vez), así que solo añadir no
+# basta: si cambias la config del radar (o intereses.yaml), las licitaciones que
+# dejan de cumplir los criterios tienen que DESAPARECER del radar. Re-evaluamos cada
+# entrada guardada con sus PROPIOS datos (cpv/título/territorio) contra los criterios
+# efectivos de ahora, y borramos las que ya no casan (por criterio, fuente o territorio).
+podadas = 0
+for clave in list(datos.keys()):
+    reg = datos[clave]
+    titulo_norm = normaliza(reg.get("titulo", "") or "")
+    cpvs_reg = reg.get("cpv", []) or []
+    # ¿sigue casando con alguna categoría efectiva (por CPV o palabra clave)?
+    categoria_reev = None
+    for nombre, criterios in intereses_efectivos.items():
+        if busca_coincidencia(cpvs_reg, titulo_norm, criterios):
+            categoria_reev = nombre
+            break
+    fuente_ok = (not fuentes_config) or (reg.get("fuente", "estatal") in fuentes_config)
+    territorio_ok = pasa_territorio(reg.get("plataforma"), reg.get("region_codigo"))
+    if categoria_reev is None or not fuente_ok or not territorio_ok:
+        del datos[clave]
+        podadas += 1
+    else:
+        reg["categoria"] = categoria_reev   # refresca el grupo por si cambió
+
 # Guardamos el diccionario completo.
 # ensure_ascii=False -> conserva tildes y "ñ"; indent=2 -> deja el diff de Git legible.
 with open(ruta_json, "w", encoding="utf-8") as f:
@@ -448,6 +473,7 @@ print(f"Total de licitaciones en el archivo: {len(datos)}")
 conteo_fuente = Counter(registro["fuente"] for registro in datos.values())
 detalle_guardadas = ", ".join(f"{n} {fuente}" for fuente, n in sorted(conteo_fuente.items()))
 print(f"Por fuente en el archivo: {detalle_guardadas}.")
+print(f"Podadas (ya no encajan con la config actual): {podadas}")
 print(f"Nuevas en esta ejecución: {len(nuevas)}")
 for lic in nuevas:
     print(f"  - [{lic['fuente']}/{lic['categoria']}] {lic['titulo']}")
