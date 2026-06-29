@@ -98,3 +98,111 @@ def descarga_entradas(url, max_paginas=MAX_PAGINAS, pausa=PAUSA_ENTRE_PAGINAS):
     # Si todavía queda un 'next' es que paramos por el tope, no porque se agotara.
     tope_alcanzado = bool(url)
     return entradas, paginas_leidas, tope_alcanzado
+
+
+# ============================================================================
+# EXTRACTOR de campos CODICE (el ÚNICO punto de extracción del proyecto)
+# ----------------------------------------------------------------------------
+# Convierte una <atom:entry> en un dict plano con los campos que nos interesan.
+# Lo usan TANTO el radar (filtrar.py) COMO el backfill del buscador
+# (backfill_catalogo.py): así la lógica de XPaths CODICE vive en UN solo sitio y
+# no se duplica. Si algún día el feed cambia una ruta, se toca aquí y punto.
+# ============================================================================
+
+# Espacios de nombres completos del feed (ATOM + las tres extensiones CODICE):
+#   - atom: el formato del feed (título, enlace, id, updated).
+#   - cbc:  componentes básicos (donde vive el código CPV, importes, fechas...).
+#   - cac:  componentes agregados (proyecto, presupuesto, proceso de licitación...).
+#   - place: extensión de la Plataforma (ContractFolderStatus, fecha de publicación...).
+NS = {
+    "atom": "http://www.w3.org/2005/Atom",
+    "cbc": "urn:dgpe:names:draft:codice:schema:xsd:CommonBasicComponents-2",
+    "cac": "urn:dgpe:names:draft:codice:schema:xsd:CommonAggregateComponents-2",
+    "place": "urn:dgpe:names:draft:codice-place-ext:schema:xsd:CommonAggregateComponents-2",
+}
+
+
+def a_texto(valor):
+    """Limpia un texto del feed. Devuelve None si no venía (en vez de cadena vacía),
+    para poder guardar 'null' aguas abajo."""
+    if valor is None:
+        return None
+    valor = valor.strip()
+    return valor or None
+
+
+def a_numero(valor):
+    """Convierte un importe del feed (texto como '722654.59') a float. Devuelve None
+    si el campo no venía o no se puede convertir, para no romper cuando falte el dato."""
+    valor = a_texto(valor)
+    if valor is None:
+        return None
+    try:
+        return float(valor)
+    except ValueError:
+        return None
+
+
+def extrae_entrada(entrada, fuente):
+    """Extrae a un dict plano los campos CODICE de una <atom:entry> (elemento lxml).
+    'fuente' es la etiqueta de origen ('estatal' / 'agregadas'). Devuelve SIEMPRE
+    las mismas claves; los campos que no vengan quedan en None (o lista vacía en cpv)."""
+    # Título y enlace.
+    titulo = entrada.findtext("atom:title", default="(sin título)", namespaces=NS).strip()
+    link = entrada.find("atom:link", NS)
+    enlace = link.get("href") if link is not None else "(sin enlace)"
+
+    # Id único de la licitación (atom:id == entry.id). Si faltara, caemos al enlace.
+    id_unico = entrada.findtext("atom:id", default="", namespaces=NS).strip() or enlace
+    # Fecha de actualización del aviso (atom:updated).
+    fecha_actualizacion = entrada.findtext("atom:updated", default="", namespaces=NS).strip()
+
+    # Códigos CPV: pueden ser varios; los recogemos todos.
+    cpvs = [c.text for c in entrada.findall(".//cbc:ItemClassificationCode", NS) if c.text]
+
+    # Objeto del contrato: el nombre del proyecto principal (cac:ProcurementProject),
+    # hijo directo del ContractFolderStatus (NO el de un lote, que cuelga de
+    # ProcurementProjectLot). El atom:title suele ser un resumen; el objeto es éste.
+    base_proyecto = ".//place:ContractFolderStatus/cac:ProcurementProject/"
+    objeto = a_texto(entrada.findtext(base_proyecto + "cbc:Name", namespaces=NS))
+
+    # Importes (mismo bloque BudgetAmount del proyecto principal, no de un lote).
+    base_presupuesto = base_proyecto + "cac:BudgetAmount/"
+    presupuesto_con_iva = a_numero(entrada.findtext(base_presupuesto + "cbc:TotalAmount", namespaces=NS))
+    presupuesto_sin_iva = a_numero(entrada.findtext(base_presupuesto + "cbc:TaxExclusiveAmount", namespaces=NS))
+    valor_estimado = a_numero(entrada.findtext(base_presupuesto + "cbc:EstimatedOverallContractAmount", namespaces=NS))
+
+    # Fin del plazo de presentación de ofertas.
+    fecha_fin_plazo = a_texto(entrada.findtext(
+        ".//place:ContractFolderStatus/cac:TenderingProcess"
+        "/cac:TenderSubmissionDeadlinePeriod/cbc:EndDate", namespaces=NS))
+    # Fecha de publicación del anuncio (fecha de emisión del aviso).
+    fecha_publicacion = a_texto(entrada.findtext(
+        ".//place:ValidNoticeInfo//cbc:IssueDate", namespaces=NS))
+
+    # Territorio: quién contrata (organismo), la plataforma agregadora y la región.
+    base_parte = ".//place:ContractFolderStatus/place:LocatedContractingParty/cac:Party/"
+    organismo = a_texto(entrada.findtext(base_parte + "cac:PartyName/cbc:Name", namespaces=NS))
+    plataforma = a_texto(entrada.findtext(base_parte + "cac:AgentParty/cac:PartyName/cbc:Name", namespaces=NS))
+    base_lugar = ".//place:ContractFolderStatus/cac:ProcurementProject/cac:RealizedLocation/"
+    region = a_texto(entrada.findtext(base_lugar + "cbc:CountrySubentity", namespaces=NS))
+    region_codigo = a_texto(entrada.findtext(base_lugar + "cbc:CountrySubentityCode", namespaces=NS))
+
+    return {
+        "id": id_unico,
+        "titulo": titulo,
+        "objeto": objeto,
+        "enlace": enlace,
+        "cpv": cpvs,
+        "fuente": fuente,
+        "organismo": organismo,
+        "plataforma": plataforma,
+        "region": region,
+        "region_codigo": region_codigo,
+        "presupuesto_con_iva": presupuesto_con_iva,
+        "presupuesto_sin_iva": presupuesto_sin_iva,
+        "valor_estimado": valor_estimado,
+        "fecha_fin_plazo": fecha_fin_plazo,
+        "fecha_publicacion": fecha_publicacion,
+        "fecha_actualizacion": fecha_actualizacion,
+    }

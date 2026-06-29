@@ -1,0 +1,67 @@
+# Backfill del catálogo del BUSCADOR (BG-2) — ejecución MANUAL.
+#
+# Qué hace: vuelca la ventana de 2 años (estatal 643 + agregadas 1044) a la tabla
+# public.licitaciones de Supabase, con upsert idempotente y en streaming.
+#
+# SEPARADO del Radar: NO toca data/licitaciones.json ni la web. Es otro destino.
+#
+# Solo se dispara A MANO (workflow_dispatch) desde la pestaña "Actions". Lee la URL
+# y la service_role de los SECRETS del repo; nunca del código y nunca se imprimen.
+
+name: Backfill catálogo (buscador)
+
+on:
+  workflow_dispatch:
+    inputs:
+      solo:
+        description: "Una sola fuente (estatal / agregadas). Vacío = ambas."
+        required: false
+        default: ""
+      periodos:
+        description: "Periodos sueltos para trocear (p.ej. '2024' o '202601 202602'). Vacío = ventana de 2 años."
+        required: false
+        default: ""
+
+# No se cancela un backfill en curso si se vuelve a lanzar.
+concurrency:
+  group: backfill-catalogo
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    # Margen amplio (el tope duro de GitHub es 360 min). Si no cabe, trocear por
+    # año/fuente con los inputs 'solo'/'periodos' (los upserts son idempotentes).
+    timeout-minutes: 350
+    # Solo necesita leer el repo (checkout). No escribe nada en el repositorio.
+    permissions:
+      contents: read
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar librerías
+        run: pip install -r requirements.txt
+
+      - name: Ejecutar backfill (--cargar)
+        env:
+          # Vienen de los SECRETS del repo. GitHub los enmascara en el log.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+          SOLO: ${{ inputs.solo }}
+          PERIODOS: ${{ inputs.periodos }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE" ]; then
+            echo "Faltan los secrets SUPABASE_URL y/o SUPABASE_SERVICE_ROLE." >&2
+            exit 1
+          fi
+          args="--cargar"
+          if [ -n "$SOLO" ]; then args="$args --solo $SOLO"; fi
+          if [ -n "$PERIODOS" ]; then args="$args --periodos $PERIODOS"; fi
+          echo "Ejecutando: python backfill_catalogo.py $args"
+          python backfill_catalogo.py $args
