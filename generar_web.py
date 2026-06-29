@@ -180,7 +180,15 @@ CSS = """
   .cpv { font-size:.82rem; color:var(--suave); display:flex; flex-wrap:wrap; gap:5px; align-items:center; }
   .cpv .et { font-weight:600; color:var(--texto); }
   .cpv code { background:#f1f5f9; color:#334155; padding:2px 7px; border-radius:6px; font-size:.78rem; }
-  .cpv-mas { font-size:.74rem; color:var(--suave); font-style:italic; }
+  /* "y N más": botón que despliega/colapsa los CPV extra de la tarjeta. */
+  .cpv-mas {
+    font:inherit; font-size:.74rem; font-style:italic; color:var(--acento-2);
+    background:none; border:none; padding:0 2px; cursor:pointer; text-decoration:underline;
+  }
+  .cpv-mas:hover { color:var(--acento); }
+  .cpv-mas:focus-visible { outline:2px solid var(--acento); outline-offset:1px; border-radius:4px; }
+  /* CPV colapsados: ocultos por [hidden]; al mostrarse fluyen como un <code> más. */
+  .cpv-extra:not([hidden]) { display:contents; }
 
   /* ---- Datos económicos y fechas ---- */
   .datos { display:flex; flex-direction:column; gap:5px; font-size:.84rem; margin-top:2px;
@@ -191,6 +199,11 @@ CSS = """
   .dato .quedan { color:#15803d; font-weight:600; }     /* plazo abierto: verde */
   .dato .vence-hoy { color:#b45309; font-weight:600; }  /* vence hoy: ámbar (urgente) */
   .dato .cerrado { color:#b91c1c; font-weight:600; }    /* plazo cerrado: rojo */
+  /* Coletilla "quedan X días" en el tono fuerte del semáforo (rojo <3, ámbar <7,
+     verde >=7). Van DESPUÉS de .quedan/.vence-hoy para ganar por orden de fuente. */
+  .dato .urg-tx-roja  { color:#b91c1c; }
+  .dato .urg-tx-ambar { color:#b45309; }
+  .dato .urg-tx-verde { color:#15803d; }
 
   /* ---- Pestañas por estado (filtran la vista; privadas, dentro del radar) ---- */
   /* Responsivo: en pantalla estrecha hacen scroll horizontal sin romper el layout. */
@@ -308,6 +321,16 @@ CSS = """
   body.sesion .card[data-estado="presentada"]::after { background:#4f46e5; }
   body.sesion .card[data-estado="descartada"]::after { background:#64748b; }
   body.sesion .card[data-estado="caducada"]::after   { background:#94a3b8; }
+
+  /* ---- Semáforo de urgencia por días a FIN DE PLAZO (público, por fecha) ------
+     rojo <3, ámbar <7, verde >=7 días (lo calcula Python en render: clasifica_urgencia).
+     Tiñe el BORDE y un fondo MUY sutil (~7%) de TODA la tarjeta, sin tapar título ni
+     importes. Solo en tarjetas 'activas' (sin decisión manual ni caducadas): si hay
+     estado privado, su data-estado es otro y manda su color (no lo pisamos). El tono
+     fuerte del texto lo pone .urg-tx-* en la coletilla "quedan X días". */
+  body.sesion .card[data-estado="activa"].urg-roja  { border-color:#fca5a5; background:rgba(185,28,28,.07); }
+  body.sesion .card[data-estado="activa"].urg-ambar { border-color:#fcd34d; background:rgba(180,83,9,.07); }
+  body.sesion .card[data-estado="activa"].urg-verde { border-color:#86efac; background:rgba(21,128,61,.07); }
 
   /* ---- Controles por tarjeta (estado + estrella): SOLO con sesión ---- */
   /* Se hornean ocultos; body.sesion los muestra al iniciar sesión. */
@@ -879,6 +902,19 @@ JS_SUPABASE = """
     selectCpv.addEventListener('change', function () {
       cpvActivo = selectCpv.value;
       actualizarVista();
+    });
+  }
+  // Desplegar/colapsar los CPV extra de una tarjeta ("y N más" <-> "ocultar").
+  // Delegado en el grid: las tarjetas son estáticas (horneadas), basta un listener.
+  if (grid) {
+    grid.addEventListener('click', function (e) {
+      const btn = e.target.closest('.cpv-mas');
+      if (!btn) return;
+      const extra = btn.parentElement.querySelector('.cpv-extra');
+      const abierto = btn.getAttribute('aria-expanded') === 'true';
+      if (extra) extra.hidden = abierto;                 // abierto -> ocultar; cerrado -> mostrar
+      btn.setAttribute('aria-expanded', abierto ? 'false' : 'true');
+      btn.textContent = abierto ? btn.dataset.abrir : btn.dataset.cerrar;
     });
   }
 
@@ -1460,9 +1496,20 @@ JS_SUPABASE = """
   // --- Rejilla mensual (mitad izquierda) -------------------------------------
   let calendarioEventos = [];   // eventos del calendario (lista + rejilla comparten)
   let calMes = null;
+  // Mes actual en Europe/Madrid (no en la zona del navegador): para que el calendario
+  // se abra por defecto en el mes en que estamos hoy. Si el entorno no soporta
+  // timeZone, cae a la hora local del navegador.
+  function mesActualMadrid(){
+    try {
+      const p = new Intl.DateTimeFormat('en-CA', { timeZone:'Europe/Madrid', year:'numeric', month:'2-digit' }).formatToParts(new Date());
+      return { y:+p.find(x=>x.type==='year').value, m:+p.find(x=>x.type==='month').value - 1 };
+    } catch(e) {
+      const f = new Date(); return { y:f.getFullYear(), m:f.getMonth() };
+    }
+  }
   function renderRejilla(eventos){
     const cont = document.getElementById('cal-mes'); if(!cont) return;
-    if(!calMes){ const f = eventos.length ? new Date(eventos[0].fecha+'T00:00:00') : new Date(); calMes = {y:f.getFullYear(), m:f.getMonth()}; }
+    if(!calMes){ calMes = mesActualMadrid(); }   // por defecto: mes actual (Europe/Madrid)
     const {y,m} = calMes, porDia = {};
     eventos.forEach(e => (porDia[e.fecha] = porDia[e.fecha]||[]).push(e));
     const primero = new Date(y,m,1), inicio = (primero.getDay()+6)%7, diasMes = new Date(y,m+1,0).getDate();
@@ -1892,6 +1939,20 @@ def dias_restantes(iso, hoy):
         return None
 
 
+def clasifica_urgencia(dias):
+    """Semáforo por días que faltan para el fin de plazo (solo plazos ABIERTOS,
+    dias >= 0): 'roja' si <3, 'ambar' si <7, 'verde' si >=7. Devuelve None cuando
+    no aplica (sin fecha, o plazo ya cerrado): en ese caso la tarjeta no se tiñe.
+    'dias' viene de dias_restantes(), que ya cuenta en Europe/Madrid."""
+    if dias is None or dias < 0:
+        return None
+    if dias < 3:
+        return "roja"
+    if dias < 7:
+        return "ambar"
+    return "verde"
+
+
 def o_guion(texto):
     """Devuelve el texto, o '—' si es None (para celdas sin dato)."""
     return texto if texto is not None else "—"
@@ -2113,27 +2174,44 @@ def construye_tarjeta(lic, es_nueva, hoy, estado):
     # dict.fromkeys quita CPV repetidos conservando el orden (una licitación puede
     # traer el mismo código dos veces y no queremos pintarlo dos veces).
     cpvs = list(dict.fromkeys(lic.get("cpv", []) or []))
-    # Mostramos SOLO los CPV COINCIDENTES (los que casan con un prefijo activo de la
-    # config), como hace licitaciones.es: un acuerdo marco puede traer cientos de CPV
-    # (uno por lote) y volcarlos todos hace la tarjeta ilegible.
+    # Mostramos PRIMERO los CPV que COINCIDEN con un prefijo activo de la config
+    # (mismo criterio "empieza por" de filtrar.py: c.startswith(p)) y colapsamos el
+    # resto: un acuerdo marco puede traer cientos de CPV (uno por lote) y volcarlos
+    # todos hace la tarjeta ilegible. La coincidencia se calcula aquí, en render
+    # (estado público), igual que el resto del espejo estático.
     if cpv_prefijos_activos:
-        cpvs_coincidentes = [c for c in cpvs if any(c.startswith(p) for p in cpv_prefijos_activos)]
+        coincidentes = [c for c in cpvs if any(c.startswith(p) for p in cpv_prefijos_activos)]
     else:
-        cpvs_coincidentes = cpvs
-    # Si no coincide ninguno por CPV (la licitación casó por palabra clave), mostramos
-    # unos pocos como contexto en vez de dejar el hueco vacío.
-    cpvs_visibles = cpvs_coincidentes if cpvs_coincidentes else cpvs
-    _tope = 12
-    _resto = len(cpvs_visibles) - _tope
-    cpvs_visibles = cpvs_visibles[:_tope]
+        coincidentes = []   # sin prefijos activos: no sabemos cuáles coinciden
+    _TOPE_CPV = 6
+    if coincidentes:
+        _set_coin = set(coincidentes)
+        no_coincidentes = [c for c in cpvs if c not in _set_coin]
+        cpvs_visibles = coincidentes[:_TOPE_CPV]
+        # El resto (coincidentes que no caben + los no coincidentes) va colapsado.
+        cpvs_extra = coincidentes[_TOPE_CPV:] + no_coincidentes
+    else:
+        # Ninguno coincide por CPV (cazada por palabra clave, o sin prefijos activos):
+        # enseñamos los primeros como contexto y colapsamos el resto.
+        cpvs_visibles = cpvs[:_TOPE_CPV]
+        cpvs_extra = cpvs[_TOPE_CPV:]
+
+    def _chip(c):   # un <code> con el NOMBRE del CPV como title (tooltip al pasar el ratón)
+        return f'<code title="{html.escape(cpv_nombres.get(c, ""))}">{html.escape(c)}</code>'
+
     if cpvs_visibles:
-        # En cada <code> ponemos el NOMBRE del CPV como title (tooltip al pasar el ratón).
-        cpv_html = " ".join(
-            f'<code title="{html.escape(cpv_nombres.get(c, ""))}">{html.escape(c)}</code>'
-            for c in cpvs_visibles
-        )
-        if _resto > 0:
-            cpv_html += f' <span class="cpv-mas">+{_resto} más</span>'
+        cpv_html = " ".join(_chip(c) for c in cpvs_visibles)
+        if cpvs_extra:
+            # Los extra van ocultos en un <span hidden>; el botón "y N más" los
+            # despliega/colapsa en el navegador (delegado en el grid). data-abrir/
+            # data-cerrar guardan las dos etiquetas para no recalcular el conteo.
+            extra_html = " ".join(_chip(c) for c in cpvs_extra)
+            mas = f"y {len(cpvs_extra)} más"
+            cpv_html += (
+                f' <span class="cpv-extra" hidden>{extra_html}</span>'
+                f'<button type="button" class="cpv-mas" aria-expanded="false"'
+                f' data-abrir="{mas}" data-cerrar="ocultar">{mas}</button>'
+            )
     else:
         cpv_html = "—"
     # data-cpv lleva TODOS los códigos (sin recortar): no se ven, pero el filtro por
@@ -2154,13 +2232,15 @@ def construye_tarjeta(lic, es_nueva, hoy, estado):
     valor_est = o_guion(formatea_euros(lic.get("valor_estimado")))
     fecha_pub = o_guion(formatea_fecha(lic.get("fecha_publicacion")))
 
-    # Fin de plazo: a la fecha le añadimos una coletilla según los días que falten.
-    #   - aún abierto (>0): "· quedan X días" (verde)
-    #   - vence hoy  (=0):  "· vence hoy" (ámbar)
+    # Fin de plazo: a la fecha le añadimos una coletilla según los días que falten,
+    # en el TONO FUERTE del semáforo de urgencia (rojo <3, ámbar <7, verde >=7).
+    #   - aún abierto (>0): "· quedan X días" (tono según urgencia)
+    #   - vence hoy  (=0):  "· vence hoy" (rojo: es <3 días)
     #   - ya pasó    (<0):  "· cerrado" (rojo)
     #   - sin fecha (None): solo "—", sin coletilla
     fin_plazo_txt = formatea_fecha(lic.get("fecha_fin_plazo"))
     dias = dias_restantes(lic.get("fecha_fin_plazo"), hoy)
+    urgencia = clasifica_urgencia(dias)   # 'roja'|'ambar'|'verde'|None (semáforo público)
     if fin_plazo_txt is None:
         fin_plazo = "—"
     elif dias is None:
@@ -2168,9 +2248,9 @@ def construye_tarjeta(lic, es_nueva, hoy, estado):
     elif dias > 0:
         # "queda 1 día" (singular) / "quedan N días" (plural).
         texto_dias = "queda 1 día" if dias == 1 else f"quedan {dias} días"
-        fin_plazo = f'{fin_plazo_txt} · <span class="quedan">{texto_dias}</span>'
+        fin_plazo = f'{fin_plazo_txt} · <span class="quedan urg-tx-{urgencia}">{texto_dias}</span>'
     elif dias == 0:
-        fin_plazo = f'{fin_plazo_txt} · <span class="vence-hoy">vence hoy</span>'
+        fin_plazo = f'{fin_plazo_txt} · <span class="vence-hoy urg-tx-roja">vence hoy</span>'
     else:
         fin_plazo = f'{fin_plazo_txt} <span class="cerrado">· cerrado</span>'
 
@@ -2207,8 +2287,10 @@ def construye_tarjeta(lic, es_nueva, hoy, estado):
 
     # data-estado es el estado PÚBLICO por fecha (activa/caducada); 'estado' siempre
     # es uno de esos dos: seguro. data-favorita arranca en "false": lo privado (estado
-    # manual y estrella) lo sobrescribe el navegador tras login.
-    return f"""    <article class="card"
+    # manual y estrella) lo sobrescribe el navegador tras login. La clase urg-* (si la
+    # hay) tiñe la tarjeta por urgencia; el CSS solo la aplica si data-estado="activa".
+    clase_urgencia = f" urg-{urgencia}" if urgencia else ""
+    return f"""    <article class="card{clase_urgencia}"
       data-importe="{data_importe}" data-fin-plazo="{data_fin_plazo}"
       data-fecha-pub="{data_fecha_pub}" data-fecha-subida="{data_fecha_subida}"
       data-cpv="{data_cpv}"
