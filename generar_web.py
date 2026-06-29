@@ -30,9 +30,9 @@ SUPABASE_URL = "https://uzktrhpgkyctlnqgdsys.supabase.co"
 SUPABASE_KEY = "sb_publishable_3J3pFbMlNzu-NUDs1-740g_lu8YsRv_"
 
 
-def lee_dias_nuevo():
-    """Lee 'vista.dias_nuevo' de la config del radar (Supabase). Si no se puede
-    (Supabase caído, tabla vacía, valor raro), devuelve DIAS_NUEVO por defecto."""
+def lee_config_radar():
+    """Lee la config del radar (Supabase, tabla radar_config). Devuelve el dict de
+    config, o {} si no se puede (Supabase caído, tabla vacía, sin red)."""
     try:
         r = requests.get(
             f"{SUPABASE_URL}/rest/v1/radar_config",
@@ -42,13 +42,39 @@ def lee_dias_nuevo():
         )
         r.raise_for_status()
         filas = r.json()
-        if filas:
-            valor = (filas[0].get("config") or {}).get("vista", {}).get("dias_nuevo")
-            if isinstance(valor, int) and valor > 0:
-                return valor
+        if filas and isinstance(filas[0].get("config"), dict):
+            return filas[0]["config"]
     except Exception:
         pass
-    return DIAS_NUEVO
+    return {}
+
+
+def _cpv_activos_de_config(config, defaults):
+    """Conjunto de PREFIJOS CPV ACTIVOS según la config del radar: los CPV activos
+    de config['categorias'] (términos como texto o {"v","on"}; on=false se ignora);
+    o, si no hay categorías en la config, los CPV de intereses.yaml (defaults).
+    Devuelve set() (vacío) si no hay ninguno => en ese caso NO se filtra el desplegable."""
+    def activos(lista):
+        salida = []
+        for it in lista or []:
+            if isinstance(it, dict):
+                if it.get("on", True) and it.get("v"):
+                    salida.append(str(it["v"]))
+            elif isinstance(it, str) and it.strip():
+                salida.append(it.strip())
+        return salida
+    prefijos = set()
+    cats = config.get("categorias") if isinstance(config, dict) else None
+    if isinstance(cats, dict) and cats:
+        for crit in cats.values():
+            if isinstance(crit, dict):
+                prefijos.update(activos(crit.get("cpv")))
+    else:
+        for crit in (defaults or {}).values():
+            if isinstance(crit, dict):
+                for c in (crit.get("cpv") or []):
+                    prefijos.add(str(c))
+    return prefijos
 
 # Opciones del menú lateral (el "desplegable" de la izquierda). Iremos añadiendo
 # más opciones en el futuro; basta con añadir más diccionarios a esta lista.
@@ -2155,7 +2181,9 @@ licitaciones.sort(key=lambda lic: datetime.fromisoformat(lic["primera_vez"]), re
 # contador de días de las tarjetas), para no usar la hora UTC del runner de Actions.
 # El umbral (días) sale de la config del radar (panel de ajustes); por defecto 7.
 hoy = datetime.now(ZoneInfo("Europe/Madrid")).date()
-dias_nuevo = lee_dias_nuevo()
+config_radar = lee_config_radar()
+_dn = (config_radar.get("vista") or {}).get("dias_nuevo")
+dias_nuevo = _dn if isinstance(_dn, int) and _dn > 0 else DIAS_NUEVO
 fecha_limite = hoy - timedelta(days=dias_nuevo)
 
 # --- 3.bis Datos que necesita el panel de ajustes (⚙️) ----------------------
@@ -2166,6 +2194,11 @@ try:
         criterios_defecto = yaml.safe_load(f) or {}
 except (OSError, yaml.YAMLError):
     criterios_defecto = {}
+
+# CPV ACTIVOS (prefijos) para limitar el desplegable "Filtrar por CPV" a solo los
+# CPV que el radar tiene activos ahora mismo (los de la config; o los del YAML si
+# aún no hay config). Vacío = no filtrar (mostrar todos los presentes).
+cpv_prefijos_activos = _cpv_activos_de_config(config_radar, criterios_defecto)
 
 # Plataformas y regiones PRESENTES en los datos, para los selectores de territorio.
 # "Estado" representa el feed estatal (sus licitaciones no traen plataforma agregadora).
@@ -2234,10 +2267,18 @@ ORDEN_HTML = """    <div class="orden-barra">
 # listamos como "código — nombre (N)", ordenados por código (las familias quedan
 # juntas). El JS usa el atributo data-cpv de cada tarjeta para ocultar/mostrar.
 # Solo se muestra si hay CPV que filtrar (si no hay datos, queda como "").
+def _cpv_esta_activo(codigo):
+    """¿Este código CPV casa con algún prefijo activo de la config? Si no hay
+    prefijos activos (sin config ni YAML), no filtramos (devolvemos True para todos)."""
+    if not cpv_prefijos_activos:
+        return True
+    return any(codigo.startswith(p) for p in cpv_prefijos_activos)
+
 conteo_cpv = {}
 for _lic in licitaciones:
     for _codigo in dict.fromkeys(_lic.get("cpv", []) or []):
-        conteo_cpv[_codigo] = conteo_cpv.get(_codigo, 0) + 1
+        if _cpv_esta_activo(_codigo):      # solo CPV activos en la config
+            conteo_cpv[_codigo] = conteo_cpv.get(_codigo, 0) + 1
 
 if conteo_cpv:
     _opciones_cpv = []
