@@ -180,6 +180,7 @@ CSS = """
   .cpv { font-size:.82rem; color:var(--suave); display:flex; flex-wrap:wrap; gap:5px; align-items:center; }
   .cpv .et { font-weight:600; color:var(--texto); }
   .cpv code { background:#f1f5f9; color:#334155; padding:2px 7px; border-radius:6px; font-size:.78rem; }
+  .cpv-mas { font-size:.74rem; color:var(--suave); font-style:italic; }
 
   /* ---- Datos económicos y fechas ---- */
   .datos { display:flex; flex-direction:column; gap:5px; font-size:.84rem; margin-top:2px;
@@ -739,11 +740,61 @@ JS_SUPABASE = """
     return card.dataset.estado !== 'caducada';
   }
 
-  // Muestra/oculta cada tarjeta según pestaña activa Y categoría Y CPV Y caducadas.
+  // Filtro de vista por la CONFIG del radar (⚙️): oculta AL INSTANTE las tarjetas que
+  // ya no encajan con lo ACTIVO en la config (al quitar un CPV/palabra/grupo/territorio),
+  // sin esperar a la próxima recogida del robot. Las ocultas siguen en el DOM y
+  // reaparecen si reactivas. Si no hay config (cfgFiltro=null), no oculta nada.
+  let cfgFiltro = null;
+  function normalizaJS(s) {
+    return String(s || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');
+  }
+  function _activosDe(lista) {
+    const r = [];
+    (lista || []).forEach(function (it) {
+      if (it && typeof it === 'object') { if (it.on !== false && it.v) r.push(String(it.v)); }
+      else if (typeof it === 'string' && it.trim()) r.push(it.trim());
+    });
+    return r;
+  }
+  function construyeFiltroConfig(cfg) {
+    const cats = (cfg && cfg.categorias) || {};
+    if (!Object.keys(cats).length) return null;   // sin config -> no filtramos la vista
+    const prefijos = [], palabras = [];
+    for (const g in cats) {
+      const c = cats[g] || {};
+      _activosDe(c.cpv).forEach(function (x) { prefijos.push(x); });
+      _activosDe(c.palabras_clave).forEach(function (x) { palabras.push(normalizaJS(x)); });
+    }
+    return {
+      prefijos: prefijos, palabras: palabras,
+      fuentes: Array.isArray(cfg.fuentes) ? cfg.fuentes : [],
+      plataformas: Array.isArray(cfg.plataformas) ? cfg.plataformas : [],
+      regiones: Array.isArray(cfg.regiones) ? cfg.regiones : []
+    };
+  }
+  function configVisible(card) {
+    if (!cfgFiltro) return true;
+    const cpvs = (card.dataset.cpv || '').split(' ').filter(Boolean);
+    const cpvMatch = cfgFiltro.prefijos.length > 0 && cpvs.some(function (c) {
+      return cfgFiltro.prefijos.some(function (p) { return c.indexOf(p) === 0; });
+    });
+    const titulo = normalizaJS(card.dataset.titulo || '');
+    const kwMatch = cfgFiltro.palabras.some(function (w) { return titulo.indexOf(w) !== -1; });
+    if (!cpvMatch && !kwMatch) return false;   // ni por CPV ni por palabra
+    const plat = card.dataset.plataforma || 'Estado';
+    if (cfgFiltro.plataformas.length && cfgFiltro.plataformas.indexOf(plat) === -1) return false;
+    const reg = card.dataset.region || '';
+    if (cfgFiltro.regiones.length && cfgFiltro.regiones.indexOf(reg) === -1) return false;
+    const fuente = card.dataset.fuente || 'estatal';
+    if (cfgFiltro.fuentes.length && cfgFiltro.fuentes.indexOf(fuente) === -1) return false;
+    return true;
+  }
+
+  // Muestra/oculta cada tarjeta según pestaña Y categoría Y CPV Y caducadas Y config.
   function aplicarFiltro() {
     cards().forEach(function (c) {
       const visible = perteneceAPestana(c, pestanaActiva) && categoriaVisible(c)
-                      && cpvVisible(c) && caducadasVisible(c);
+                      && cpvVisible(c) && caducadasVisible(c) && configVisible(c);
       c.classList.toggle('oculta-filtro', !visible);
     });
   }
@@ -1764,9 +1815,11 @@ JS_SUPABASE = """
       const { error } = await supabase.from('radar_config')
         .upsert({ id: 1, config: cfg, updated_at: new Date().toISOString() }, { onConflict: 'id' });
       if (error) throw error;
-      ajMsg.textContent = 'Guardado ✓ — el robot lo usará en su próxima recogida.';
+      cfgFiltro = construyeFiltroConfig(cfg);   // filtro de vista al instante
+      ajMsg.textContent = 'Guardado ✓ — lo que quitaste se oculta ya; lo nuevo entra en la próxima recogida.';
       ajMsg.className = 'aj-msg ok';
       aplicarVistaInicial(cfg.vista);   // aplica ya los ajustes de vista
+      actualizarVista();                // re-aplica el filtro (oculta lo que ya no encaja)
     } catch (e) {
       ajMsg.textContent = 'Error al guardar: ' + (e.message || e);
       ajMsg.className = 'aj-msg err';
@@ -1787,10 +1840,13 @@ JS_SUPABASE = """
     if (vista.pestana_inicial) seleccionarPestana(vista.pestana_inicial);
     else actualizarVista();
   }
-  // Al cargar la página: lee la config (lectura pública) y aplica la vista guardada.
+  // Al cargar la página: lee la config (lectura pública), monta el filtro de vista
+  // por config (oculta lo que ya no encaja) y aplica los ajustes de vista guardados.
   (async function () {
     const g = await ajLeerConfig();
+    cfgFiltro = construyeFiltroConfig(g);
     if (g && g.vista) aplicarVistaInicial(g.vista);
+    else actualizarVista();
   })();
 """
 
@@ -2057,18 +2113,36 @@ def construye_tarjeta(lic, es_nueva, hoy, estado):
     # dict.fromkeys quita CPV repetidos conservando el orden (una licitación puede
     # traer el mismo código dos veces y no queremos pintarlo dos veces).
     cpvs = list(dict.fromkeys(lic.get("cpv", []) or []))
-    if cpvs:
-        # En cada <code> ponemos el NOMBRE del CPV como title (tooltip al pasar el
-        # ratón); si no lo conocemos, queda vacío. cpv_nombres es el mapa global.
+    # Mostramos SOLO los CPV COINCIDENTES (los que casan con un prefijo activo de la
+    # config), como hace licitaciones.es: un acuerdo marco puede traer cientos de CPV
+    # (uno por lote) y volcarlos todos hace la tarjeta ilegible.
+    if cpv_prefijos_activos:
+        cpvs_coincidentes = [c for c in cpvs if any(c.startswith(p) for p in cpv_prefijos_activos)]
+    else:
+        cpvs_coincidentes = cpvs
+    # Si no coincide ninguno por CPV (la licitación casó por palabra clave), mostramos
+    # unos pocos como contexto en vez de dejar el hueco vacío.
+    cpvs_visibles = cpvs_coincidentes if cpvs_coincidentes else cpvs
+    _tope = 12
+    _resto = len(cpvs_visibles) - _tope
+    cpvs_visibles = cpvs_visibles[:_tope]
+    if cpvs_visibles:
+        # En cada <code> ponemos el NOMBRE del CPV como title (tooltip al pasar el ratón).
         cpv_html = " ".join(
             f'<code title="{html.escape(cpv_nombres.get(c, ""))}">{html.escape(c)}</code>'
-            for c in cpvs
+            for c in cpvs_visibles
         )
+        if _resto > 0:
+            cpv_html += f' <span class="cpv-mas">+{_resto} más</span>'
     else:
         cpv_html = "—"
-    # data-cpv: los códigos (sin repetir) separados por espacio, para que el JS
-    # pueda filtrar las tarjetas por CPV. Son numéricos, pero escapamos por higiene.
+    # data-cpv lleva TODOS los códigos (sin recortar): no se ven, pero el filtro por
+    # CPV y el filtro de vista por config los necesitan completos para casar bien.
     data_cpv = html.escape(" ".join(cpvs))
+    # Territorio/fuente como data-* para el filtro de vista por config (en el navegador).
+    data_plataforma = html.escape(lic.get("plataforma") or "Estado")
+    data_region = html.escape(lic.get("region_codigo") or "")
+    data_fuente = html.escape(lic.get("fuente") or "estatal")
 
     # --- Datos económicos y fechas (ya guardados en el JSON por filtrar.py) ----
     # Los formateamos para mostrarlos. Si un campo es null, mostramos "—" (con
@@ -2138,6 +2212,7 @@ def construye_tarjeta(lic, es_nueva, hoy, estado):
       data-importe="{data_importe}" data-fin-plazo="{data_fin_plazo}"
       data-fecha-pub="{data_fecha_pub}" data-fecha-subida="{data_fecha_subida}"
       data-cpv="{data_cpv}"
+      data-plataforma="{data_plataforma}" data-region="{data_region}" data-fuente="{data_fuente}"
       data-titulo="{titulo}" data-licitacion-id="{lic_id}"
       data-estado="{estado}" data-favorita="false">
       {CONTROLES_CARD}
