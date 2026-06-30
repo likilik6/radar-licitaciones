@@ -67,7 +67,7 @@
     "fecha_publicacion": "2025-12-02",
     "fecha_actualizacion": "2026-06-24T18:11:40.133+02:00",
     "primera_vez": "2026-06-24T19:53:13.030001",
-    "ultima_vez": "2026-06-29T21:43:08.481200",
+    "ultima_vez": "2026-06-30T07:19:21.707863",
     "organismo": "Junta de Gobierno del Ayuntamiento de Santa Cruz de Tenerife",
     "plataforma": null,
     "region": "Tenerife",
@@ -94,7 +94,7 @@
     "plataforma": null,
     "region": "Murcia",
     "region_codigo": "ES620",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90731700 (coincide con 90731700)",
     "presupuesto_con_iva": 30855.0,
     "presupuesto_sin_iva": 25500.0,
@@ -103,34 +103,7 @@
     "fecha_publicacion": "2026-06-01",
     "fecha_actualizacion": "2026-06-26T11:04:05.076+02:00",
     "primera_vez": "2026-06-25T09:04:28.410821",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
-  },
-  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19403587": {
-    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19403587",
-    "titulo": "AT Comprobación sistema potabilización lindano",
-    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=5hKgwST%2BydqFlFRHfEzEaw%3D%3D",
-    "cpv": [
-      "90714500",
-      "90714500",
-      "90714500",
-      "90714500",
-      "90714500"
-    ],
-    "fuente": "estatal",
-    "organismo": "Instituto Aragonés del Agua",
-    "plataforma": null,
-    "region": "Zaragoza",
-    "region_codigo": "ES243",
-    "categoria": "criticas",
-    "coincidencia": "CPV 90714500 (coincide con 90714500)",
-    "presupuesto_con_iva": 84363.74,
-    "presupuesto_sin_iva": 69722.09,
-    "valor_estimado": 139444.2,
-    "fecha_fin_plazo": "2026-04-27",
-    "fecha_publicacion": "2026-06-24",
-    "fecha_actualizacion": "2026-06-24T12:55:08.341+02:00",
-    "primera_vez": "2026-06-25T09:04:28.410821",
-    "ultima_vez": "2026-06-29T11:01:24.354168"
+    "ultima_vez": "2026-06-30T07:19:21.707863"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19596190": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19596190",
@@ -154,99 +127,6 @@
     "fecha_actualizacion": "2026-06-24T08:05:21.584+02:00",
     "primera_vez": "2026-06-25T09:04:28.410821",
     "ultima_vez": "2026-06-29T11:01:24.354168"
-  },
-  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19918235": {
-    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19918235",
-    "titulo": "Servicios de caracterización de las emisiones difusas en el vertedero de residuos no peligrosos de Meruelo",
-    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=22qIWzbaIWlq1DdmE7eaXg%3D%3D",
-    "cpv": [
-      "90714500",
-      "71313000"
-    ],
-    "fuente": "estatal",
-    "organismo": "Consejo de Administración de Medio Ambiente, Agua, Residuos y Energía de Cantabria, S.A.(MARE S.A.)",
-    "plataforma": null,
-    "region": "Cantabria",
-    "region_codigo": "ES130",
-    "categoria": "criticas",
-    "coincidencia": "CPV 90714500 (coincide con 90714500)",
-    "presupuesto_con_iva": 195145.8,
-    "presupuesto_sin_iva": 161280.0,
-    "valor_estimado": 354816.0,
-    "fecha_fin_plazo": "2026-08-05",
-    "fecha_publicacion": "2026-06-25",
-    "fecha_actualizacion": "2026-06-25T10:15:17.242+02:00",
-    "primera_vez": "2026-06-25T09:04:28.410821",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
-  },
-  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/14965608": {
-    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/14965608",
-    "titulo": "Servicio De Asesoramiento Y Seguimiento De Indicadores Dora Del Aeropuerto De Palma De Mallorca",
-    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=D2uz9rZii0m9Hd5zqvq9cg%3D%3D",
-    "cpv": [
-      "71700000"
-    ],
-    "fuente": "estatal",
-    "organismo": "Aena. Dirección del Aeropuerto de Palma de Mallorca",
-    "plataforma": null,
-    "region": "Mallorca",
-    "region_codigo": "ES532",
-    "categoria": "criticas",
-    "coincidencia": "CPV 71700000 (coincide con 71700000)",
-    "presupuesto_con_iva": 45012.0,
-    "presupuesto_sin_iva": 37200.0,
-    "valor_estimado": 111600.0,
-    "fecha_fin_plazo": "2024-06-05",
-    "fecha_publicacion": "2024-06-28",
-    "fecha_actualizacion": "2026-06-23T13:04:06.345+02:00",
-    "primera_vez": "2026-06-25T09:04:28.410821",
-    "ultima_vez": "2026-06-29T11:01:24.354168"
-  },
-  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19779659": {
-    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19779659",
-    "titulo": "Este contrato tiene por objeto el servicio de control de emisiones atmosféricas de los hornos crematorios  del Parque Cementerio San Cayetano de Fuengirola.",
-    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=DsiHOZr2iqs36J9Lctlsuw%3D%3D",
-    "cpv": [
-      "90714500"
-    ],
-    "fuente": "estatal",
-    "organismo": "Consejo de Administración de Parque Cementerio de Fuengirola S.A.M. (PARCESAM)",
-    "plataforma": null,
-    "region": "Málaga",
-    "region_codigo": "ES617",
-    "categoria": "criticas",
-    "coincidencia": "CPV 90714500 (coincide con 90714500)",
-    "presupuesto_con_iva": 12100.0,
-    "presupuesto_sin_iva": 10000.0,
-    "valor_estimado": 22000.0,
-    "fecha_fin_plazo": "2026-06-21",
-    "fecha_publicacion": "2026-06-11",
-    "fecha_actualizacion": "2026-06-25T13:18:30.132+02:00",
-    "primera_vez": "2026-06-25T09:04:28.410821",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
-  },
-  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19791436": {
-    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19791436",
-    "titulo": "Seguimiento Del Sistema De Auscultación Y Monitorización Remota En La Casa Del Labrador. Real Sitio De Aranjuez",
-    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=HwTcOYZhQ85t5r0ngvMetA%3D%3D",
-    "cpv": [
-      "71700000"
-    ],
-    "fuente": "estatal",
-    "organismo": "Consejo de Administración del Patrimonio Nacional",
-    "plataforma": null,
-    "region": "España",
-    "region_codigo": "ES",
-    "categoria": "criticas",
-    "coincidencia": "CPV 71700000 (coincide con 71700000)",
-    "presupuesto_con_iva": 49489.0,
-    "presupuesto_sin_iva": 40900.0,
-    "valor_estimado": 81800.0,
-    "fecha_fin_plazo": "2026-06-17",
-    "fecha_publicacion": "2026-06-08",
-    "fecha_actualizacion": "2026-06-29T15:18:01.324+02:00",
-    "primera_vez": "2026-06-25T09:04:28.410821",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/15360219": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/15360219",
@@ -582,7 +462,7 @@
     "fecha_publicacion": "2026-01-23",
     "fecha_actualizacion": "2026-06-19T13:12:25.709+02:00",
     "primera_vez": "2026-06-25T09:04:28.410821",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
+    "ultima_vez": "2026-06-30T07:19:21.707863"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19071782": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19071782",
@@ -605,58 +485,7 @@
     "fecha_publicacion": "2026-02-18",
     "fecha_actualizacion": "2026-06-18T11:12:22.215+02:00",
     "primera_vez": "2026-06-25T09:04:28.410821",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
-  },
-  "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19407647": {
-    "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19407647",
-    "titulo": "equipos monitorización, instalación y seguimiento proyecto horizon cosmic",
-    "enlace": "https://www.juntadeandalucia.es/haciendayadministracionpublica/apl/pdc_sirec/perfiles-licitaciones/detalle-licitacion.jsf?idExpediente=940104",
-    "cpv": [
-      "51112200",
-      "38551000",
-      "71700000",
-      "38930000",
-      "71600000",
-      "38931000"
-    ],
-    "fuente": "agregadas",
-    "organismo": "Agencia de Vivienda y Rehabilitación de Andalucía (AVRA)",
-    "plataforma": "Junta de Andalucía",
-    "region": null,
-    "region_codigo": "ES618",
-    "categoria": "criticas",
-    "coincidencia": "CPV 71700000 (coincide con 71700000)",
-    "presupuesto_con_iva": null,
-    "presupuesto_sin_iva": 26855.92,
-    "valor_estimado": 26855.92,
-    "fecha_fin_plazo": "2026-04-30",
-    "fecha_publicacion": "2026-04-08",
-    "fecha_actualizacion": "2026-06-15T15:12:30.403+02:00",
-    "primera_vez": "2026-06-25T09:04:28.410821",
-    "ultima_vez": "2026-06-26T09:05:39.995142"
-  },
-  "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/9834738": {
-    "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/9834738",
-    "titulo": "Asistencia técnica en el seguimiento y control del depósito de seguridad de Kastrexana",
-    "enlace": "https://www.contratacion.euskadi.eus/webkpe00-kpeperfi/es/contenidos/anuncio_contratacion/expgebizkaia1527020/es_doc/index.html",
-    "cpv": [
-      "90714500"
-    ],
-    "fuente": "agregadas",
-    "organismo": "Diputación Foral de Bizkaia-Diputado Foral de Infraestructuras y Desarrollo Territorial",
-    "plataforma": "Gobierno Vasco",
-    "region": null,
-    "region_codigo": "ES213",
-    "categoria": "criticas",
-    "coincidencia": "CPV 90714500 (coincide con 90714500)",
-    "presupuesto_con_iva": null,
-    "presupuesto_sin_iva": 90909.09,
-    "valor_estimado": 272727.28,
-    "fecha_fin_plazo": "2022-05-23",
-    "fecha_publicacion": "2022-04-23",
-    "fecha_actualizacion": "2026-06-12T17:10:59.023+02:00",
-    "primera_vez": "2026-06-25T09:04:28.410821",
-    "ultima_vez": "2026-06-25T09:04:28.410821"
+    "ultima_vez": "2026-06-30T07:19:21.707863"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19235666": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19235666",
@@ -729,7 +558,7 @@
     "fecha_publicacion": "2026-06-26",
     "fecha_actualizacion": "2026-06-26T13:08:08.554+02:00",
     "primera_vez": "2026-06-25T09:04:28.410821",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
+    "ultima_vez": "2026-06-30T07:19:21.707863"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19885986": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19885986",
@@ -830,7 +659,7 @@
     "fecha_publicacion": "2026-05-22",
     "fecha_actualizacion": "2026-06-23T13:30:07.470+02:00",
     "primera_vez": "2026-06-25T09:04:28.410821",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
+    "ultima_vez": "2026-06-30T07:19:21.707863"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19795080": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19795080",
@@ -853,7 +682,7 @@
     "fecha_publicacion": "2026-06-01",
     "fecha_actualizacion": "2026-06-17T15:11:41.576+02:00",
     "primera_vez": "2026-06-25T09:04:28.410821",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
+    "ultima_vez": "2026-06-30T07:19:21.707863"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19876107": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19876107",
@@ -924,7 +753,7 @@
     "fecha_publicacion": "2026-03-27",
     "fecha_actualizacion": "2026-06-25T07:54:07.784+02:00",
     "primera_vez": "2026-06-26T09:05:39.995142",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
+    "ultima_vez": "2026-06-30T07:19:21.707863"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19207311": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19207311",
@@ -949,7 +778,7 @@
     "fecha_publicacion": "2026-06-25",
     "fecha_actualizacion": "2026-06-25T17:35:56.168+02:00",
     "primera_vez": "2026-06-26T09:05:39.995142",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
+    "ultima_vez": "2026-06-30T07:19:21.707863"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19746803": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19746803",
@@ -972,7 +801,7 @@
     "fecha_publicacion": "2026-05-25",
     "fecha_actualizacion": "2026-06-25T13:04:11.985+02:00",
     "primera_vez": "2026-06-26T09:05:39.995142",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
+    "ultima_vez": "2026-06-30T07:19:21.707863"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19231746": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19231746",
@@ -996,7 +825,7 @@
     "fecha_publicacion": "2026-03-12",
     "fecha_actualizacion": "2026-06-25T10:26:25.939+02:00",
     "primera_vez": "2026-06-26T09:05:39.995142",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
+    "ultima_vez": "2026-06-30T07:19:21.707863"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19172138": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19172138",
@@ -1029,7 +858,7 @@
     "plataforma": null,
     "region": "Gran Canaria",
     "region_codigo": "ES705",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90714500 (coincide con 90714500)",
     "presupuesto_con_iva": 218032.45,
     "presupuesto_sin_iva": 203768.64,
@@ -1038,57 +867,7 @@
     "fecha_publicacion": "2026-03-04",
     "fecha_actualizacion": "2026-06-26T13:29:51.427+02:00",
     "primera_vez": "2026-06-29T06:58:02.115925",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
-  },
-  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19217601": {
-    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19217601",
-    "titulo": "Plataforma de Gestión del Ciclo del Agua y Sistema de Gestión de Telemedida.",
-    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=pxOiOqMZ0Up70UvEyYJSGw%3D%3D",
-    "cpv": [
-      "72212150",
-      "72210000",
-      "71700000",
-      "72000000",
-      "72200000",
-      "51210000",
-      "72212460",
-      "72212150",
-      "72212460",
-      "51210000",
-      "72000000",
-      "72200000",
-      "71700000",
-      "72210000",
-      "72212150",
-      "72210000",
-      "71700000",
-      "72000000",
-      "72200000",
-      "51210000",
-      "72212460",
-      "72212150",
-      "72000000",
-      "51210000",
-      "72210000",
-      "71700000",
-      "72200000",
-      "72212460"
-    ],
-    "fuente": "estatal",
-    "organismo": "Junta de Gobierno del Ayuntamiento de Logroño",
-    "plataforma": null,
-    "region": "La Rioja",
-    "region_codigo": "ES230",
-    "categoria": "criticas",
-    "coincidencia": "CPV 71700000 (coincide con 71700000)",
-    "presupuesto_con_iva": 1425575.1,
-    "presupuesto_sin_iva": 1178161.24,
-    "valor_estimado": 1413793.49,
-    "fecha_fin_plazo": "2026-04-10",
-    "fecha_publicacion": "2026-03-11",
-    "fecha_actualizacion": "2026-06-26T11:27:28.280+02:00",
-    "primera_vez": "2026-06-29T06:58:02.115925",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
+    "ultima_vez": "2026-06-30T07:19:21.707863"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/17485425": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/17485425",
@@ -1112,87 +891,7 @@
     "fecha_publicacion": "2025-06-16",
     "fecha_actualizacion": "2026-06-26T10:22:27.874+02:00",
     "primera_vez": "2026-06-29T06:58:02.115925",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
-  },
-  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19217504": {
-    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19217504",
-    "titulo": "Servicio de mantenimiento del sistema de control industrial y monitorización del CPD (AUTÓMATA) y de los sistemas de alimentación eléctrica ininterrumpida (UPS), instalados en el CPD de la Universidad de La Laguna",
-    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=zyY1qYHpIIHE6P%2FuLemXRw%3D%3D",
-    "cpv": [
-      "50324100",
-      "50532400",
-      "31154000",
-      "48150000",
-      "71700000",
-      "50532000",
-      "50324100",
-      "48150000",
-      "71700000",
-      "50532400",
-      "50532000",
-      "31154000"
-    ],
-    "fuente": "estatal",
-    "organismo": "Rectorado de la Universidad de La Laguna",
-    "plataforma": null,
-    "region": null,
-    "region_codigo": "ES709",
-    "categoria": "criticas",
-    "coincidencia": "CPV 71700000 (coincide con 71700000)",
-    "presupuesto_con_iva": 127330.0,
-    "presupuesto_sin_iva": 119000.0,
-    "valor_estimado": 160500.0,
-    "fecha_fin_plazo": "2026-03-27",
-    "fecha_publicacion": "2026-05-27",
-    "fecha_actualizacion": "2026-06-26T08:19:32.495+02:00",
-    "primera_vez": "2026-06-29T06:58:02.115925",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
-  },
-  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19099706": {
-    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19099706",
-    "titulo": "Despliegue del sistema de control scada infraestructuras para la climatización del acc de sevilla",
-    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=SNpsscLRsVWkU02jNGj1Fw%3D%3D",
-    "cpv": [
-      "71700000"
-    ],
-    "fuente": "estatal",
-    "organismo": "Dirección Económico-Financiera de ENAIRE",
-    "plataforma": null,
-    "region": "Madrid",
-    "region_codigo": "ES300",
-    "categoria": "criticas",
-    "coincidencia": "CPV 71700000 (coincide con 71700000)",
-    "presupuesto_con_iva": 667029.85,
-    "presupuesto_sin_iva": 551264.34,
-    "valor_estimado": 551264.34,
-    "fecha_fin_plazo": "2026-03-27",
-    "fecha_publicacion": "2026-02-23",
-    "fecha_actualizacion": "2026-06-26T04:27:07.395+02:00",
-    "primera_vez": "2026-06-29T06:58:02.115925",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
-  },
-  "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/18767870": {
-    "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/18767870",
-    "titulo": "Servicio de control ambiental y atención al público en el Anillo Verde de Vitoria-Gasteiz (2026-2030).",
-    "enlace": "https://www.contratacion.euskadi.eus/webkpe00-kpeperfi/es/contenidos/anuncio_contratacion/expjaso667778/es_doc/index.html",
-    "cpv": [
-      "90714500"
-    ],
-    "fuente": "agregadas",
-    "organismo": "Ayuntamiento de Vitoria-Gasteiz-Junta de Gobierno Local",
-    "plataforma": "Gobierno Vasco",
-    "region": null,
-    "region_codigo": "ES211",
-    "categoria": "criticas",
-    "coincidencia": "CPV 90714500 (coincide con 90714500)",
-    "presupuesto_con_iva": null,
-    "presupuesto_sin_iva": 416040.06,
-    "valor_estimado": 520050.07,
-    "fecha_fin_plazo": "2026-02-06",
-    "fecha_publicacion": "2026-01-01",
-    "fecha_actualizacion": "2026-06-26T09:11:05.898+02:00",
-    "primera_vez": "2026-06-29T06:58:02.115925",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
+    "ultima_vez": "2026-06-30T07:19:21.707863"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19846621": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19846621",
@@ -1216,7 +915,7 @@
     "fecha_publicacion": "2026-06-09",
     "fecha_actualizacion": "2026-06-26T12:16:06.063+02:00",
     "primera_vez": "2026-06-29T06:58:02.115925",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
+    "ultima_vez": "2026-06-30T07:19:21.707863"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19217649": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19217649",
@@ -1242,56 +941,7 @@
     "fecha_publicacion": "2026-06-01",
     "fecha_actualizacion": "2026-06-29T14:42:12.528+02:00",
     "primera_vez": "2026-06-29T21:43:08.481200",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
-  },
-  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19949624": {
-    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19949624",
-    "titulo": "Servicio de asistencia técnica especializada de carácter general y continuada para el seguimiento, control, verificación y mejora continua de los sistemas de gestión de calidad, medio ambiente y energía (el Sistema Integrado, en lo sucesivo).",
-    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=Txk2nQl%2FMzg%2B1TMyIiZmzw%3D%3D",
-    "cpv": [
-      "79212000",
-      "90714500"
-    ],
-    "fuente": "estatal",
-    "organismo": "Comisión Ejecutiva de la Limpieza Pública y Protección Ambiental Sociedad Anónima Municipal (LIPASAM)",
-    "plataforma": null,
-    "region": "Sevilla",
-    "region_codigo": "ES618",
-    "categoria": "criticas",
-    "coincidencia": "CPV 90714500 (coincide con 90714500)",
-    "presupuesto_con_iva": 58080.0,
-    "presupuesto_sin_iva": 48000.0,
-    "valor_estimado": 96000.0,
-    "fecha_fin_plazo": "2026-07-20",
-    "fecha_publicacion": "2026-06-29",
-    "fecha_actualizacion": "2026-06-29T13:42:38.924+02:00",
-    "primera_vez": "2026-06-29T21:43:08.481200",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
-  },
-  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19949698": {
-    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19949698",
-    "titulo": "Servicio de cálculo de costes de gases de efecto invernadero (GEI) y obtención de pruebas de cumplimiento del rechazo, previo al depósito en vertedero en el Complejo Medioambiental de Montalbán  perteneciente a la Empresa Provincial de Residuos y Medioambiente, S.A. (EPREMASA)",
-    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=PMiapx27oH47%2B9FIQYNjeQ%3D%3D",
-    "cpv": [
-      "90700000",
-      "90714500",
-      "71900000"
-    ],
-    "fuente": "estatal",
-    "organismo": "Presidencia del Consejo de Administración de la Empresa Provincial de Residuos y Medio Ambiente, S.A.",
-    "plataforma": null,
-    "region": "Córdoba",
-    "region_codigo": "ES613",
-    "categoria": "criticas",
-    "coincidencia": "CPV 90714500 (coincide con 90714500)",
-    "presupuesto_con_iva": 38455.68,
-    "presupuesto_sin_iva": 32608.0,
-    "valor_estimado": 32608.0,
-    "fecha_fin_plazo": "2026-07-14",
-    "fecha_publicacion": "2026-06-29",
-    "fecha_actualizacion": "2026-06-29T12:54:01.496+02:00",
-    "primera_vez": "2026-06-29T21:43:08.481200",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
+    "ultima_vez": "2026-06-30T07:19:21.707863"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19337849": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19337849",
@@ -1320,30 +970,7 @@
     "fecha_publicacion": "2026-03-25",
     "fecha_actualizacion": "2026-06-29T11:53:15.608+02:00",
     "primera_vez": "2026-06-29T21:43:08.481200",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
-  },
-  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19680837": {
-    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19680837",
-    "titulo": "Servicio de control de emisiones atmosféricas de los hornos crematorios del tanatorio de Son Valentí (Palma) y  Bon Sosec (Marratxí) de la Empresa Funeraria Municipal, S.A.",
-    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=ioU%2F83QfSzWExvMJXBMHHQ%3D%3D",
-    "cpv": [
-      "90714500"
-    ],
-    "fuente": "estatal",
-    "organismo": "Consell d'Administració de l'Empresa Funerària Municipal S.A.",
-    "plataforma": null,
-    "region": "Mallorca",
-    "region_codigo": "ES532",
-    "categoria": "criticas",
-    "coincidencia": "CPV 90714500 (coincide con 90714500)",
-    "presupuesto_con_iva": 16931.43,
-    "presupuesto_sin_iva": 13992.92,
-    "valor_estimado": 43723.97,
-    "fecha_fin_plazo": "2026-05-29",
-    "fecha_publicacion": "2026-06-29",
-    "fecha_actualizacion": "2026-06-29T11:47:57.249+02:00",
-    "primera_vez": "2026-06-29T21:43:08.481200",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
+    "ultima_vez": "2026-06-30T07:19:21.707863"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19950038": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19950038",
@@ -1366,6 +993,6 @@
     "fecha_publicacion": "2026-06-29",
     "fecha_actualizacion": "2026-06-29T07:41:14.790+02:00",
     "primera_vez": "2026-06-29T21:43:08.481200",
-    "ultima_vez": "2026-06-29T21:43:08.481200"
+    "ultima_vez": "2026-06-30T07:19:21.707863"
   }
 }
