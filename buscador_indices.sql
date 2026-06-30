@@ -34,8 +34,16 @@ create index if not exists licitaciones_fechapub_desc_id
 analyze public.licitaciones;
 
 -- ----------------------------------------------------------------------------
--- NOTA (no obligatorio): los índices de una sola columna licitaciones_valor_idx
--- (valor_estimado) y licitaciones_fin_plazo (fecha_fin_plazo) de BG-1 quedan algo
--- redundantes con estos compuestos para el ORDEN, pero siguen sirviendo para
--- filtros de rango; déjalos salvo que quieras recuperar espacio.
+-- NOTA (SIN PRISA): los índices de una sola columna de BG-1 quedan redundantes
+-- con estos compuestos para el ORDEN (el compuesto sirve también de filtro por
+-- la 1ª columna). Cuando quieras recuperar espacio, puedes quitarlos:
+--   - licitaciones_valor_idx  (valor_estimado)   <- cubierto por licitaciones_valor_desc_id
+--   - licitaciones_fin_plazo  (fecha_fin_plazo)  <- cubierto por licitaciones_finplazo_id
+-- OJO: fecha_fin_plazo lo usan también la purga (BG-2c) y el filtro 'abierta';
+-- el compuesto sigue sirviendo para esos rangos, así que es seguro. Descomenta
+-- cuando lo decidas (no corre prisa):
+--   drop index if exists public.licitaciones_valor_idx;
+--   drop index if exists public.licitaciones_fin_plazo;
+-- (licitaciones_fuente_idx y licitaciones_cpv_gin NO se tocan: no hay compuesto
+--  que los reemplace.)
 -- ----------------------------------------------------------------------------

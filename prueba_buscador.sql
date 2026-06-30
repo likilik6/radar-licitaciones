@@ -1,53 +1,41 @@
 -- prueba_buscador.sql  ·  PASO 5 de BG-3: SQL para CUADRAR y DIAGNOSTICAR
 -- Ejecuta en el SQL Editor de Supabase (rol postgres: ve todas las filas y NO
--- tiene el statement_timeout corto del rol authenticated, por eso aquí sí se
--- puede contar exacto lo que en la API daba 57014).
+-- tiene el statement_timeout corto del rol authenticated).
 --
--- OJO tildes: el módulo manda el término SIN tildes (el tsv se guardó con
--- unaccent), por eso usamos 'climatizacion' a secas. Corre los que usan now()
--- casi a la vez que la consola.
+-- OJO tildes: 'climatizacion' sin tildes (el tsv se guardó con unaccent). Corre
+-- los que usan now() casi a la vez que la consola.
 
 -- ===========================================================================
--- A) CUADRAR los totales EXACTOS que ahora devuelve buscador_api.js
+-- A) CUADRAR los totales que devuelve buscador_api.js
 -- ===========================================================================
 
--- P1 (pequeño -> la API lo devuelve EXACTO): texto=aire, abierta, importeMax=200000
+-- P1 (vía RPC, EXACTO): texto=aire, abierta, importeMax=200000
 select count(*) as p1_total
 from public.licitaciones
 where tsv @@ websearch_to_tsquery('spanish', 'aire')
   and valor_estimado <= 200000
   and (fecha_fin_plazo >= now() or fecha_fin_plazo is null);
 
--- P4 (pequeño -> EXACTO): cpv overlaps ['90920000']
+-- P3 (vía RPC, EXACTO): texto=climatizacion (la RPC cuenta exacto el subconjunto)
+select count(*) as p3_total
+from public.licitaciones
+where tsv @@ websearch_to_tsquery('spanish', 'climatizacion');
+
+-- P4 (sin texto -> PostgREST, EXACTO): cpv overlaps ['90920000']
 select count(*) as p4_total
 from public.licitaciones
 where cpv && array['90920000']::text[];
 
--- P3 (referencia): la API lo devuelve AHORA como estimado (≈) si supera 10.000;
--- aquí ves el número real para comparar el orden de magnitud.
-select count(*) as p3_total_real
-from public.licitaciones
-where tsv @@ websearch_to_tsquery('spanish', 'climatizacion');
-
--- P5 (referencia): sin filtros = todo el catálogo. La API lo da estimado (≈).
+-- P5 (sin texto -> PostgREST, la API lo da ESTIMADO): todo el catálogo
 select count(*) as p5_total_real from public.licitaciones;
 
 -- ===========================================================================
--- B) DIAGNÓSTICO con EXPLAIN ANALYZE de las consultas que daban TIMEOUT
---    Mira el plan: si ves "Seq Scan" + "Sort" de cientos de miles de filas,
---    aplica buscador_indices.sql y vuelve a correrlos (deberías ver Index Scan).
+-- B) DIAGNÓSTICO: por qué P3 daba timeout y por qué la CTE MATERIALIZED lo cura
 -- ===========================================================================
 
--- B1) P5 — orden por valor_estimado DESC (sin filtros). Es la que más sufre:
---     sin índice adecuado, ordena las ~588k filas enteras.
-explain (analyze, buffers)
-select licitacion_id, titulo, valor_estimado
-from public.licitaciones
-order by valor_estimado desc nulls last, licitacion_id asc
-limit 25;
-
--- B2) P3 — full-text ordenado por fecha_fin_plazo. Debe usar el GIN(tsv) para
---     filtrar y luego ordenar el subconjunto (rápido si el match no es enorme).
+-- B1) Plan MALO (lo que hacía PostgREST): ORDER BY fecha + filtro tsv al vuelo.
+--     Espera ver un Index Scan por licitaciones_finplazo_id "Filter: tsv @@ ..."
+--     recorriendo muchísimas filas (rows removed by filter enorme) -> lento.
 explain (analyze, buffers)
 select licitacion_id, titulo, fecha_fin_plazo
 from public.licitaciones
@@ -55,17 +43,39 @@ where tsv @@ websearch_to_tsquery('spanish', 'climatizacion')
 order by fecha_fin_plazo asc nulls last, licitacion_id asc
 limit 25;
 
--- B3) Pantalla de entrada (sin filtros, abiertas, orden fin de plazo asc).
+-- B2) Plan BUENO (lo que hace la RPC): CTE MATERIALIZED -> Bitmap Index Scan
+--     sobre licitaciones_tsv_gin PRIMERO, luego Sort del subconjunto + Limit.
 explain (analyze, buffers)
-select licitacion_id, titulo, fecha_fin_plazo
-from public.licitaciones
-where fecha_fin_plazo >= now() or fecha_fin_plazo is null
+with filtrado as materialized (
+  select licitacion_id, fecha_fin_plazo, valor_estimado, fecha_publicacion
+  from public.licitaciones
+  where tsv @@ websearch_to_tsquery('spanish', 'climatizacion')
+)
+select licitacion_id
+from filtrado
 order by fecha_fin_plazo asc nulls last, licitacion_id asc
 limit 25;
 
+-- B3) P5 — orden por valor_estimado DESC sin filtros (debe usar el compuesto
+--     licitaciones_valor_desc_id -> Index Scan, 25 filas, sin Sort masivo).
+explain (analyze, buffers)
+select licitacion_id, titulo, valor_estimado
+from public.licitaciones
+order by valor_estimado desc nulls last, licitacion_id asc
+limit 25;
+
 -- ===========================================================================
--- C) ccaa / lugar_ejecucion: confirmado a 0 -> filtros desactivados en BG-3.
---    Extraer la región del CODICE queda como tarea futura del pipeline.
+-- C) PROBAR LA RPC directamente (debe cuadrar con A). 'climatizacion' es ligero;
+--    si el editor diera "Failed to fetch" con un término amplio, usa uno raro.
+-- ===========================================================================
+select (public.buscar_licitaciones('climatizacion'))->>'total'                          as p3_rpc_total;
+select json_array_length((public.buscar_licitaciones('climatizacion'))->'filas')         as p3_rpc_filas_pagina;
+-- Con filtros, igual que P1:
+select (public.buscar_licitaciones(p_texto => 'aire', p_estado => 'abierta',
+                                   p_importe_max => 200000))->>'total'                    as p1_rpc_total;
+
+-- ===========================================================================
+-- D) ccaa / lugar_ejecucion: confirmado a 0 -> filtros desactivados en BG-3.
 -- ===========================================================================
 select
   count(*) filter (where ccaa is not null)            as ccaa_no_null,
