@@ -80,6 +80,7 @@ def _cpv_activos_de_config(config, defaults):
 # más opciones en el futuro; basta con añadir más diccionarios a esta lista.
 OPCIONES_MENU = [
     {"nombre": "Radar", "vista": "radar", "enlace": "#vista-radar", "icono": "📡"},
+    {"nombre": "Buscador", "vista": "buscador", "enlace": "#vista-buscador", "icono": "🔍"},
     {"nombre": "Cartera", "vista": "cartera", "enlace": "#vista-cartera", "icono": "💼"},
     {"nombre": "Calendario", "vista": "calendario", "enlace": "#vista-calendario", "icono": "📅"},
 ]
@@ -469,7 +470,30 @@ CSS = """
   .docs-form .btn-pri:disabled { opacity:.6; cursor:progress; }
 
   /* ---- Vistas Radar / Cartera (se alternan desde el lateral) ---- */
-  #vista-radar[hidden], #vista-cartera[hidden] { display:none; }
+  #vista-radar[hidden], #vista-cartera[hidden], #vista-buscador[hidden] { display:none; }
+  /* ---- Buscador general (BG-4) ---- */
+  .bg-gate { background:var(--panel); border:1px solid var(--borde); border-radius:12px; padding:22px; color:var(--suave); text-align:center; }
+  .bg-barra { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px; }
+  .bg-input { flex:1 1 320px; min-width:240px; padding:11px 13px; border:1px solid var(--borde); border-radius:9px; font:inherit; background:var(--panel); color:var(--texto); }
+  .bg-input:focus { outline:none; border-color:var(--acento); box-shadow:0 0 0 3px rgba(99,102,241,.15); }
+  .bg-sel { padding:10px 12px; border:1px solid var(--borde); border-radius:9px; font:inherit; background:var(--panel); color:var(--texto); cursor:pointer; }
+  .bg-cabecera { margin-bottom:12px; }
+  .bg-contador { font-size:.9rem; color:var(--suave); }
+  .bg-contador b { color:var(--acento); }
+  .bg-msg { color:var(--suave); font-size:.92rem; padding:8px 0 14px; }
+  .bg-card .bg-org { font-size:.82rem; color:var(--suave); margin:2px 0 8px; }
+  .bg-card .bg-meta { font-size:.82rem; color:var(--texto); margin-bottom:8px; }
+  .bg-card .bg-fuente { text-transform:capitalize; font-weight:600; }
+  .bg-card .bg-plazo { font-size:.82rem; color:var(--suave); border-top:1px solid var(--borde); padding-top:9px; margin-top:4px; }
+  .bg-card .bg-plazo .et { color:var(--suave); }
+  #bg-resultados .card.urg-roja  { border-color:#fca5a5; background:rgba(185,28,28,.06); }
+  #bg-resultados .card.urg-ambar { border-color:#fcd34d; background:rgba(180,83,9,.06); }
+  #bg-resultados .card.urg-verde { border-color:#86efac; background:rgba(21,128,61,.05); }
+  .bg-pag { display:flex; align-items:center; justify-content:center; gap:14px; margin:20px 0 8px; }
+  .bg-pag-btn { font:inherit; font-size:.86rem; font-weight:600; cursor:pointer; padding:8px 14px; border-radius:8px; border:1px solid var(--borde); background:var(--panel); color:var(--texto); }
+  .bg-pag-btn:hover:not(:disabled) { border-color:var(--acento); color:var(--acento-2); }
+  .bg-pag-btn:disabled { opacity:.45; cursor:default; }
+  .bg-pag-info { font-size:.86rem; color:var(--suave); }
   #cartera-contenido { overflow-x:auto; }            /* tabla ancha: scroll horizontal */
   #cartera-contenido > p { margin:0 0 14px; color:var(--suave); font-size:.92rem; }
   #cartera-contenido > p strong { color:var(--texto); }
@@ -1293,12 +1317,13 @@ JS_SUPABASE = """
   const vistaRadar      = document.getElementById('vista-radar');
   const vistaCartera    = document.getElementById('vista-cartera');
   const vistaCalendario = document.getElementById('vista-calendario');
+  const vistaBuscador   = document.getElementById('vista-buscador');   // BG-4
   const carteraCont     = document.getElementById('cartera-contenido');
   const calendarioCont  = document.getElementById('calendario-contenido');
   const tituloSeccion   = document.getElementById('titulo-seccion');
   const metaRadar       = document.getElementById('meta-radar');
-  const VISTAS  = ['radar', 'cartera', 'calendario'];
-  const TITULOS = { radar: 'Radar', cartera: 'Cartera', calendario: 'Calendario' };
+  const VISTAS  = ['radar', 'cartera', 'calendario', 'buscador'];
+  const TITULOS = { radar: 'Radar', cartera: 'Cartera', calendario: 'Calendario', buscador: 'Buscador' };
   let vistaActiva = 'radar';   // vista por defecto
 
   function mostrarVista(nombre) {
@@ -1306,6 +1331,7 @@ JS_SUPABASE = """
     if (vistaRadar)      vistaRadar.hidden      = (vistaActiva !== 'radar');
     if (vistaCartera)    vistaCartera.hidden    = (vistaActiva !== 'cartera');
     if (vistaCalendario) vistaCalendario.hidden = (vistaActiva !== 'calendario');
+    if (vistaBuscador)   vistaBuscador.hidden   = (vistaActiva !== 'buscador');   // BG-4
     // Marca activa la entrada del lateral y ajusta la cabecera.
     document.querySelectorAll('.sidebar .nav-item[data-vista]').forEach(function (a) {
       a.classList.toggle('activo', a.getAttribute('data-vista') === vistaActiva);
@@ -1315,6 +1341,7 @@ JS_SUPABASE = """
     // Al entrar con sesión, (re)cargamos la fuente correspondiente.
     if (vistaActiva === 'cartera' && sesionActiva) cargarCartera();
     if (vistaActiva === 'calendario' && sesionActiva) cargarCalendario();
+    if (vistaActiva === 'buscador' && window.__bgEntrar) window.__bgEntrar();   // BG-4
   }
 
   // Clic en las entradas del lateral -> alternar vista (sin saltar por el ancla).
@@ -1896,6 +1923,192 @@ JS_SUPABASE = """
     else actualizarVista();
   })();
 """
+
+
+# ============================================================================
+# BG-4 · BUSCADOR GENERAL (UI sobre buscador_api.js)
+# ----------------------------------------------------------------------------
+# Decisión: "inline en build". Leemos buscador_api.js TAL CUAL (una sola fuente
+# de verdad: el .js sigue siendo el módulo real y testeable) y le quitamos el
+# 'export' para poder incrustarlo dentro del <script type=module>. Va envuelto
+# en un IIFE para aislar sus helpers (COLUMNAS, aNumero, ...) del resto del
+# módulo. Dentro del IIFE tiene en scope el cliente `supabase`, `fmtEur`,
+# `sesionActiva` y `vistaActiva` que define JS_SUPABASE. Si el fichero no está,
+# el buscador queda inerte pero el Radar se genera igual (degradación segura).
+# ============================================================================
+_ruta_api_buscador = Path("buscador_api.js")
+_BUSCADOR_API_SRC = (
+    _ruta_api_buscador.read_text(encoding="utf-8").replace(
+        "export function crearBuscador", "function crearBuscador"
+    )
+    if _ruta_api_buscador.exists()
+    else ""
+)
+
+# UI del buscador (cadena NORMAL: lleva llaves { } de JS, no es f-string).
+JS_BUSCADOR_UI = """
+  // === BG-4 · UI del Buscador general (vista #vista-buscador) ================
+  // Privado: solo con sesión (el catálogo de ~588k es authenticated). Render de
+  // tarjetas DINÁMICO en JS desde buscar() (los resultados no están horneados).
+  const _bg = crearBuscador(supabase);
+  const bgBuscar = _bg.buscar;
+
+  const bgGate    = document.getElementById('bg-gate');
+  const bgPanel   = document.getElementById('bg-panel');
+  const bgTexto   = document.getElementById('bg-texto');
+  const bgFuente  = document.getElementById('bg-fuente');
+  const bgEstadoF = document.getElementById('bg-estado');
+  const bgOrden   = document.getElementById('bg-orden');
+  const bgCont    = document.getElementById('bg-contador');
+  const bgMsg     = document.getElementById('bg-estado-msg');
+  const bgRes     = document.getElementById('bg-resultados');
+  const bgPag     = document.getElementById('bg-paginacion');
+  const bgPrev    = document.getElementById('bg-prev');
+  const bgNext    = document.getElementById('bg-next');
+  const bgPagInfo = document.getElementById('bg-pag-info');
+
+  const BG_POR_PAGINA = 25;
+  let bgPagina = 1;
+  let bgYaBuscado = false;
+  let bgCargando = false;
+
+  function bgEscape(s){ const d = document.createElement('div'); d.textContent = (s == null ? '' : String(s)); return d.innerHTML; }
+  function bgFecha(iso){ if(!iso) return '—'; const d = new Date(iso); return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-ES'); }
+  function bgDias(iso){ if(!iso) return null; const h = new Date(); h.setHours(0,0,0,0); const d = new Date(iso); if(Number.isNaN(d.getTime())) return null; d.setHours(0,0,0,0); return Math.round((d - h) / 86400000); }
+  function bgUrg(dias){ if(dias == null || dias < 0) return ''; if(dias < 3) return 'roja'; if(dias < 7) return 'ambar'; return 'verde'; }
+
+  function bgChipsCpv(cpv){
+    const lista = Array.isArray(cpv) ? cpv.filter(Boolean) : [];
+    if(!lista.length) return '—';
+    const TOPE = 6;
+    const vis = lista.slice(0, TOPE), extra = lista.slice(TOPE);
+    let html = vis.map(function(c){ return '<code>' + bgEscape(c) + '</code>'; }).join(' ');
+    if(extra.length){
+      const mas = 'y ' + extra.length + ' más';
+      html += ' <span class="cpv-extra" hidden>'
+            + extra.map(function(c){ return '<code>' + bgEscape(c) + '</code>'; }).join(' ')
+            + '</span><button type="button" class="cpv-mas" aria-expanded="false" data-abrir="'
+            + mas + '" data-cerrar="ocultar">' + mas + '</button>';
+    }
+    return html;
+  }
+
+  function bgTarjeta(f){
+    const dias = bgDias(f.fecha_fin_plazo);
+    const urg = bgUrg(dias);
+    let coletilla = '';
+    if(f.fecha_fin_plazo && dias != null){
+      if(dias > 0) coletilla = ' · <span class="quedan urg-tx-' + urg + '">' + (dias === 1 ? 'queda 1 día' : 'quedan ' + dias + ' días') + '</span>';
+      else if(dias === 0) coletilla = ' · <span class="vence-hoy urg-tx-roja">vence hoy</span>';
+      else coletilla = ' <span class="cerrado">· cerrado</span>';
+    }
+    const enlace = f.enlace ? bgEscape(f.enlace) : '';
+    const titulo = bgEscape(f.titulo || '(sin título)');
+    const tituloHtml = enlace ? '<a href="' + enlace + '" target="_blank" rel="noopener">' + titulo + '</a>' : titulo;
+    const org = f.organo_contratacion ? '<div class="bg-org">' + bgEscape(f.organo_contratacion) + '</div>' : '';
+    const fuente = f.fuente ? '<span class="bg-fuente">' + bgEscape(f.fuente) + '</span>' : '';
+    const valor = (f.valor_estimado != null) ? '<span class="bg-valor">' + fmtEur(f.valor_estimado) + '</span>' : '';
+    const sep = (fuente && valor) ? ' · ' : '';
+    return '<article class="card bg-card' + (urg ? ' urg-' + urg : '') + '">'
+      + '<h2 class="card-title">' + tituloHtml + '</h2>'
+      + org
+      + '<div class="bg-meta">' + fuente + sep + valor + '</div>'
+      + '<div class="cpv"><span class="et">CPV</span> ' + bgChipsCpv(f.cpv) + '</div>'
+      + '<div class="bg-plazo"><span class="et">Fin de plazo</span> ' + bgFecha(f.fecha_fin_plazo) + coletilla + '</div>'
+      + '</article>';
+  }
+
+  function bgParams(){
+    const partes = (bgOrden && bgOrden.value || 'fecha_fin_plazo:asc').split(':');
+    return {
+      texto: bgTexto ? bgTexto.value : '',
+      fuente: (bgFuente && bgFuente.value) || undefined,
+      estado: (bgEstadoF && bgEstadoF.value) || undefined,
+      ordenCampo: partes[0],
+      ordenAsc: partes[1] !== 'desc',
+      pagina: bgPagina,
+      porPagina: BG_POR_PAGINA,
+    };
+  }
+
+  async function bgRun(){
+    if(!sesionActiva){ bgActualizarGate(); return; }
+    if(bgCargando) return;
+    bgCargando = true;
+    bgYaBuscado = true;
+    if(bgMsg){ bgMsg.hidden = false; bgMsg.textContent = 'Buscando…'; }
+    if(bgPag) bgPag.hidden = true;
+    const r = await bgBuscar(bgParams());
+    bgCargando = false;
+    if(r.error){
+      if(bgRes) bgRes.innerHTML = '';
+      if(bgMsg){ bgMsg.hidden = false; bgMsg.textContent = 'Error en la búsqueda: ' + (r.error.message || r.error); }
+      if(bgCont) bgCont.textContent = '';
+      if(bgPag) bgPag.hidden = true;
+      return;
+    }
+    const filas = r.filas || [];
+    if(!filas.length){
+      if(bgRes) bgRes.innerHTML = '';
+      if(bgMsg){ bgMsg.hidden = false; bgMsg.textContent = 'Sin resultados. Prueba con otros términos o filtros.'; }
+      if(bgCont) bgCont.textContent = '';
+      if(bgPag) bgPag.hidden = true;
+      return;
+    }
+    if(bgMsg) bgMsg.hidden = true;
+    if(bgRes) bgRes.innerHTML = filas.map(bgTarjeta).join('');
+    const ini = (r.pagina - 1) * r.porPagina + 1;
+    const fin = ini + filas.length - 1;
+    const tot = (r.aproximado ? '≈ ' : '') + (r.total || 0).toLocaleString('es-ES');
+    if(bgCont) bgCont.innerHTML = 'Mostrando <b>' + ini + '–' + fin + '</b> de <b>' + tot + '</b>';
+    const totalPag = Math.max(1, Math.ceil((r.total || 0) / r.porPagina));
+    if(bgPag) bgPag.hidden = false;
+    if(bgPrev) bgPrev.disabled = r.pagina <= 1;
+    if(bgNext) bgNext.disabled = r.pagina >= totalPag;
+    if(bgPagInfo) bgPagInfo.textContent = 'Página ' + r.pagina + ' de ' + (r.aproximado ? '≈ ' : '') + totalPag;
+  }
+
+  let bgTimer = null;
+  function bgReinicia(){ bgPagina = 1; bgRun(); }
+  if(bgTexto) bgTexto.addEventListener('input', function(){ clearTimeout(bgTimer); bgTimer = setTimeout(bgReinicia, 300); });
+  [bgFuente, bgEstadoF, bgOrden].forEach(function(el){ if(el) el.addEventListener('change', bgReinicia); });
+  if(bgPrev) bgPrev.addEventListener('click', function(){ if(bgPagina > 1){ bgPagina--; bgRun(); } });
+  if(bgNext) bgNext.addEventListener('click', function(){ bgPagina++; bgRun(); });
+  // "y N más" de CPV (delegado en el contenedor de resultados del buscador).
+  if(bgRes) bgRes.addEventListener('click', function(e){
+    const btn = e.target.closest('.cpv-mas'); if(!btn) return;
+    const extra = btn.parentElement.querySelector('.cpv-extra');
+    const abierto = btn.getAttribute('aria-expanded') === 'true';
+    if(extra) extra.hidden = abierto;
+    btn.setAttribute('aria-expanded', abierto ? 'false' : 'true');
+    btn.textContent = abierto ? btn.dataset.abrir : btn.dataset.cerrar;
+  });
+
+  function bgActualizarGate(){
+    const dentro = !!sesionActiva;
+    if(bgGate)  bgGate.hidden  = dentro;
+    if(bgPanel) bgPanel.hidden = !dentro;
+    if(dentro && !bgYaBuscado) bgRun();   // primera búsqueda al entrar logueado
+  }
+
+  // Reaccionar a login/logout (listener propio, independiente del módulo).
+  supabase.auth.onAuthStateChange(function(){
+    setTimeout(function(){ if(vistaActiva === 'buscador') bgActualizarGate(); }, 0);
+  });
+
+  // Hook que llama mostrarVista al entrar en la vista.
+  window.__bgEntrar = function(){ bgActualizarGate(); if(sesionActiva && bgTexto) bgTexto.focus(); };
+
+  // Si la página cargó directamente en el buscador, refresca el gate ya.
+  if(typeof vistaActiva !== 'undefined' && vistaActiva === 'buscador') window.__bgEntrar();
+"""
+
+# Envolvemos api + UI en un IIFE (aísla helpers; ve `supabase` por closure).
+JS_BUSCADOR = (
+    ("\n  // ===================== BG-4: BUSCADOR GENERAL =====================\n"
+     "  (function () {\n" + _BUSCADOR_API_SRC + "\n" + JS_BUSCADOR_UI + "\n  })();\n")
+    if _BUSCADOR_API_SRC else ""
+)
 
 
 def slug(texto):
@@ -2569,13 +2782,49 @@ pagina = f"""<!DOCTYPE html>
         <div id="calendario-contenido" class="cal-lista-panel"></div>
       </div>
     </div>
+    <div id="vista-buscador" hidden>
+      <div id="bg-gate" class="bg-gate" hidden>🔒 Inicia sesión para usar el buscador general (catálogo completo de licitaciones).</div>
+      <div id="bg-panel" hidden>
+        <div class="bg-barra">
+          <input id="bg-texto" class="bg-input" type="search" autocomplete="off"
+                 placeholder="Buscar por título, objeto u órgano…  (p. ej. calidad del aire)">
+          <select id="bg-fuente" class="bg-sel" title="Fuente">
+            <option value="">Todas las fuentes</option>
+            <option value="estatal">Estatal</option>
+            <option value="agregadas">Agregadas</option>
+          </select>
+          <select id="bg-estado" class="bg-sel" title="Estado del plazo">
+            <option value="">Estado: automático</option>
+            <option value="abierta">Abiertas</option>
+            <option value="cerrada">Cerradas</option>
+            <option value="todas">Todas</option>
+          </select>
+          <select id="bg-orden" class="bg-sel" title="Ordenar por">
+            <option value="fecha_fin_plazo:asc">Fin de plazo ↑</option>
+            <option value="fecha_fin_plazo:desc">Fin de plazo ↓</option>
+            <option value="valor_estimado:desc">Importe ↓</option>
+            <option value="valor_estimado:asc">Importe ↑</option>
+            <option value="fecha_publicacion:desc">Publicación ↓</option>
+            <option value="fecha_publicacion:asc">Publicación ↑</option>
+          </select>
+        </div>
+        <div class="bg-cabecera"><span id="bg-contador" class="bg-contador"></span></div>
+        <div id="bg-estado-msg" class="bg-msg" hidden></div>
+        <div id="bg-resultados" class="grid"></div>
+        <div id="bg-paginacion" class="bg-pag" hidden>
+          <button id="bg-prev" class="bg-pag-btn" type="button">‹ Anterior</button>
+          <span id="bg-pag-info" class="bg-pag-info"></span>
+          <button id="bg-next" class="bg-pag-btn" type="button">Siguiente ›</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 {CONTRATO_MODAL}{CARTERA_DOCS_MODAL}{AJUSTES_MODAL}</div>
 
 <script>{DATOS_CONFIG_JS}</script>
 <script>{JS}</script>
-<script type="module">{JS_SUPABASE}</script>
+<script type="module">{JS_SUPABASE}{JS_BUSCADOR}</script>
 </body>
 </html>
 """
