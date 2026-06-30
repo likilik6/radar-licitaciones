@@ -600,7 +600,11 @@ def purgar(anios=3, simular=False, lote=5000):
         print(f"SIMULACIÓN (no borra): {n:,} filas se borrarían (ventana de {anios} años).")
         return
 
-    print(f"PURGA por lotes de {lote:,} · ventana de {anios} años ...")
+    # Anunciamos el total pendiente (una simulación) antes del bucle, para que el
+    # log sea inequívoco: esta versión ITERA por tandas hasta agotar en ESTA ejecución.
+    pendiente = _rpc_purga(sesion, url, headers, anios, True, lote)
+    print(f"PURGA EN BUCLE · lotes de {lote:,} · ventana de {anios} años · "
+          f"pendientes ≈ {pendiente:,} (≈{-(-pendiente // lote)} tandas) ...")
     total, tanda = 0, 0
     while True:
         tanda += 1
