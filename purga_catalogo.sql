@@ -78,6 +78,13 @@ $$;
 revoke all on function public.purga_catalogo(int, boolean, int) from public, anon;
 grant execute on function public.purga_catalogo(int, boolean, int) to service_role;
 
+-- Red de seguridad a NIVEL DE ROL (esto sí es efectivo): sube el statement_timeout
+-- del rol que usa el backend. El `set local` de dentro de la función NO basta —el
+-- contador del timeout se arma ANTES de entrar en la función, así que un único
+-- statement largo expira igual; por eso el troceado real va en el cliente (con LIMIT).
+-- Con esto, además, la simulación (count) y cualquier tanda holgada tienen margen.
+alter role service_role set statement_timeout = '120s';
+
 -- ----------------------------------------------------------------------------
 -- NOTAS sobre las condiciones (léelas antes de activar):
 --   · fecha_publicacion NULL → la fila NO se borra (no se puede datar; se conserva).
