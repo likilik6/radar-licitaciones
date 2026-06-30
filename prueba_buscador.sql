@@ -1,0 +1,84 @@
+-- prueba_buscador.sql  ·  PASO 5 de BG-3: SQL para CUADRAR y DIAGNOSTICAR
+-- Ejecuta en el SQL Editor de Supabase (rol postgres: ve todas las filas y NO
+-- tiene el statement_timeout corto del rol authenticated).
+--
+-- OJO tildes: 'climatizacion' sin tildes (el tsv se guardó con unaccent). Corre
+-- los que usan now() casi a la vez que la consola.
+
+-- ===========================================================================
+-- A) CUADRAR los totales que devuelve buscador_api.js
+-- ===========================================================================
+
+-- P1 (vía RPC, EXACTO): texto=aire, abierta, importeMax=200000
+select count(*) as p1_total
+from public.licitaciones
+where tsv @@ websearch_to_tsquery('spanish', 'aire')
+  and valor_estimado <= 200000
+  and (fecha_fin_plazo >= now() or fecha_fin_plazo is null);
+
+-- P3 (vía RPC, EXACTO): texto=climatizacion (la RPC cuenta exacto el subconjunto)
+select count(*) as p3_total
+from public.licitaciones
+where tsv @@ websearch_to_tsquery('spanish', 'climatizacion');
+
+-- P4 (sin texto -> PostgREST, EXACTO): cpv overlaps ['90920000']
+select count(*) as p4_total
+from public.licitaciones
+where cpv && array['90920000']::text[];
+
+-- P5 (sin texto -> PostgREST, la API lo da ESTIMADO): todo el catálogo
+select count(*) as p5_total_real from public.licitaciones;
+
+-- ===========================================================================
+-- B) DIAGNÓSTICO: por qué P3 daba timeout y por qué la CTE MATERIALIZED lo cura
+-- ===========================================================================
+
+-- B1) Plan MALO (lo que hacía PostgREST): ORDER BY fecha + filtro tsv al vuelo.
+--     Espera ver un Index Scan por licitaciones_finplazo_id "Filter: tsv @@ ..."
+--     recorriendo muchísimas filas (rows removed by filter enorme) -> lento.
+explain (analyze, buffers)
+select licitacion_id, titulo, fecha_fin_plazo
+from public.licitaciones
+where tsv @@ websearch_to_tsquery('spanish', 'climatizacion')
+order by fecha_fin_plazo asc nulls last, licitacion_id asc
+limit 25;
+
+-- B2) Plan BUENO (lo que hace la RPC): CTE MATERIALIZED -> Bitmap Index Scan
+--     sobre licitaciones_tsv_gin PRIMERO, luego Sort del subconjunto + Limit.
+explain (analyze, buffers)
+with filtrado as materialized (
+  select licitacion_id, fecha_fin_plazo, valor_estimado, fecha_publicacion
+  from public.licitaciones
+  where tsv @@ websearch_to_tsquery('spanish', 'climatizacion')
+)
+select licitacion_id
+from filtrado
+order by fecha_fin_plazo asc nulls last, licitacion_id asc
+limit 25;
+
+-- B3) P5 — orden por valor_estimado DESC sin filtros (debe usar el compuesto
+--     licitaciones_valor_desc_id -> Index Scan, 25 filas, sin Sort masivo).
+explain (analyze, buffers)
+select licitacion_id, titulo, valor_estimado
+from public.licitaciones
+order by valor_estimado desc nulls last, licitacion_id asc
+limit 25;
+
+-- ===========================================================================
+-- C) PROBAR LA RPC directamente (debe cuadrar con A). 'climatizacion' es ligero;
+--    si el editor diera "Failed to fetch" con un término amplio, usa uno raro.
+-- ===========================================================================
+select (public.buscar_licitaciones('climatizacion'))->>'total'                          as p3_rpc_total;
+select json_array_length((public.buscar_licitaciones('climatizacion'))->'filas')         as p3_rpc_filas_pagina;
+-- Con filtros, igual que P1:
+select (public.buscar_licitaciones(p_texto => 'aire', p_estado => 'abierta',
+                                   p_importe_max => 200000))->>'total'                    as p1_rpc_total;
+
+-- ===========================================================================
+-- D) ccaa / lugar_ejecucion: confirmado a 0 -> filtros desactivados en BG-3.
+-- ===========================================================================
+select
+  count(*) filter (where ccaa is not null)            as ccaa_no_null,
+  count(*) filter (where lugar_ejecucion is not null) as lugar_no_null,
+  count(*)                                             as total
+from public.licitaciones;
