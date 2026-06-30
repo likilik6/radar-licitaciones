@@ -10,12 +10,23 @@
 // USO:
 //   import { crearBuscador } from './buscador_api.js';
 //   const { buscar } = crearBuscador(supabase);   // <- el supabase ya existente
-//   const { filas, total, pagina, porPagina, error } = await buscar({ ... });
+//   const r = await buscar({ ... });               // { filas, total, pagina,
+//                                                  //   porPagina, aproximado, error }
 //
 // Tabla: public.licitaciones (BG-1). El texto va sobre la columna `tsv`, que se
 // construyó con config 'spanish' + unaccent() aplicado AL GUARDAR (no es una
 // config propia con unaccent integrado). Por eso aquí quitamos las tildes del
 // término en cliente, para que "climatizacion" case con "climatización".
+//
+// PAGINACIÓN ESTABLE: todas las consultas ordenan ADEMÁS por licitacion_id (PK)
+// como desempate, para que páginas consecutivas no se solapen cuando hay empates
+// en el campo de orden (p.ej. muchas filas con la misma fecha_fin_plazo o NULL).
+//
+// CONTEO HÍBRIDO (evita el timeout 57014 del count:'exact' sobre ~588k filas):
+// pedimos la estimación del planner (barata); si es pequeña (< umbralCountExacto)
+// hacemos un count exacto (también barato sobre pocas filas); si es grande, nos
+// quedamos con la estimación y marcamos `aproximado: true`. Nunca contamos exacto
+// cientos de miles de filas. (No tocamos statement_timeout.)
 // ============================================================================
 
 // Columnas que la UI necesitará. NO usamos select('*') para no arrastrar el tsv.
@@ -37,6 +48,7 @@ const COLUMNAS = [
 ].join(',');
 
 const POR_PAGINA_DEF = 25;
+const UMBRAL_COUNT_EXACTO_DEF = 10000; // < a esto: count exacto; >= : estimación
 const ORDEN_PERMITIDO = new Set(['fecha_fin_plazo', 'valor_estimado', 'fecha_publicacion']);
 const MODOS_COUNT = new Set(['exact', 'estimated', 'planned']);
 const ESTADOS = new Set(['abierta', 'cerrada', 'todas']);
@@ -74,7 +86,9 @@ export function crearBuscador(supabase) {
     throw new Error('crearBuscador: hay que pasarle el cliente supabase ya inicializado.');
   }
 
-  // buscar(params) -> { filas, total, pagina, porPagina, error }
+  // buscar(params) -> { filas, total, pagina, porPagina, aproximado, error }
+  //   aproximado=true  -> `total` es una estimación del planner (conjunto grande).
+  //   aproximado=false -> `total` es exacto.
   //
   // params admitidos (todos opcionales; los vacíos/undefined se ignoran):
   //   texto        string   -> búsqueda full-text (websearch) sobre tsv
@@ -85,118 +99,122 @@ export function crearBuscador(supabase) {
   //   estado       'abierta' | 'cerrada' | 'todas'   (ver default abajo)
   //   fechaFinDesde / fechaFinHasta   -> rango sobre fecha_fin_plazo (ISO/Date)
   //   fechaPubDesde / fechaPubHasta   -> rango sobre fecha_publicacion (ISO/Date)
-  //   ccaa         string   -> igualdad (PENDIENTE: confirmar que está poblado)
-  //   lugar        string   -> ilike sobre lugar_ejecucion (PENDIENTE: idem)
   //   ordenCampo   'fecha_fin_plazo' | 'valor_estimado' | 'fecha_publicacion'
   //   ordenAsc     boolean  (def. true)
   //   pagina       number   (1-based, def. 1)
   //   porPagina    number   (def. 25)
-  //   modoCount    'exact' | 'estimated' | 'planned'  (def. 'exact')
+  //   modoCount    'exact' | 'estimated' | 'planned'  -> FUERZA el modo (salta el
+  //                híbrido). Sin pasarlo, se usa el híbrido (recomendado).
+  //   umbralCountExacto number -> umbral del híbrido (def. 10000)
+  //
+  //   NOTA: ccaa y lugar_ejecucion NO se filtran: el catálogo los tiene a 0
+  //   (verificado 2026-06-30). Extraer la región del CODICE es tarea futura del
+  //   pipeline; cuando se pueblen, reactivar aquí (ver comprobarPoblacion()).
   async function buscar(params = {}) {
     // --- Paginación saneada.
     const nPorPagina = aNumero(params.porPagina);
     const porPagina = nPorPagina && nPorPagina > 0 ? Math.floor(nPorPagina) : POR_PAGINA_DEF;
     const nPagina = aNumero(params.pagina);
     const pagina = nPagina && nPagina >= 1 ? Math.floor(nPagina) : 1;
-
-    // --- Modo de conteo. 'exact' sobre ~587k puede ir lento en consultas MUY
-    //     amplias; entonces conviene pasar modoCount:'estimated' (más barato).
-    const modoCount = MODOS_COUNT.has(params.modoCount) ? params.modoCount : 'exact';
-
-    let q = supabase.from('licitaciones').select(COLUMNAS, { count: modoCount });
-
-    // --- Texto: websearch sobre tsv, config 'spanish', SIN tildes (ver arriba).
-    const texto = aTexto(params.texto);
-    if (texto) {
-      q = q.textSearch('tsv', quitarTildes(texto), { type: 'websearch', config: 'spanish' });
-    }
-
-    // --- CPV: OR dentro de la lista (overlaps = comparte AL MENOS UNO).
-    //     v1: igualdad de código COMPLETO. La coincidencia por PREFIJO del Radar
-    //     ("empieza por") NO la da overlaps; queda como iteración futura
-    //     (requeriría una RPC o una columna auxiliar de prefijos).
-    let cpvs = [];
-    if (Array.isArray(params.cpv)) {
-      cpvs = params.cpv.map(aTexto).filter(Boolean);
-      if (cpvs.length) q = q.overlaps('cpv', cpvs);
-    }
-
-    // --- Fuente.
-    const fuente = params.fuente === 'estatal' || params.fuente === 'agregadas' ? params.fuente : null;
-    if (fuente) q = q.eq('fuente', fuente);
-
-    // --- Importe (valor_estimado).
-    const impMin = aNumero(params.importeMin);
-    const impMax = aNumero(params.importeMax);
-    if (impMin !== null) q = q.gte('valor_estimado', impMin);
-    if (impMax !== null) q = q.lte('valor_estimado', impMax);
-
-    // --- Rangos de fecha explícitos (AND con todo lo demás).
-    const finDesde = aISO(params.fechaFinDesde);
-    const finHasta = aISO(params.fechaFinHasta);
-    if (finDesde) q = q.gte('fecha_fin_plazo', finDesde);
-    if (finHasta) q = q.lte('fecha_fin_plazo', finHasta);
-    const pubDesde = aISO(params.fechaPubDesde);
-    const pubHasta = aISO(params.fechaPubHasta);
-    if (pubDesde) q = q.gte('fecha_publicacion', pubDesde);
-    if (pubHasta) q = q.lte('fecha_publicacion', pubHasta);
-
-    // --- ccaa / lugar_ejecucion: PENDIENTES de confirmar que el catálogo los
-    //     tiene poblados (BG-1 no garantizó que CODICE traiga estos campos). Si
-    //     están casi todo NULL no filtran nada útil. Quedan escritos pero solo
-    //     se aplican si se pasan; usa comprobarPoblacion() para decidir.
-    const ccaa = aTexto(params.ccaa);
-    if (ccaa) q = q.eq('ccaa', ccaa);
-    const lugar = aTexto(params.lugar);
-    if (lugar) q = q.ilike('lugar_ejecucion', `%${lugar}%`);
-
-    // --- Estado (DERIVADO, no se guarda).
-    //     'abierta' -> fin de plazo en el futuro  O  sin plazo (NULL).
-    //     'cerrada' -> fin de plazo ya pasado (los NULL NO cuentan como cerrada).
-    //     'todas'   -> no filtra por estado.
-    //   fecha_fin_plazo NULL = "sin plazo" (coherente con el Radar: NULL no es
-    //   caducada). En 'abierta' las INCLUIMOS (no están cerradas) con el OR is.null.
-    //
-    //   DEFAULT: si no se pasa estado, vale 'abierta' SOLO cuando no hay ningún
-    //   otro filtro (la pantalla de entrada = "primeras N abiertas"); si hay otro
-    //   filtro, default 'todas' (para no ocultar resultados que el usuario pidió).
-    const hayOtrosFiltros = !!(
-      texto || cpvs.length || fuente ||
-      impMin !== null || impMax !== null ||
-      finDesde || finHasta || pubDesde || pubHasta || ccaa || lugar
-    );
-    const estado = ESTADOS.has(params.estado)
-      ? params.estado
-      : (hayOtrosFiltros ? 'todas' : 'abierta');
-    // ISO sin milisegundos para no meter puntos extra en el filtro .or().
-    const ahora = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
-    if (estado === 'abierta') {
-      q = q.or(`fecha_fin_plazo.gte.${ahora},fecha_fin_plazo.is.null`);
-    } else if (estado === 'cerrada') {
-      q = q.lt('fecha_fin_plazo', ahora);
-    }
-
-    // --- Orden. Por defecto fin de plazo ascendente (lo que vence antes, primero).
-    const ordenCampo = ORDEN_PERMITIDO.has(params.ordenCampo) ? params.ordenCampo : 'fecha_fin_plazo';
-    const ordenAsc = params.ordenAsc !== undefined ? !!params.ordenAsc : true;
-    q = q.order(ordenCampo, { ascending: ordenAsc, nullsFirst: false });
-
-    // --- Paginación: range es inclusivo en ambos extremos.
     const desde = (pagina - 1) * porPagina;
     const hasta = desde + porPagina - 1;
-    q = q.range(desde, hasta);
 
-    // --- Ejecutar. El error de PostgREST se DEVUELVE (no se lanza) para no
-    //     tumbar la página.
-    const { data, count, error } = await q;
-    if (error) {
-      return { filas: [], total: 0, pagina, porPagina, error };
+    const ok = (data, total, aproximado) => ({
+      filas: data ?? [], total, pagina, porPagina, aproximado, error: null,
+    });
+    const fallo = (error) => ({ filas: [], total: 0, pagina, porPagina, aproximado: false, error });
+
+    // --- Normalizar filtros UNA vez (se reutilizan en datos y conteo).
+    const textoNorm = (() => { const t = aTexto(params.texto); return t ? quitarTildes(t) : null; })();
+    const cpvs = Array.isArray(params.cpv) ? params.cpv.map(aTexto).filter(Boolean) : [];
+    const fuente = params.fuente === 'estatal' || params.fuente === 'agregadas' ? params.fuente : null;
+    const impMin = aNumero(params.importeMin);
+    const impMax = aNumero(params.importeMax);
+    const finDesde = aISO(params.fechaFinDesde);
+    const finHasta = aISO(params.fechaFinHasta);
+    const pubDesde = aISO(params.fechaPubDesde);
+    const pubHasta = aISO(params.fechaPubHasta);
+
+    // Estado (DERIVADO, no se guarda).
+    //   'abierta' -> fin de plazo en el futuro  O  sin plazo (NULL).
+    //   'cerrada' -> fin de plazo ya pasado (los NULL NO cuentan como cerrada).
+    //   'todas'   -> no filtra por estado.
+    // NULL = "sin plazo" (coherente con el Radar: NULL no es caducada). En
+    // 'abierta' las INCLUIMOS (no están cerradas) con el OR is.null.
+    // DEFAULT: 'abierta' SOLO si no hay ningún otro filtro (pantalla de entrada =
+    // "primeras N abiertas"); si hay otro filtro, 'todas' (no ocultar resultados).
+    const hayOtrosFiltros = !!(
+      textoNorm || cpvs.length || fuente ||
+      impMin !== null || impMax !== null ||
+      finDesde || finHasta || pubDesde || pubHasta
+    );
+    const estado = ESTADOS.has(params.estado) ? params.estado : (hayOtrosFiltros ? 'todas' : 'abierta');
+    // ISO sin milisegundos para no meter puntos extra en el filtro .or().
+    const ahora = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+
+    // Aplica TODOS los filtros a un builder (sin orden ni range). Se usa tanto
+    // para la consulta de datos como para las de conteo.
+    const aplicarFiltros = (q) => {
+      if (textoNorm) q = q.textSearch('tsv', textoNorm, { type: 'websearch', config: 'spanish' });
+      if (cpvs.length) q = q.overlaps('cpv', cpvs); // OR; código COMPLETO (prefijo = iteración futura)
+      if (fuente) q = q.eq('fuente', fuente);
+      if (impMin !== null) q = q.gte('valor_estimado', impMin);
+      if (impMax !== null) q = q.lte('valor_estimado', impMax);
+      if (finDesde) q = q.gte('fecha_fin_plazo', finDesde);
+      if (finHasta) q = q.lte('fecha_fin_plazo', finHasta);
+      if (pubDesde) q = q.gte('fecha_publicacion', pubDesde);
+      if (pubHasta) q = q.lte('fecha_publicacion', pubHasta);
+      if (estado === 'abierta') q = q.or(`fecha_fin_plazo.gte.${ahora},fecha_fin_plazo.is.null`);
+      else if (estado === 'cerrada') q = q.lt('fecha_fin_plazo', ahora);
+      return q;
+    };
+
+    // Consulta de DATOS: filtros + orden + desempate por PK + paginación.
+    const ordenCampo = ORDEN_PERMITIDO.has(params.ordenCampo) ? params.ordenCampo : 'fecha_fin_plazo';
+    const ordenAsc = params.ordenAsc !== undefined ? !!params.ordenAsc : true;
+    const construirDatos = () => {
+      let q = aplicarFiltros(supabase.from('licitaciones').select(COLUMNAS));
+      q = q.order(ordenCampo, { ascending: ordenAsc, nullsFirst: false });
+      // Desempate ESTABLE por la PK (única) -> páginas que no se solapan.
+      q = q.order('licitacion_id', { ascending: true });
+      return q.range(desde, hasta);
+    };
+    // Consulta de CONTEO (head: sin datos) en el modo indicado.
+    const contar = (modo) =>
+      aplicarFiltros(supabase.from('licitaciones').select('licitacion_id', { count: modo, head: true }));
+
+    // --- Modo de conteo FORZADO por el usuario: datos + ese count, en paralelo.
+    const modoForzado = MODOS_COUNT.has(params.modoCount) ? params.modoCount : null;
+    if (modoForzado) {
+      const [rDatos, rCount] = await Promise.all([construirDatos(), contar(modoForzado)]);
+      if (rDatos.error) return fallo(rDatos.error);
+      const total = rCount.error ? 0 : (rCount.count ?? 0);
+      return ok(rDatos.data, total, modoForzado !== 'exact');
     }
-    return { filas: data ?? [], total: count ?? 0, pagina, porPagina, error: null };
+
+    // --- HÍBRIDO (por defecto): datos + estimación del planner en paralelo (1 RTT).
+    const [rDatos, rEstim] = await Promise.all([construirDatos(), contar('planned')]);
+    if (rDatos.error) return fallo(rDatos.error);
+    const estimado = rEstim.error ? null : (rEstim.count ?? 0);
+
+    // Si la estimación es PEQUEÑA, un count exacto es barato -> total exacto.
+    const nUmbral = aNumero(params.umbralCountExacto);
+    const umbralExacto = nUmbral && nUmbral > 0 ? Math.floor(nUmbral) : UMBRAL_COUNT_EXACTO_DEF;
+    if (estimado !== null && estimado < umbralExacto) {
+      const rExacto = await contar('exact');
+      if (!rExacto.error && rExacto.count != null) return ok(rDatos.data, rExacto.count, false);
+      // Si el exacto falla (p.ej. estimación errónea + timeout), degradamos al
+      // estimado en vez de romper la página.
+      return ok(rDatos.data, estimado, true);
+    }
+
+    // Conjunto grande (o sin estimación): devolvemos la estimación, aproximada.
+    return ok(rDatos.data, estimado ?? 0, true);
   }
 
-  // Utilidad opcional para BG-3: cuántas filas tienen ccaa / lugar_ejecucion
-  // poblados. Úsala UNA vez para decidir si esos filtros valen la pena en la UI.
+  // Utilidad para re-comprobar (en el futuro) si ccaa / lugar_ejecucion ya se
+  // pueblan en el catálogo. Hoy ambos dan 0 (verificado 2026-06-30) y por eso
+  // sus filtros están desactivados en buscar().
   async function comprobarPoblacion() {
     const salida = {};
     for (const col of ['ccaa', 'lugar_ejecucion']) {

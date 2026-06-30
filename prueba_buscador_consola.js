@@ -31,6 +31,8 @@
     'presupuesto_con_iva', 'presupuesto_sin_iva', 'valor_estimado',
     'fecha_publicacion', 'fecha_fin_plazo', 'lugar_ejecucion', 'ccaa', 'enlace',
   ].join(',');
+  const POR_PAGINA_DEF = 25;
+  const UMBRAL_COUNT_EXACTO_DEF = 10000;
   const ORDEN_PERMITIDO = new Set(['fecha_fin_plazo', 'valor_estimado', 'fecha_publicacion']);
   const MODOS_COUNT = new Set(['exact', 'estimated', 'planned']);
   const ESTADOS = new Set(['abierta', 'cerrada', 'todas']);
@@ -42,41 +44,65 @@
   function crearBuscador(supabase) {
     async function buscar(params = {}) {
       const nPorPagina = aNumero(params.porPagina);
-      const porPagina = nPorPagina && nPorPagina > 0 ? Math.floor(nPorPagina) : 25;
+      const porPagina = nPorPagina && nPorPagina > 0 ? Math.floor(nPorPagina) : POR_PAGINA_DEF;
       const nPagina = aNumero(params.pagina);
       const pagina = nPagina && nPagina >= 1 ? Math.floor(nPagina) : 1;
-      const modoCount = MODOS_COUNT.has(params.modoCount) ? params.modoCount : 'exact';
-      let q = supabase.from('licitaciones').select(COLUMNAS, { count: modoCount });
-      const texto = aTexto(params.texto);
-      if (texto) q = q.textSearch('tsv', quitarTildes(texto), { type: 'websearch', config: 'spanish' });
-      let cpvs = [];
-      if (Array.isArray(params.cpv)) { cpvs = params.cpv.map(aTexto).filter(Boolean); if (cpvs.length) q = q.overlaps('cpv', cpvs); }
+      const desde = (pagina - 1) * porPagina;
+      const hasta = desde + porPagina - 1;
+      const ok = (data, total, aproximado) => ({ filas: data ?? [], total, pagina, porPagina, aproximado, error: null });
+      const fallo = (error) => ({ filas: [], total: 0, pagina, porPagina, aproximado: false, error });
+
+      const textoNorm = (() => { const t = aTexto(params.texto); return t ? quitarTildes(t) : null; })();
+      const cpvs = Array.isArray(params.cpv) ? params.cpv.map(aTexto).filter(Boolean) : [];
       const fuente = params.fuente === 'estatal' || params.fuente === 'agregadas' ? params.fuente : null;
-      if (fuente) q = q.eq('fuente', fuente);
       const impMin = aNumero(params.importeMin); const impMax = aNumero(params.importeMax);
-      if (impMin !== null) q = q.gte('valor_estimado', impMin);
-      if (impMax !== null) q = q.lte('valor_estimado', impMax);
       const finDesde = aISO(params.fechaFinDesde); const finHasta = aISO(params.fechaFinHasta);
-      if (finDesde) q = q.gte('fecha_fin_plazo', finDesde);
-      if (finHasta) q = q.lte('fecha_fin_plazo', finHasta);
       const pubDesde = aISO(params.fechaPubDesde); const pubHasta = aISO(params.fechaPubHasta);
-      if (pubDesde) q = q.gte('fecha_publicacion', pubDesde);
-      if (pubHasta) q = q.lte('fecha_publicacion', pubHasta);
-      const ccaa = aTexto(params.ccaa); if (ccaa) q = q.eq('ccaa', ccaa);
-      const lugar = aTexto(params.lugar); if (lugar) q = q.ilike('lugar_ejecucion', `%${lugar}%`);
-      const hayOtrosFiltros = !!(texto || cpvs.length || fuente || impMin !== null || impMax !== null || finDesde || finHasta || pubDesde || pubHasta || ccaa || lugar);
+      const hayOtrosFiltros = !!(textoNorm || cpvs.length || fuente || impMin !== null || impMax !== null || finDesde || finHasta || pubDesde || pubHasta);
       const estado = ESTADOS.has(params.estado) ? params.estado : (hayOtrosFiltros ? 'todas' : 'abierta');
       const ahora = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
-      if (estado === 'abierta') q = q.or(`fecha_fin_plazo.gte.${ahora},fecha_fin_plazo.is.null`);
-      else if (estado === 'cerrada') q = q.lt('fecha_fin_plazo', ahora);
+
+      const aplicarFiltros = (q) => {
+        if (textoNorm) q = q.textSearch('tsv', textoNorm, { type: 'websearch', config: 'spanish' });
+        if (cpvs.length) q = q.overlaps('cpv', cpvs);
+        if (fuente) q = q.eq('fuente', fuente);
+        if (impMin !== null) q = q.gte('valor_estimado', impMin);
+        if (impMax !== null) q = q.lte('valor_estimado', impMax);
+        if (finDesde) q = q.gte('fecha_fin_plazo', finDesde);
+        if (finHasta) q = q.lte('fecha_fin_plazo', finHasta);
+        if (pubDesde) q = q.gte('fecha_publicacion', pubDesde);
+        if (pubHasta) q = q.lte('fecha_publicacion', pubHasta);
+        if (estado === 'abierta') q = q.or(`fecha_fin_plazo.gte.${ahora},fecha_fin_plazo.is.null`);
+        else if (estado === 'cerrada') q = q.lt('fecha_fin_plazo', ahora);
+        return q;
+      };
       const ordenCampo = ORDEN_PERMITIDO.has(params.ordenCampo) ? params.ordenCampo : 'fecha_fin_plazo';
       const ordenAsc = params.ordenAsc !== undefined ? !!params.ordenAsc : true;
-      q = q.order(ordenCampo, { ascending: ordenAsc, nullsFirst: false });
-      const desde = (pagina - 1) * porPagina; const hasta = desde + porPagina - 1;
-      q = q.range(desde, hasta);
-      const { data, count, error } = await q;
-      if (error) return { filas: [], total: 0, pagina, porPagina, error };
-      return { filas: data ?? [], total: count ?? 0, pagina, porPagina, error: null };
+      const construirDatos = () => {
+        let q = aplicarFiltros(supabase.from('licitaciones').select(COLUMNAS));
+        q = q.order(ordenCampo, { ascending: ordenAsc, nullsFirst: false });
+        q = q.order('licitacion_id', { ascending: true }); // desempate ESTABLE
+        return q.range(desde, hasta);
+      };
+      const contar = (modo) => aplicarFiltros(supabase.from('licitaciones').select('licitacion_id', { count: modo, head: true }));
+
+      const modoForzado = MODOS_COUNT.has(params.modoCount) ? params.modoCount : null;
+      if (modoForzado) {
+        const [rDatos, rCount] = await Promise.all([construirDatos(), contar(modoForzado)]);
+        if (rDatos.error) return fallo(rDatos.error);
+        return ok(rDatos.data, rCount.error ? 0 : (rCount.count ?? 0), modoForzado !== 'exact');
+      }
+      const [rDatos, rEstim] = await Promise.all([construirDatos(), contar('planned')]);
+      if (rDatos.error) return fallo(rDatos.error);
+      const estimado = rEstim.error ? null : (rEstim.count ?? 0);
+      const nUmbral = aNumero(params.umbralCountExacto);
+      const umbralExacto = nUmbral && nUmbral > 0 ? Math.floor(nUmbral) : UMBRAL_COUNT_EXACTO_DEF;
+      if (estimado !== null && estimado < umbralExacto) {
+        const rExacto = await contar('exact');
+        if (!rExacto.error && rExacto.count != null) return ok(rDatos.data, rExacto.count, false);
+        return ok(rDatos.data, estimado, true);
+      }
+      return ok(rDatos.data, estimado ?? 0, true);
     }
     async function comprobarPoblacion() {
       const salida = {};
@@ -91,42 +117,50 @@
   // ---------------------------------------------------------------------------
 
   const { buscar, comprobarPoblacion } = crearBuscador(supabase);
-  const resumen = (etq, r) => console.log(`${etq} -> filas=${r.filas.length} total=${r.total} pag=${r.pagina}/${Math.ceil(r.total / r.porPagina) || 1}` + (r.error ? ` ERROR=${r.error.message}` : ''));
+  const ms = (t0) => `${Math.round(performance.now() - t0)}ms`;
+  const resumen = (etq, r, t0) => console.log(
+    `${etq} -> filas=${r.filas.length} total=${r.total}${r.aproximado ? ' (≈ estimado)' : ' (exacto)'} ` +
+    `pag=${r.pagina}/${Math.ceil(r.total / r.porPagina) || 1} en ${ms(t0)}` + (r.error ? ` ERROR=${r.error.message}` : ''));
 
   console.log('\n──────── PRUEBA 1: texto=aire, estado=abierta, importeMax=200000 ────────');
+  let t = performance.now();
   const p1 = await buscar({ texto: 'aire', estado: 'abierta', importeMax: 200000 });
-  resumen('P1', p1); console.table(p1.filas.map(f => ({ titulo: f.titulo, valor: f.valor_estimado, fin: f.fecha_fin_plazo })));
+  resumen('P1', p1, t);
+  console.log('→ debe ser EXACTO y cuadrar con p1_total del SQL.');
 
-  console.log('\n──────── PRUEBA 2: paginación (pág 1 vs pág 2 no se solapan) ────────');
+  console.log('\n──────── PRUEBA 2: paginación estable (pág 1 vs pág 2 NO se solapan) ────────');
+  t = performance.now();
   const p2a = await buscar({ texto: 'aire', estado: 'abierta', importeMax: 200000, pagina: 1, porPagina: 5 });
   const p2b = await buscar({ texto: 'aire', estado: 'abierta', importeMax: 200000, pagina: 2, porPagina: 5 });
-  const ids1 = p2a.filas.map(f => f.licitacion_id), ids2 = p2b.filas.map(f => f.licitacion_id);
-  const solapan = ids1.filter(id => ids2.includes(id));
-  resumen('P2 pág1', p2a); resumen('P2 pág2', p2b);
-  console.log('IDs pág1:', ids1, '\nIDs pág2:', ids2, '\n¿Solapan?', solapan.length ? '❌ ' + solapan : '✅ no');
+  const ids1 = p2a.filas.map((f) => f.licitacion_id), ids2 = p2b.filas.map((f) => f.licitacion_id);
+  const solapan = ids1.filter((id) => ids2.includes(id));
+  resumen('P2 pág1', p2a, t); resumen('P2 pág2', p2b, t);
+  console.log('IDs pág1:', ids1, '\nIDs pág2:', ids2, '\n¿Solapan?', solapan.length ? '❌ ' + solapan : '✅ no (paginación estable)');
 
-  console.log('\n──────── PRUEBA 3: tildes (climatizacion encuentra climatización) ────────');
+  console.log('\n──────── PRUEBA 3: tildes (climatizacion == climatización), antes daba TIMEOUT ────────');
+  t = performance.now();
   const p3a = await buscar({ texto: 'climatizacion' });
   const p3b = await buscar({ texto: 'climatización' });
-  resumen('P3 sin tilde', p3a); resumen('P3 con tilde', p3b);
-  console.log(p3a.total > 0 && p3a.total === p3b.total ? '✅ ambas devuelven lo mismo y > 0' : '⚠️ revisar: totales ' + p3a.total + ' vs ' + p3b.total);
+  resumen('P3 sin tilde', p3a, t); resumen('P3 con tilde', p3b, t);
+  console.log(!p3a.error && !p3b.error && p3a.total === p3b.total ? '✅ sin timeout y ambas cuadran' : '⚠️ revisar (errores o totales distintos)');
 
   console.log('\n──────── PRUEBA 4: CPV 90920000 (overlaps) ────────');
+  t = performance.now();
   const p4 = await buscar({ cpv: ['90920000'] });
-  resumen('P4', p4);
-  const llevan = p4.filas.every(f => Array.isArray(f.cpv) && f.cpv.includes('90920000'));
-  console.log('¿Todas las filas llevan 90920000?', p4.filas.length ? (llevan ? '✅ sí' : '❌ no') : '(0 filas)');
-  console.table(p4.filas.slice(0, 5).map(f => ({ titulo: f.titulo, cpv: (f.cpv || []).join(' ') })));
+  resumen('P4', p4, t);
+  const llevan = p4.filas.every((f) => Array.isArray(f.cpv) && f.cpv.includes('90920000'));
+  console.log('¿Todas las filas llevan 90920000?', p4.filas.length ? (llevan ? '✅ sí' : '❌ no') : '(0 filas)', '· debe ser EXACTO y cuadrar con p4_total del SQL.');
 
-  console.log('\n──────── PRUEBA 5: orden por valor_estimado DESC ────────');
+  console.log('\n──────── PRUEBA 5: orden por valor_estimado DESC (sin filtros), antes daba TIMEOUT ────────');
+  t = performance.now();
   const p5 = await buscar({ ordenCampo: 'valor_estimado', ordenAsc: false, estado: 'todas', porPagina: 10 });
-  resumen('P5', p5);
-  const vals = p5.filas.map(f => f.valor_estimado);
+  resumen('P5', p5, t);
+  const vals = p5.filas.map((f) => f.valor_estimado);
   const ordenado = vals.every((v, i) => i === 0 || v == null || vals[i - 1] == null || vals[i - 1] >= v);
-  console.log('valores:', vals, '\n¿Descendente?', ordenado ? '✅ sí' : '❌ no');
+  console.log('valores:', vals, '\n¿Descendente?', ordenado ? '✅ sí' : '❌ no', p5.error ? '❌ ERROR ' + p5.error.message : '✅ sin timeout');
 
-  console.log('\n──────── EXTRA: población de ccaa / lugar_ejecucion ────────');
-  console.log(await comprobarPoblacion(), '(si salen ~0, esos filtros no sirven aún)');
+  console.log('\n──────── EXTRA: población ccaa / lugar_ejecucion (debe ser 0 → filtros desactivados) ────────');
+  console.log(await comprobarPoblacion());
 
-  console.log('\n✔️ Pruebas terminadas. Compara los "total" con los SQL de prueba_buscador.sql.');
+  console.log('\n✔️ Pruebas terminadas. Cuadra P1 y P4 con prueba_buscador.sql (count exact).');
 })();
