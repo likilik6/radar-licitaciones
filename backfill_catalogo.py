@@ -565,29 +565,54 @@ def diario(fuentes):
 
 
 # --- PURGA de la ventana (vía RPC en Supabase) ------------------------------
-def purgar(anios=3, simular=False):
-    """Llama a la función RPC public.purga_catalogo(anios, simular). Borra del
-    catálogo lo publicado hace más de 'anios' años, SALVO lo que siga abierto
-    (fecha_fin_plazo >= hoy), lo que esté en public.contratos y lo que esté en
-    public.decisiones. Con simular=True solo CUENTA lo que se borraría (no borra)."""
-    token = os.environ.get("SUPABASE_SERVICE_ROLE")
-    if not token:
-        sys.exit("ERROR: falta la service_role en SUPABASE_SERVICE_ROLE (NUNCA en el repo).")
-    url_base = os.environ.get("SUPABASE_URL") or SUPABASE_URL
-    accion = "SIMULACIÓN (no borra)" if simular else "PURGA (borra)"
-    print(f"{accion} · ventana de {anios} años · RPC public.purga_catalogo ...")
+def _rpc_purga(sesion, url, headers, anios, simular, lote):
+    """Una llamada a la RPC public.purga_catalogo. Devuelve el entero que responde:
+    el TOTAL a borrar si simular, o el nº borrado en ESTA tanda si no."""
     try:
-        r = requests.post(
-            f"{url_base}/rest/v1/rpc/purga_catalogo",
-            headers={"apikey": token, "Authorization": f"Bearer {token}",
-                     "Content-Type": "application/json"},
-            json={"anios": anios, "simular": simular}, timeout=600,
-        )
+        r = sesion.post(url, headers=headers,
+                        json={"anios": anios, "simular": simular, "lote": lote}, timeout=600)
     except requests.RequestException as e:
         sys.exit(f"Purga: error de red ({e}).")
     if r.status_code != 200:
         sys.exit(f"Purga falló: HTTP {r.status_code}: {r.text[:300]}")
-    print(f"{accion}: {r.text.strip()} filas afectadas.")
+    try:
+        return int(r.text.strip())
+    except ValueError:
+        sys.exit(f"Purga: respuesta inesperada de la RPC: {r.text[:120]!r}")
+
+
+def purgar(anios=3, simular=False, lote=5000):
+    """Purga la ventana vía RPC public.purga_catalogo. Borra lo publicado hace más
+    de 'anios' años SALVO lo abierto, lo de public.contratos y lo de public.decisiones.
+    EN LOTES: cada llamada borra ≤ 'lote' filas (rápida, por debajo del
+    statement_timeout de PostgREST) y aquí REPETIMOS hasta agotar. Un único DELETE
+    grande daba timeout (57014). simular=True solo CUENTA el total (no borra)."""
+    token = os.environ.get("SUPABASE_SERVICE_ROLE")
+    if not token:
+        sys.exit("ERROR: falta la service_role en SUPABASE_SERVICE_ROLE (NUNCA en el repo).")
+    url_base = os.environ.get("SUPABASE_URL") or SUPABASE_URL
+    url = f"{url_base}/rest/v1/rpc/purga_catalogo"
+    headers = {"apikey": token, "Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    sesion = requests.Session()
+
+    if simular:
+        n = _rpc_purga(sesion, url, headers, anios, True, lote)
+        print(f"SIMULACIÓN (no borra): {n:,} filas se borrarían (ventana de {anios} años).")
+        return
+
+    print(f"PURGA por lotes de {lote:,} · ventana de {anios} años ...")
+    total, tanda = 0, 0
+    while True:
+        tanda += 1
+        n = _rpc_purga(sesion, url, headers, anios, False, lote)
+        total += n
+        print(f"  tanda {tanda}: {n:,} borradas (acumulado {total:,})")
+        if n < lote:           # devolvió menos que el lote ⇒ ya no quedan filas
+            break
+        if tanda > 100000:     # cinturón de seguridad contra un bucle infinito
+            print("  AVISO: demasiadas tandas; paro por seguridad.")
+            break
+    print(f"Purga terminada: {total:,} filas borradas en {tanda} tanda(s).")
 
 
 # --- MUESTREO (estimación por meses, sin bajar años enteros) ----------------
@@ -725,6 +750,8 @@ def main():
                     help="Con --purgar: solo CUENTA lo que se borraría, sin borrar.")
     ap.add_argument("--ventana-anios", type=int, default=3,
                     help="Años de la ventana para --purgar (por defecto 3).")
+    ap.add_argument("--lote", type=int, default=5000,
+                    help="Filas por tanda en --purgar (por defecto 5000). El cliente repite hasta agotar.")
     ap.add_argument("--muestra", action="store_true",
                     help="Estimación por muestreo de meses recientes (no baja años; no escribe).")
     ap.add_argument("--meses", type=int, default=3,
@@ -758,7 +785,7 @@ def main():
     elif args.diario:
         diario(fuentes)
     elif args.purgar:
-        purgar(args.ventana_anios, args.simular)
+        purgar(args.ventana_anios, args.simular, args.lote)
     elif args.cargar:
         carga(construir_unidades(args.solo, args.periodos), limpiar=not args.conservar_zip)
     else:
