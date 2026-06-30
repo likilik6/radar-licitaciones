@@ -28,6 +28,10 @@
 -- search_path fijo por seguridad. Solo service_role puede ejecutarla.
 -- ============================================================================
 
+-- Índice por fecha_publicacion: la purga filtra por esta columna y BG-1 no la
+-- indexó. Sin él, cada tanda/cuenta recorre la tabla entera. Idempotente.
+create index if not exists licitaciones_fecha_pub_idx on public.licitaciones (fecha_publicacion);
+
 -- Quitamos la versión anterior (2 argumentos, DELETE único) para no dejar overloads.
 drop function if exists public.purga_catalogo(int, boolean);
 
