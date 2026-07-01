@@ -90,55 +90,70 @@ from public.licitaciones;
 --    El editor (rol postgres) muestra el tiempo de ejecución de cada consulta.
 -- ===========================================================================
 
--- E0) Cuántas casan de verdad (referencia). Si supera el tope (5000), la RPC lo
---     dará como "más de 5.000". Contar exacto AQUÍ puede tardar (rol postgres sin
---     timeout corto): es solo para saber la magnitud real.
-select 'cai'          as caso, count(*) from public.licitaciones where tsv @@ websearch_to_tsquery('spanish','cai')
-union all
-select 'climatizacion', count(*) from public.licitaciones where tsv @@ websearch_to_tsquery('spanish','climatizacion')
-union all
-select 'cpv 9073%',     count(*) from public.licitaciones where public.cpv_texto(cpv) like '% 9073%'
-union all
-select 'cpv 90%',       count(*) from public.licitaciones where public.cpv_texto(cpv) like '% 90%';
-
--- E1) PROBE (conteo acotado): debe cortarse en 5001 y ser BARATO (no ordena).
---     Espera: Limit -> Aggregate -> Bitmap Heap Scan (recheck) sobre Bitmap Index
---     Scan de licitaciones_tsv_gin. actual rows del Limit = 5001, tiempo bajo.
-explain (analyze, buffers)
+-- E1) *** LA COMPROBACIÓN CLAVE (regresión de sargabilidad) ***
+--     PROBE con EXPLAIN **SIN ANALYZE** (no ejecuta -> instantáneo, no puede dar
+--     timeout): confirma que el plan usa BITMAP INDEX SCAN, NO Seq Scan.
+--     Esto reproduce el WHERE que construye ahora la RPC (predicado CONSTANTE, sin
+--     `IS NULL OR`). websearch_to_tsquery(const) se pliega a una tsquery constante.
+--     Espera: Limit -> Aggregate -> Bitmap Heap Scan -> Bitmap Index Scan
+--             (licitaciones_tsv_gin).  Si ves "Seq Scan on licitaciones" -> MAL.
+explain
 select count(*) from (
   select 1 from public.licitaciones
-  where tsv @@ websearch_to_tsquery('spanish','cai')
+  where tsv @@ websearch_to_tsquery('spanish', unaccent('climatizacion'))   -- SELECTIVO (era el que regresaba)
+  limit 5001
+) s;
+
+explain
+select count(*) from (
+  select 1 from public.licitaciones
+  where tsv @@ websearch_to_tsquery('spanish', unaccent('cai'))             -- AMPLIO
+  limit 5001
+) s;
+
+-- E1b) PROBE del PREFIJO CPV: debe usar Bitmap Index Scan de licitaciones_cpv_trgm
+--      (NO Seq Scan). "90" (2 chars) también, por el espacio inicial de cpv_texto.
+explain
+select count(*) from (
+  select 1 from public.licitaciones
+  where public.cpv_texto(cpv) like any (array['% 9073%'])
+  limit 5001
+) s;
+
+explain
+select count(*) from (
+  select 1 from public.licitaciones
+  where public.cpv_texto(cpv) like any (array['% 90%'])
   limit 5001
 ) s;
 
 -- E2) RAMA AMPLIA (página por índice de ORDEN + filtro, primeras 25). enable_sort
 --     off obliga a obtener el orden del índice. Espera: Index Scan usando
---     licitaciones_finplazo_id con "Filter: (tsv @@ ...)", Limit 25, pocas filas.
+--     licitaciones_finplazo_id con "Filter: (tsv @@ ...)", Limit 25 (no Sort).
 set enable_sort = off;
-explain (analyze, buffers)
-select li.licitacion_id, li.titulo, li.fecha_fin_plazo
-from public.licitaciones li
-where li.tsv @@ websearch_to_tsquery('spanish','cai')
-order by li.fecha_fin_plazo asc nulls last, li.licitacion_id asc
+explain
+select licitacion_id, titulo, fecha_fin_plazo
+from public.licitaciones
+where tsv @@ websearch_to_tsquery('spanish', unaccent('cai'))
+order by fecha_fin_plazo asc nulls last, licitacion_id asc
 limit 25 offset 0;
 reset enable_sort;
 
--- E3) CPV-PREFIJO por TRIGRAM: debe usar licitaciones_cpv_trgm (Bitmap Index
---     Scan) en vez de Seq Scan de 588k. "9073" y "90" (2 chars: el espacio inicial
---     de cpv_texto aporta un trigram " 90", así que el índice también aplica).
-explain (analyze, buffers)
-select 1 from public.licitaciones
-where public.cpv_texto(cpv) like any (array['% 9073%'])
-limit 5001;
+-- E3) RAMA SELECTIVA (climatizacion). Espera: CTE materializada con Bitmap Index
+--     Scan (licitaciones_tsv_gin) DENTRO, y luego un Sort del subconjunto + Limit.
+explain
+with filtrado as materialized (
+  select licitacion_id, fecha_fin_plazo, valor_estimado, fecha_publicacion
+  from public.licitaciones
+  where tsv @@ websearch_to_tsquery('spanish', unaccent('climatizacion'))
+)
+select licitacion_id from filtrado
+order by fecha_fin_plazo asc nulls last, licitacion_id asc
+limit 25 offset 0;
 
-explain (analyze, buffers)
-select 1 from public.licitaciones
-where public.cpv_texto(cpv) like any (array['% 90%'])
-limit 5001;
-
--- E4) La RPC de punta a punta para los 4 casos (wall-clock del Function Scan).
---     Espera: todos RÁPIDOS. climatizacion => topado=false y total exacto (~3146);
---     cai / 9073 / 90 => topado=true, total=5000, filas=25.
+-- E4) La RPC de punta a punta para los 4 casos (ya con ANALYZE = wall-clock real).
+--     No debe dar 0A000 ni timeout. climatizacion => topado=false, total exacto
+--     (~3146); cai / 9073 / 90 => topado=true, total=5000, filas=25. Todos RÁPIDOS.
 explain analyze select public.buscar_licitaciones('climatizacion');
 explain analyze select public.buscar_licitaciones('cai');
 explain analyze select public.buscar_licitaciones(p_cpv_prefijo => array['9073']);
