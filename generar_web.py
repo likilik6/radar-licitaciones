@@ -2198,13 +2198,17 @@ JS_BUSCADOR_UI = """
     if(bgRes) bgRes.innerHTML = filas.map(bgTarjeta).join('');
     const ini = (r.pagina - 1) * r.porPagina + 1;
     const fin = ini + filas.length - 1;
-    const tot = (r.aproximado ? '≈ ' : '') + (r.total || 0).toLocaleString('es-ES');
+    // Contador: 'topado' = el total es un TOPE ("más de N"); 'aproximado' = "≈ N".
+    const nTot = (r.total || 0).toLocaleString('es-ES');
+    const tot = r.topado ? ('más de ' + nTot) : ((r.aproximado ? '≈ ' : '') + nTot);
     if(bgCont) bgCont.innerHTML = 'Mostrando <b>' + ini + '–' + fin + '</b> de <b>' + tot + '</b>';
     const totalPag = Math.max(1, Math.ceil((r.total || 0) / r.porPagina));
     if(bgPag) bgPag.hidden = false;
     if(bgPrev) bgPrev.disabled = r.pagina <= 1;
     if(bgNext) bgNext.disabled = r.pagina >= totalPag;
-    if(bgPagInfo) bgPagInfo.textContent = 'Página ' + r.pagina + ' de ' + (r.aproximado ? '≈ ' : '') + totalPag;
+    const pagPref = r.topado ? '' : (r.aproximado ? '≈ ' : '');
+    const pagSuf = r.topado ? '+' : '';
+    if(bgPagInfo) bgPagInfo.textContent = 'Página ' + r.pagina + ' de ' + pagPref + totalPag + pagSuf;
   }
 
   let bgTimer = null;

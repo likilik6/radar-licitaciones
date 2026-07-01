@@ -80,7 +80,9 @@ export function crearBuscador(supabase) {
     throw new Error('crearBuscador: hay que pasarle el cliente supabase ya inicializado.');
   }
 
-  // buscar(params) -> { filas, total, pagina, porPagina, aproximado, error }
+  // buscar(params) -> { filas, total, pagina, porPagina, aproximado, topado, error }
+  //   topado=true (solo vía RPC) -> el conjunto supera el TOPE del conteo; `total`
+  //                      es ese tope y la UI muestra "más de N" (no "≈ N").
   //   aproximado=true  -> `total` es una estimación del planner (conjunto grande,
   //                       solo en el camino SIN texto). El camino CON texto da
   //                       siempre conteo exacto del subconjunto que casa.
@@ -119,9 +121,9 @@ export function crearBuscador(supabase) {
     const hasta = desde + porPagina - 1;
 
     const ok = (data, total, aproximado) => ({
-      filas: data ?? [], total, pagina, porPagina, aproximado, error: null,
+      filas: data ?? [], total, pagina, porPagina, aproximado, topado: false, error: null,
     });
-    const fallo = (error) => ({ filas: [], total: 0, pagina, porPagina, aproximado: false, error });
+    const fallo = (error) => ({ filas: [], total: 0, pagina, porPagina, aproximado: false, topado: false, error });
 
     // --- Normalizar filtros UNA vez (se reutilizan en ambos caminos).
     const texto = aTexto(params.texto);
@@ -185,6 +187,7 @@ export function crearBuscador(supabase) {
         pagina,
         porPagina,
         aproximado: !!(data && data.aproximado),
+        topado: !!(data && data.topado),   // total es el TOPE -> la UI muestra "más de N"
         error: null,
       };
     }
