@@ -477,9 +477,42 @@ CSS = """
   .bg-input { flex:1 1 320px; min-width:240px; padding:11px 13px; border:1px solid var(--borde); border-radius:9px; font:inherit; background:var(--panel); color:var(--texto); }
   .bg-input:focus { outline:none; border-color:var(--acento); box-shadow:0 0 0 3px rgba(99,102,241,.15); }
   .bg-sel { padding:10px 12px; border:1px solid var(--borde); border-radius:9px; font:inherit; background:var(--panel); color:var(--texto); cursor:pointer; }
-  .bg-cabecera { margin-bottom:12px; }
+  .bg-mas-btn { padding:10px 14px; border:1px solid var(--borde); border-radius:9px; font:inherit; font-weight:600; background:var(--panel); color:var(--acento-2); cursor:pointer; white-space:nowrap; }
+  .bg-mas-btn:hover { border-color:var(--acento); }
+  .bg-mas-btn[aria-expanded="true"] { background:var(--acento); color:#fff; border-color:transparent; }
+  /* Filtros rápidos (pills) */
+  .bg-pills { display:flex; flex-wrap:wrap; align-items:center; gap:10px 18px; margin-bottom:12px; }
+  .bg-pill-grupo { display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .bg-pill-et { font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--suave); margin-right:2px; }
+  .bg-pill { padding:6px 13px; border:1px solid var(--borde); border-radius:999px; font:inherit; font-size:.84rem; background:var(--panel); color:var(--texto); cursor:pointer; transition:background .12s,color .12s,border-color .12s; }
+  .bg-pill:hover { border-color:var(--acento); color:var(--acento-2); }
+  .bg-pill.activo { background:var(--acento); border-color:transparent; color:#fff; font-weight:600; }
+  .bg-orden-lbl { display:inline-flex; align-items:center; gap:6px; font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--suave); }
+  .bg-orden-lbl .bg-sel { font-size:.84rem; text-transform:none; font-weight:400; color:var(--texto); }
+  /* Panel avanzado (colapsable): CPV / importe / fechas */
+  .bg-avanzado { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px 20px; padding:16px; margin-bottom:14px; border:1px solid var(--borde); border-radius:11px; background:var(--bg); }
+  .bg-campo { display:flex; flex-direction:column; gap:6px; }
+  .bg-campo > label { font-size:.78rem; font-weight:700; color:var(--suave); }
+  .bg-input-sm { padding:8px 10px; border:1px solid var(--borde); border-radius:8px; font:inherit; font-size:.88rem; background:var(--panel); color:var(--texto); min-width:0; }
+  .bg-input-sm:focus { outline:none; border-color:var(--acento); box-shadow:0 0 0 3px rgba(99,102,241,.15); }
+  .bg-cpv-fila { display:flex; gap:8px; }
+  .bg-cpv-fila .bg-input-sm { flex:1 1 auto; }
+  .bg-mini-btn { padding:8px 12px; border:1px solid var(--borde); border-radius:8px; font:inherit; font-size:.84rem; font-weight:600; background:var(--panel); color:var(--acento-2); cursor:pointer; white-space:nowrap; }
+  .bg-mini-btn:hover { border-color:var(--acento); }
+  .bg-hint { font-size:.76rem; color:var(--suave); }
+  .bg-rango { display:flex; align-items:center; gap:8px; }
+  .bg-rango .bg-input-sm { flex:1 1 0; }
+  .bg-rango-sep { color:var(--suave); }
+  /* Chips de filtros activos (removibles) */
+  .bg-chips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+  .bg-chip { display:inline-flex; align-items:center; gap:7px; padding:5px 6px 5px 12px; border-radius:999px; font-size:.82rem; background:rgba(99,102,241,.10); border:1px solid rgba(99,102,241,.28); color:var(--acento-2); }
+  .bg-chip-x { border:0; background:rgba(99,102,241,.16); color:var(--acento-2); width:18px; height:18px; border-radius:999px; cursor:pointer; font-size:.9rem; line-height:1; display:inline-flex; align-items:center; justify-content:center; padding:0; }
+  .bg-chip-x:hover { background:var(--acento); color:#fff; }
+  .bg-cabecera { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
   .bg-contador { font-size:.9rem; color:var(--suave); }
   .bg-contador b { color:var(--acento); }
+  .bg-limpiar { border:0; background:none; color:var(--acento-2); font:inherit; font-size:.84rem; font-weight:600; cursor:pointer; text-decoration:underline; white-space:nowrap; }
+  .bg-limpiar:hover { color:var(--acento); }
   .bg-msg { color:var(--suave); font-size:.92rem; padding:8px 0 14px; }
   .bg-card .bg-org { font-size:.82rem; color:var(--suave); margin:2px 0 8px; }
   .bg-card .bg-meta { font-size:.82rem; color:var(--texto); margin-bottom:8px; }
@@ -1956,9 +1989,20 @@ JS_BUSCADOR_UI = """
   const bgGate    = document.getElementById('bg-gate');
   const bgPanel   = document.getElementById('bg-panel');
   const bgTexto   = document.getElementById('bg-texto');
-  const bgFuente  = document.getElementById('bg-fuente');
-  const bgEstadoF = document.getElementById('bg-estado');
   const bgOrden   = document.getElementById('bg-orden');
+  const bgPills   = document.getElementById('bg-pills');
+  const bgMas     = document.getElementById('bg-mas');
+  const bgAvanz   = document.getElementById('bg-avanzado');
+  const bgCpv     = document.getElementById('bg-cpv');
+  const bgCpvAdd  = document.getElementById('bg-cpv-add');
+  const bgImpMin  = document.getElementById('bg-imp-min');
+  const bgImpMax  = document.getElementById('bg-imp-max');
+  const bgFinDesde= document.getElementById('bg-fin-desde');
+  const bgFinHasta= document.getElementById('bg-fin-hasta');
+  const bgPubDesde= document.getElementById('bg-pub-desde');
+  const bgPubHasta= document.getElementById('bg-pub-hasta');
+  const bgChips   = document.getElementById('bg-chips');
+  const bgLimpiar = document.getElementById('bg-limpiar');
   const bgCont    = document.getElementById('bg-contador');
   const bgMsg     = document.getElementById('bg-estado-msg');
   const bgRes     = document.getElementById('bg-resultados');
@@ -1971,6 +2015,16 @@ JS_BUSCADOR_UI = """
   let bgPagina = 1;
   let bgYaBuscado = false;
   let bgCargando = false;
+
+  // Estado de filtros: FUENTE DE VERDAD. Los pills / inputs / chips lo reflejan;
+  // bgParams() lo traduce a los params de buscar(). '' = sin filtro (Auto/Todas).
+  const bgFiltros = {
+    fuente: '', estado: '', orden: 'fecha_fin_plazo:asc',
+    cpvPrefijo: [],                       // prefijos CPV (OR) -> RPC
+    impMin: '', impMax: '',               // valor_estimado (rango)
+    finDesde: '', finHasta: '',           // fecha_fin_plazo (rango, yyyy-mm-dd)
+    pubDesde: '', pubHasta: '',           // fecha_publicacion (rango, yyyy-mm-dd)
+  };
 
   function bgEscape(s){ const d = document.createElement('div'); d.textContent = (s == null ? '' : String(s)); return d.innerHTML; }
   function bgFecha(iso){ if(!iso) return '—'; const d = new Date(iso); return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-ES'); }
@@ -2019,16 +2073,101 @@ JS_BUSCADOR_UI = """
   }
 
   function bgParams(){
-    const partes = (bgOrden && bgOrden.value || 'fecha_fin_plazo:asc').split(':');
+    const f = bgFiltros;
+    const partes = (f.orden || 'fecha_fin_plazo:asc').split(':');
     return {
       texto: bgTexto ? bgTexto.value : '',
-      fuente: (bgFuente && bgFuente.value) || undefined,
-      estado: (bgEstadoF && bgEstadoF.value) || undefined,
+      fuente: f.fuente || undefined,
+      estado: f.estado || undefined,
+      cpvPrefijo: f.cpvPrefijo.length ? f.cpvPrefijo.slice() : undefined,
+      importeMin: f.impMin !== '' ? f.impMin : undefined,
+      importeMax: f.impMax !== '' ? f.impMax : undefined,
+      // Rango por día: 'desde' = inicio del día; 'hasta' = fin del día (inclusivo).
+      fechaFinDesde: f.finDesde ? f.finDesde + 'T00:00:00' : undefined,
+      fechaFinHasta: f.finHasta ? f.finHasta + 'T23:59:59' : undefined,
+      fechaPubDesde: f.pubDesde ? f.pubDesde + 'T00:00:00' : undefined,
+      fechaPubHasta: f.pubHasta ? f.pubHasta + 'T23:59:59' : undefined,
       ordenCampo: partes[0],
       ordenAsc: partes[1] !== 'desc',
       pagina: bgPagina,
       porPagina: BG_POR_PAGINA,
     };
+  }
+
+  // --- Pills: en cada grupo (fuente/estado) hay UN valor activo (radio).
+  function bgSelPill(grupo, val){
+    const cont = bgPills && bgPills.querySelector('.bg-pill-grupo[data-filtro="' + grupo + '"]');
+    if(!cont) return;
+    cont.querySelectorAll('.bg-pill').forEach(function(b){ b.classList.toggle('activo', (b.dataset.val || '') === val); });
+  }
+
+  // --- CPV: normaliza un token a prefijo (recorta y quita el dígito de control
+  //     "-N" si el usuario pega el código oficial). Sin regex (evita escapes).
+  function bgNormPrefijo(s){ return String(s == null ? '' : s).trim().split('-')[0].trim(); }
+  function bgAddCpv(){
+    if(!bgCpv) return;
+    const tokens = bgCpv.value.split(',').join(' ').split(';').join(' ').split(' ');
+    let cambiado = false;
+    tokens.forEach(function(t){
+      const p = bgNormPrefijo(t);
+      if(p && bgFiltros.cpvPrefijo.indexOf(p) < 0){ bgFiltros.cpvPrefijo.push(p); cambiado = true; }
+    });
+    bgCpv.value = '';
+    if(cambiado) bgSincroniza();
+  }
+
+  // Etiqueta "desde/hasta" para un rango (fmt formatea cada extremo).
+  function bgRangoTxt(desde, hasta, fmt){
+    if(desde && hasta) return fmt(desde) + ' – ' + fmt(hasta);
+    if(desde) return 'desde ' + fmt(desde);
+    return 'hasta ' + fmt(hasta);
+  }
+
+  // Pinta los chips de filtros activos y decide si se ve "Limpiar filtros".
+  function bgRenderChips(){
+    const f = bgFiltros;
+    const chips = [];
+    const FUENTE = { estatal:'Estatal', agregadas:'Agregadas' };
+    const ESTADO = { abierta:'Abiertas', cerrada:'Cerradas', todas:'Todas' };
+    if(f.fuente) chips.push({ tipo:'fuente', txt:'Fuente: ' + (FUENTE[f.fuente] || f.fuente) });
+    if(f.estado) chips.push({ tipo:'estado', txt:'Estado: ' + (ESTADO[f.estado] || f.estado) });
+    f.cpvPrefijo.forEach(function(p){ chips.push({ tipo:'cpv', val:p, txt:'CPV ' + p + '…' }); });
+    if(f.impMin !== '' || f.impMax !== ''){
+      let t;
+      if(f.impMin !== '' && f.impMax !== '') t = fmtEur(Number(f.impMin)) + ' – ' + fmtEur(Number(f.impMax));
+      else if(f.impMin !== '') t = '≥ ' + fmtEur(Number(f.impMin));
+      else t = '≤ ' + fmtEur(Number(f.impMax));
+      chips.push({ tipo:'importe', txt:'Importe: ' + t });
+    }
+    if(f.finDesde || f.finHasta) chips.push({ tipo:'fin', txt:'Fin: ' + bgRangoTxt(f.finDesde, f.finHasta, bgFecha) });
+    if(f.pubDesde || f.pubHasta) chips.push({ tipo:'pub', txt:'Publicación: ' + bgRangoTxt(f.pubDesde, f.pubHasta, bgFecha) });
+
+    if(bgChips){
+      bgChips.innerHTML = chips.map(function(c){
+        return '<span class="bg-chip" data-tipo="' + c.tipo + '"' + (c.val != null ? ' data-val="' + bgEscape(c.val) + '"' : '') + '>'
+             + bgEscape(c.txt)
+             + ' <button type="button" class="bg-chip-x" aria-label="Quitar filtro">×</button></span>';
+      }).join('');
+      bgChips.hidden = chips.length === 0;
+    }
+    const hayTexto = !!(bgTexto && bgTexto.value.trim());
+    if(bgLimpiar) bgLimpiar.hidden = !(chips.length || hayTexto);
+  }
+
+  // Cambió un filtro -> refresca chips, vuelve a la página 1 y relanza.
+  function bgSincroniza(){ bgRenderChips(); bgReinicia(); }
+
+  // "Limpiar filtros": resetea TODO (incluido el texto) y relanza.
+  function bgLimpiarTodo(){
+    if(bgTexto) bgTexto.value = '';
+    bgFiltros.fuente = ''; bgFiltros.estado = ''; bgFiltros.orden = 'fecha_fin_plazo:asc';
+    bgFiltros.cpvPrefijo = [];
+    bgFiltros.impMin = ''; bgFiltros.impMax = '';
+    bgFiltros.finDesde = ''; bgFiltros.finHasta = ''; bgFiltros.pubDesde = ''; bgFiltros.pubHasta = '';
+    bgSelPill('fuente', ''); bgSelPill('estado', '');
+    if(bgOrden) bgOrden.value = 'fecha_fin_plazo:asc';
+    [bgImpMin, bgImpMax, bgFinDesde, bgFinHasta, bgPubDesde, bgPubHasta, bgCpv].forEach(function(el){ if(el) el.value = ''; });
+    bgSincroniza();
   }
 
   async function bgRun(){
@@ -2070,8 +2209,60 @@ JS_BUSCADOR_UI = """
 
   let bgTimer = null;
   function bgReinicia(){ bgPagina = 1; bgRun(); }
-  if(bgTexto) bgTexto.addEventListener('input', function(){ clearTimeout(bgTimer); bgTimer = setTimeout(bgReinicia, 300); });
-  [bgFuente, bgEstadoF, bgOrden].forEach(function(el){ if(el) el.addEventListener('change', bgReinicia); });
+
+  // Texto: debounce. Re-render de chips también (el botón "Limpiar" aparece con texto).
+  if(bgTexto) bgTexto.addEventListener('input', function(){ clearTimeout(bgTimer); bgTimer = setTimeout(function(){ bgRenderChips(); bgReinicia(); }, 300); });
+
+  // Orden (select).
+  if(bgOrden) bgOrden.addEventListener('change', function(){ bgFiltros.orden = bgOrden.value; bgReinicia(); });
+
+  // Pills fuente/estado (delegación: un valor activo por grupo).
+  if(bgPills) bgPills.addEventListener('click', function(e){
+    const btn = e.target.closest('.bg-pill'); if(!btn) return;
+    const grupo = btn.closest('.bg-pill-grupo'); if(!grupo) return;
+    const campo = grupo.dataset.filtro;
+    if(campo !== 'fuente' && campo !== 'estado') return;
+    bgFiltros[campo] = btn.dataset.val || '';
+    grupo.querySelectorAll('.bg-pill').forEach(function(b){ b.classList.toggle('activo', b === btn); });
+    bgSincroniza();
+  });
+
+  // Panel "Más filtros": mostrar/ocultar.
+  if(bgMas) bgMas.addEventListener('click', function(){
+    const abierto = bgMas.getAttribute('aria-expanded') === 'true';
+    bgMas.setAttribute('aria-expanded', abierto ? 'false' : 'true');
+    if(bgAvanz) bgAvanz.hidden = abierto;
+  });
+
+  // CPV por prefijo: botón "Añadir" o Enter.
+  if(bgCpvAdd) bgCpvAdd.addEventListener('click', bgAddCpv);
+  if(bgCpv) bgCpv.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); bgAddCpv(); } });
+
+  // Importe y fechas: al confirmar (change = blur/Enter) actualizan estado y relanzan.
+  if(bgImpMin)   bgImpMin.addEventListener('change', function(){ bgFiltros.impMin = bgImpMin.value; bgSincroniza(); });
+  if(bgImpMax)   bgImpMax.addEventListener('change', function(){ bgFiltros.impMax = bgImpMax.value; bgSincroniza(); });
+  if(bgFinDesde) bgFinDesde.addEventListener('change', function(){ bgFiltros.finDesde = bgFinDesde.value; bgSincroniza(); });
+  if(bgFinHasta) bgFinHasta.addEventListener('change', function(){ bgFiltros.finHasta = bgFinHasta.value; bgSincroniza(); });
+  if(bgPubDesde) bgPubDesde.addEventListener('change', function(){ bgFiltros.pubDesde = bgPubDesde.value; bgSincroniza(); });
+  if(bgPubHasta) bgPubHasta.addEventListener('change', function(){ bgFiltros.pubHasta = bgPubHasta.value; bgSincroniza(); });
+
+  // "Limpiar filtros".
+  if(bgLimpiar) bgLimpiar.addEventListener('click', bgLimpiarTodo);
+
+  // Chips activos: quitar uno (delegación).
+  if(bgChips) bgChips.addEventListener('click', function(e){
+    const x = e.target.closest('.bg-chip-x'); if(!x) return;
+    const chip = x.closest('.bg-chip'); if(!chip) return;
+    const tipo = chip.dataset.tipo;
+    if(tipo === 'fuente'){ bgFiltros.fuente = ''; bgSelPill('fuente', ''); }
+    else if(tipo === 'estado'){ bgFiltros.estado = ''; bgSelPill('estado', ''); }
+    else if(tipo === 'cpv'){ const v = chip.dataset.val; bgFiltros.cpvPrefijo = bgFiltros.cpvPrefijo.filter(function(p){ return p !== v; }); }
+    else if(tipo === 'importe'){ bgFiltros.impMin = ''; bgFiltros.impMax = ''; if(bgImpMin) bgImpMin.value = ''; if(bgImpMax) bgImpMax.value = ''; }
+    else if(tipo === 'fin'){ bgFiltros.finDesde = ''; bgFiltros.finHasta = ''; if(bgFinDesde) bgFinDesde.value = ''; if(bgFinHasta) bgFinHasta.value = ''; }
+    else if(tipo === 'pub'){ bgFiltros.pubDesde = ''; bgFiltros.pubHasta = ''; if(bgPubDesde) bgPubDesde.value = ''; if(bgPubHasta) bgPubHasta.value = ''; }
+    bgSincroniza();
+  });
+
   if(bgPrev) bgPrev.addEventListener('click', function(){ if(bgPagina > 1){ bgPagina--; bgRun(); } });
   if(bgNext) bgNext.addEventListener('click', function(){ bgPagina++; bgRun(); });
   // "y N más" de CPV (delegado en el contenedor de resultados del buscador).
@@ -2788,27 +2979,74 @@ pagina = f"""<!DOCTYPE html>
         <div class="bg-barra">
           <input id="bg-texto" class="bg-input" type="search" autocomplete="off"
                  placeholder="Buscar por título, objeto u órgano…  (p. ej. calidad del aire)">
-          <select id="bg-fuente" class="bg-sel" title="Fuente">
-            <option value="">Todas las fuentes</option>
-            <option value="estatal">Estatal</option>
-            <option value="agregadas">Agregadas</option>
-          </select>
-          <select id="bg-estado" class="bg-sel" title="Estado del plazo">
-            <option value="">Estado: automático</option>
-            <option value="abierta">Abiertas</option>
-            <option value="cerrada">Cerradas</option>
-            <option value="todas">Todas</option>
-          </select>
-          <select id="bg-orden" class="bg-sel" title="Ordenar por">
-            <option value="fecha_fin_plazo:asc">Fin de plazo ↑</option>
-            <option value="fecha_fin_plazo:desc">Fin de plazo ↓</option>
-            <option value="valor_estimado:desc">Importe ↓</option>
-            <option value="valor_estimado:asc">Importe ↑</option>
-            <option value="fecha_publicacion:desc">Publicación ↓</option>
-            <option value="fecha_publicacion:asc">Publicación ↑</option>
-          </select>
+          <button id="bg-mas" class="bg-mas-btn" type="button" aria-expanded="false"
+                  aria-controls="bg-avanzado">Más filtros</button>
         </div>
-        <div class="bg-cabecera"><span id="bg-contador" class="bg-contador"></span></div>
+        <div id="bg-pills" class="bg-pills">
+          <div class="bg-pill-grupo" data-filtro="fuente" role="group" aria-label="Fuente">
+            <span class="bg-pill-et">Fuente</span>
+            <button type="button" class="bg-pill activo" data-val="">Todas</button>
+            <button type="button" class="bg-pill" data-val="estatal">Estatal</button>
+            <button type="button" class="bg-pill" data-val="agregadas">Agregadas</button>
+          </div>
+          <div class="bg-pill-grupo" data-filtro="estado" role="group" aria-label="Estado del plazo">
+            <span class="bg-pill-et">Estado</span>
+            <button type="button" class="bg-pill activo" data-val="">Auto</button>
+            <button type="button" class="bg-pill" data-val="abierta">Abiertas</button>
+            <button type="button" class="bg-pill" data-val="cerrada">Cerradas</button>
+            <button type="button" class="bg-pill" data-val="todas">Todas</button>
+          </div>
+          <label class="bg-orden-lbl">Orden
+            <select id="bg-orden" class="bg-sel" title="Ordenar por">
+              <option value="fecha_fin_plazo:asc">Fin de plazo ↑</option>
+              <option value="fecha_fin_plazo:desc">Fin de plazo ↓</option>
+              <option value="valor_estimado:desc">Importe ↓</option>
+              <option value="valor_estimado:asc">Importe ↑</option>
+              <option value="fecha_publicacion:desc">Publicación ↓</option>
+              <option value="fecha_publicacion:asc">Publicación ↑</option>
+            </select>
+          </label>
+        </div>
+        <div id="bg-avanzado" class="bg-avanzado" hidden>
+          <div class="bg-campo">
+            <label for="bg-cpv">CPV (empieza por)</label>
+            <div class="bg-cpv-fila">
+              <input id="bg-cpv" class="bg-input-sm" type="text" inputmode="numeric" autocomplete="off"
+                     placeholder="p. ej. 9073">
+              <button id="bg-cpv-add" class="bg-mini-btn" type="button">Añadir</button>
+            </div>
+            <small class="bg-hint">Enter o «Añadir». Varios códigos = casa cualquiera. «9073» → familia 9073xxxx.</small>
+          </div>
+          <div class="bg-campo">
+            <label for="bg-imp-min">Importe estimado (€)</label>
+            <div class="bg-rango">
+              <input id="bg-imp-min" class="bg-input-sm" type="number" min="0" step="1000" placeholder="mín." aria-label="Importe mínimo">
+              <span class="bg-rango-sep">–</span>
+              <input id="bg-imp-max" class="bg-input-sm" type="number" min="0" step="1000" placeholder="máx." aria-label="Importe máximo">
+            </div>
+          </div>
+          <div class="bg-campo">
+            <label for="bg-fin-desde">Fin de plazo</label>
+            <div class="bg-rango">
+              <input id="bg-fin-desde" class="bg-input-sm" type="date" aria-label="Fin de plazo desde">
+              <span class="bg-rango-sep">–</span>
+              <input id="bg-fin-hasta" class="bg-input-sm" type="date" aria-label="Fin de plazo hasta">
+            </div>
+          </div>
+          <div class="bg-campo">
+            <label for="bg-pub-desde">Fecha de publicación</label>
+            <div class="bg-rango">
+              <input id="bg-pub-desde" class="bg-input-sm" type="date" aria-label="Publicación desde">
+              <span class="bg-rango-sep">–</span>
+              <input id="bg-pub-hasta" class="bg-input-sm" type="date" aria-label="Publicación hasta">
+            </div>
+          </div>
+        </div>
+        <div id="bg-chips" class="bg-chips" hidden></div>
+        <div class="bg-cabecera">
+          <span id="bg-contador" class="bg-contador"></span>
+          <button id="bg-limpiar" class="bg-limpiar" type="button" hidden>Limpiar filtros</button>
+        </div>
         <div id="bg-estado-msg" class="bg-msg" hidden></div>
         <div id="bg-resultados" class="grid"></div>
         <div id="bg-paginacion" class="bg-pag" hidden>

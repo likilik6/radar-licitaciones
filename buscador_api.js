@@ -13,14 +13,18 @@
 //   const r = await buscar({ ... });               // { filas, total, pagina,
 //                                                  //   porPagina, aproximado, error }
 //
-// DOS CAMINOS según haya texto o no:
-//   · CON texto -> RPC public.buscar_licitaciones (ver buscador_rpc.sql). Usa una
-//     CTE MATERIALIZED que filtra por el GIN(tsv) PRIMERO y luego ordena+pagina.
-//     Esto evita el plan malo de PostgREST (ordenar por el índice de fecha y
-//     filtrar el tsv al vuelo -> 16 s -> timeout 57014). El término va tal cual;
-//     la RPC le aplica unaccent('spanish') para casar tildes ("climatización").
-//   · SIN texto -> PostgREST normal (filtros + orden + paginación) con conteo
-//     HÍBRIDO (estimación del planner; exacto solo si el conjunto es pequeño).
+// DOS CAMINOS según los filtros:
+//   · CON texto  O  CON CPV por PREFIJO -> RPC public.buscar_licitaciones (ver
+//     buscador_rpc.sql). Usa una CTE MATERIALIZED que filtra PRIMERO (por el
+//     GIN(tsv) si hay texto; por el prefijo CPV si no) y luego ordena+pagina.
+//     Con texto, esto evita el plan malo de PostgREST (ordenar por el índice de
+//     fecha y filtrar el tsv al vuelo -> 16 s -> timeout 57014). El término va
+//     tal cual; la RPC le aplica unaccent('spanish') para casar tildes.
+//     El PREFIJO CPV ("empieza por", como el Radar) no lo sabe hacer PostgREST
+//     sobre un text[], por eso también pasa por la RPC (con o sin texto).
+//   · SIN texto y SIN prefijo -> PostgREST normal (filtros + orden + paginación)
+//     con conteo HÍBRIDO (estimación del planner; exacto solo si el conjunto es
+//     pequeño). El CPV EXACTO (overlaps) también va por aquí.
 //
 // PAGINACIÓN ESTABLE: ambos caminos ordenan ADEMÁS por licitacion_id (PK) como
 // desempate, para que páginas consecutivas no se solapen en empates de fecha/NULL.
@@ -84,6 +88,11 @@ export function crearBuscador(supabase) {
   // params admitidos (todos opcionales; los vacíos/undefined se ignoran):
   //   texto        string   -> búsqueda full-text (vía RPC)
   //   cpv          string[] -> overlaps (OR): filas que comparten AL MENOS UN código
+  //                            EXACTO (código completo). Va por PostgREST/RPC según haya texto.
+  //   cpvPrefijo   string[] -> PREFIJO de CPV (OR): casa la familia "empieza por"
+  //                            (p. ej. "9073" -> 9073xxxx), como el Radar. FUERZA la
+  //                            RPC (con o sin texto), porque PostgREST no hace prefijo
+  //                            sobre text[]. Cada prefijo se usa trim() tal cual.
   //   fuente       'estatal' | 'agregadas'
   //   importeMin / importeMax  -> rango sobre valor_estimado
   //   estado       'abierta' | 'cerrada' | 'todas'   (ver default abajo)
@@ -117,6 +126,7 @@ export function crearBuscador(supabase) {
     // --- Normalizar filtros UNA vez (se reutilizan en ambos caminos).
     const texto = aTexto(params.texto);
     const cpvs = Array.isArray(params.cpv) ? params.cpv.map(aTexto).filter(Boolean) : [];
+    const cpvPrefijos = Array.isArray(params.cpvPrefijo) ? params.cpvPrefijo.map(aTexto).filter(Boolean) : [];
     const fuente = params.fuente === 'estatal' || params.fuente === 'agregadas' ? params.fuente : null;
     const impMin = aNumero(params.importeMin);
     const impMax = aNumero(params.importeMax);
@@ -132,7 +142,7 @@ export function crearBuscador(supabase) {
     // DEFAULT: 'abierta' SOLO si no hay ningún otro filtro (pantalla de entrada =
     // "primeras N abiertas"); si hay otro filtro (incluido texto), 'todas'.
     const hayOtrosFiltros = !!(
-      texto || cpvs.length || fuente ||
+      texto || cpvs.length || cpvPrefijos.length || fuente ||
       impMin !== null || impMax !== null ||
       finDesde || finHasta || pubDesde || pubHasta
     );
@@ -142,12 +152,13 @@ export function crearBuscador(supabase) {
     const ordenAsc = params.ordenAsc !== undefined ? !!params.ordenAsc : true;
 
     // ======================================================================
-    // CAMINO 1 · CON TEXTO -> RPC (filtra por GIN primero; conteo exacto).
+    // CAMINO 1 · CON TEXTO  O  CON PREFIJO CPV -> RPC (filtra primero; conteo
+    // exacto sobre el subconjunto que casa).
     // ======================================================================
-    if (texto) {
-      const { data, error } = await supabase.rpc('buscar_licitaciones', {
-        p_texto: texto,
-        p_cpv: cpvs.length ? cpvs : null,
+    if (texto || cpvPrefijos.length) {
+      const rpcParams = {
+        p_texto: texto,                                 // puede ir null (solo prefijo CPV)
+        p_cpv: cpvs.length ? cpvs : null,               // CPV exacto (overlaps)
         p_fuente: fuente,
         p_importe_min: impMin,
         p_importe_max: impMax,
@@ -160,7 +171,13 @@ export function crearBuscador(supabase) {
         p_orden_asc: ordenAsc,
         p_pagina: pagina,
         p_por_pagina: porPagina,
-      });
+      };
+      // Solo enviamos p_cpv_prefijo cuando HAY prefijos: así una búsqueda de solo
+      // TEXTO sigue resolviendo contra la RPC ANTIGUA (BG-3, sin ese parámetro) si
+      // aún no se re-desplegó buscador_rpc.sql. Degradación segura: lo único que
+      // exige la RPC nueva es el propio filtro CPV por prefijo.
+      if (cpvPrefijos.length) rpcParams.p_cpv_prefijo = cpvPrefijos;
+      const { data, error } = await supabase.rpc('buscar_licitaciones', rpcParams);
       if (error) return fallo(error);
       return {
         filas: (data && data.filas) ?? [],
@@ -179,7 +196,7 @@ export function crearBuscador(supabase) {
     const ahora = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 
     const aplicarFiltros = (q) => {
-      if (cpvs.length) q = q.overlaps('cpv', cpvs); // OR; código COMPLETO (prefijo = iteración futura)
+      if (cpvs.length) q = q.overlaps('cpv', cpvs); // OR; código COMPLETO (el prefijo va por la RPC, ver arriba)
       if (fuente) q = q.eq('fuente', fuente);
       if (impMin !== null) q = q.gte('valor_estimado', impMin);
       if (impMax !== null) q = q.lte('valor_estimado', impMax);
