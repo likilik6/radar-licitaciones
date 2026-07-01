@@ -72,6 +72,17 @@ language plpgsql
 stable
 security invoker
 set search_path = extensions, public, pg_catalog
+-- GUCs a nivel de FUNCIÓN (NO en el cuerpo: `SET` dentro del cuerpo está prohibido
+-- en funciones no-VOLATILE -> error 0A000 con STABLE). Aquí es legal y se aplican
+-- durante toda la llamada (se guardan/restauran automáticamente):
+--   · plan_cache_mode=force_custom_plan -> pliega v_q/v_cpv_pref/params en cada
+--     llamada para que el planner elija GIN/trigram (con plan genérico + los OR
+--     de por medio no los usaría).
+--   · enable_sort=off -> la rama AMPLIA obtiene el orden del ÍNDICE (Index Scan),
+--     no un Sort masivo. En la rama SELECTIVA el sort del subconjunto (<= tope) es
+--     un "soft disable": se hace igual (pocas filas), sin efecto práctico.
+set plan_cache_mode = 'force_custom_plan'
+set enable_sort = off
 as $$
 declare
   v_q        tsquery;
@@ -92,8 +103,8 @@ declare
   -- aproximado; además la rama SELECTIVA materializa como mucho ~5000 filas (rápido).
   v_umbral   constant integer := 5000;
 begin
-  -- Que las constantes/variables se plieguen y el planner elija GIN/trigram.
-  set local plan_cache_mode = 'force_custom_plan';
+  -- (plan_cache_mode y enable_sort se fijan en la cláusula SET de la función, no
+  --  aquí: SET en el cuerpo daría 0A000 al ser la función STABLE.)
 
   -- Prefijos CPV -> patrones "CONTIENE '<espacio><prefijo>'" (trigram-friendly).
   -- cpv_texto(cpv) antepone un espacio a cada código, así '% 9073%' casa cualquier
@@ -214,12 +225,11 @@ begin
   else
     -- =================================================================
     -- AMPLIO (> tope): sin materializar. Página por INDEX SCAN del índice de
-    -- ORDEN (enable_sort=off obliga a obtener el orden del índice, no un Sort
-    -- masivo) filtrando al vuelo. Denso -> las primeras 25 salen enseguida.
-    -- Orden por columna+dirección CONCRETAS (v_campo/v_dir vienen de listas
-    -- blancas) para que case EXACTAMENTE con un índice compuesto.
+    -- ORDEN (enable_sort=off, fijado a nivel de función, obliga a obtener el orden
+    -- del índice y no un Sort masivo) filtrando al vuelo. Denso -> las primeras 25
+    -- salen enseguida. Orden por columna+dirección CONCRETAS (v_campo/v_dir vienen
+    -- de listas blancas) para que case EXACTAMENTE con un índice compuesto.
     -- =================================================================
-    set local enable_sort = off;
     v_ord := v_campo || ' ' || v_dir || ' nulls last, licitacion_id asc';
     v_sql :=
          'select coalesce(json_agg(row_to_json(x) order by ' || v_ord || '), ''[]''::json) '
