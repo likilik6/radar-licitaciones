@@ -522,6 +522,12 @@ CSS = """
   #bg-resultados .card.urg-roja  { border-color:#fca5a5; background:rgba(185,28,28,.06); }
   #bg-resultados .card.urg-ambar { border-color:#fcd34d; background:rgba(180,83,9,.06); }
   #bg-resultados .card.urg-verde { border-color:#86efac; background:rgba(21,128,61,.05); }
+  /* BG-5: estrella «En observación» en los resultados del buscador (arriba a la derecha). */
+  .bg-card .bg-card-ctrl { justify-content:flex-end; margin-bottom:2px; }
+  /* BG-5: tarjeta de CATÁLOGO hidratada en 'En observación' (origen buscador). */
+  .tag.cat-catalogo { background:#e0f2fe; color:#075985; }
+  .cat-org { font-size:.82rem; color:var(--suave); margin:2px 0 8px; word-break:break-word; }
+  .cat-hueco { font-size:.85rem; color:var(--suave); margin:6px 0; }
   .bg-pag { display:flex; align-items:center; justify-content:center; gap:14px; margin:20px 0 8px; }
   .bg-pag-btn { font:inherit; font-size:.86rem; font-weight:600; cursor:pointer; padding:8px 14px; border-radius:8px; border:1px solid var(--borde); background:var(--panel); color:var(--texto); }
   .bg-pag-btn:hover:not(:disabled) { border-color:var(--acento); color:var(--acento-2); }
@@ -693,6 +699,13 @@ JS_SUPABASE = """
     // Guardamos el estado PÚBLICO base, para restaurarlo al cerrar sesión.
     card.dataset.estadoBase = card.dataset.estado;
   });
+  // IDs de las tarjetas NATIVAS del Radar (las horneadas desde data/licitaciones.json).
+  // Se captura ANTES de cualquier hidratación (BG-5): sirve para saber qué favoritas
+  // del buscador NO están en el JSON y hay que traerlas del catálogo.
+  const idsRadarJSON = new Set(tarjetasPorId.keys());
+  // Tarjetas HIDRATADAS del catálogo (BG-5): licitacion_id -> card. Son las favoritas
+  // que vienen del buscador (no están en el JSON) y solo se muestran en 'En observación'.
+  const catalogoInyectado = new Map();
 
   // --- Pintado de lo PRIVADO sobre una tarjeta (idempotente) ---------------
   // Estas dos funciones son la ÚNICA lógica de pintado: las usan tanto la carga
@@ -738,6 +751,7 @@ JS_SUPABASE = """
 
   // Devuelve cada tarjeta a su estado público base y vacía el Map (al cerrar sesión).
   function limpiarPrivado() {
+    limpiarCatalogoInyectado();   // BG-5: quita del DOM las tarjetas hidratadas del catálogo
     tarjetasPorId.forEach(function (card) {
       pintaEstado(card, null);
       pintaFavorita(card, false);
@@ -794,6 +808,12 @@ JS_SUPABASE = """
   };
   // ¿La tarjeta pertenece a una pestaña? data-estado es el estado EFECTIVO.
   function perteneceAPestana(card, pestana) {
+    // Tarjetas HIDRATADAS del catálogo (buscador): aparecen SOLO en 'En observación'
+    // y solo mientras sigan marcadas. NO se propagan a las pestañas por estado ni a
+    // 'Todas' (esas siguen leyendo únicamente el JSON del Radar). BG-5, límite de alcance.
+    if (card.dataset.origen === 'catalogo') {
+      return pestana === 'favoritas' && card.dataset.favorita === 'true';
+    }
     if (pestana === 'todas') return true;
     if (pestana === 'favoritas') return card.dataset.favorita === 'true';  // sin importar estado
     return card.dataset.estado === ESTADO_DE_PESTANA[pestana];
@@ -873,8 +893,13 @@ JS_SUPABASE = """
   // Muestra/oculta cada tarjeta según pestaña Y categoría Y CPV Y caducadas Y config.
   function aplicarFiltro() {
     cards().forEach(function (c) {
-      const visible = perteneceAPestana(c, pestanaActiva) && categoriaVisible(c)
-                      && cpvVisible(c) && caducadasVisible(c) && configVisible(c);
+      // Las hidratadas del catálogo (BG-5) solo obedecen a la pestaña ('En observación'):
+      // NO se les aplican los filtros de vista del Radar (categoría/CPV/caducadas/config),
+      // para que 'En observación' muestre SIEMPRE todas las marcadas.
+      const visible = (c.dataset.origen === 'catalogo')
+        ? perteneceAPestana(c, pestanaActiva)
+        : perteneceAPestana(c, pestanaActiva) && categoriaVisible(c)
+          && cpvVisible(c) && caducadasVisible(c) && configVisible(c);
       c.classList.toggle('oculta-filtro', !visible);
     });
   }
@@ -975,6 +1000,238 @@ JS_SUPABASE = """
     });
   }
 
+  // ====== BG-5 · 'En observación': núcleo de escritura + hidratación catálogo ===
+  // Núcleo ÚNICO de escritura de una decisión (estado + estrella) en 'decisiones'
+  // por licitacion_id. Lo usan IGUAL el Radar y el buscador (mismo mecanismo, no
+  // uno nuevo): sin marca (ni estado ni favorita) -> borra la fila; si no -> upsert
+  // del objeto COMPLETO con onConflict. Mantiene el espejo decisionesPorId. NO pinta
+  // (eso lo hace quien llama, sobre su propio DOM). Lanza si Supabase da error.
+  async function persistirDecision(id, estado, favorita) {
+    estado = estado || null;
+    favorita = favorita === true;
+    if (estado === null && favorita === false) {
+      const { error } = await supabase.from('decisiones').delete().eq('licitacion_id', id);
+      if (error) throw error;
+      decisionesPorId.delete(id);
+    } else {
+      const fila = { licitacion_id: id, estado: estado, favorita: favorita, updated_at: new Date().toISOString() };
+      const { error } = await supabase.from('decisiones').upsert(fila, { onConflict: 'licitacion_id' });
+      if (error) throw error;
+      decisionesPorId.set(id, { estado: estado, favorita: favorita });
+    }
+  }
+
+  // Columnas del catálogo (public.licitaciones) para hidratar una tarjeta. Sin tsv.
+  const COLS_CATALOGO = 'licitacion_id,titulo,objeto,organo_contratacion,cpv,fuente,'
+    + 'presupuesto_con_iva,presupuesto_sin_iva,valor_estimado,fecha_publicacion,fecha_fin_plazo,enlace';
+
+  // Controles (estrella + estado + Detalles) IGUALES que los del Radar (CONTROLES_CARD
+  // de Python), para el PUENTE COMPLETO: los listeners delegados del grid ya los atienden.
+  const CONTROLES_CARD_JS =
+      '<div class="card-ctrl">'
+    + '<button type="button" class="ctrl-estrella" aria-pressed="false" aria-label="En observación" title="Poner o quitar de «En observación»">☆</button>'
+    + '<span class="ctrl-cap">Estado</span>'
+    + '<select class="ctrl-estado" aria-label="Estado manual">'
+    + '<option value="activa">Activa</option><option value="presentada">Presentada</option>'
+    + '<option value="ganada">Ganada</option><option value="perdida">Perdida</option>'
+    + '<option value="descartada">Descartada</option></select>'
+    + '<button type="button" class="ctrl-detalles" aria-label="Detalles del contrato" title="Detalles del contrato">Detalles</button>'
+    + '<span class="card-aviso" hidden></span></div>';
+
+  // Escapa texto para HTML/atributos (incluye comillas dobles).
+  function catEsc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  // El catálogo guarda las fechas como timestamptz (con hora/zona); nos quedamos con
+  // la parte de fecha (YYYY-MM-DD) para que la lógica de días/orden del Radar (que
+  // hace new Date(iso + 'T00:00:00')) funcione igual que con las del JSON.
+  function catFechaSolo(v) {
+    const s = String(v == null ? '' : v);
+    return (s.length >= 10 && s.charAt(4) === '-' && s.charAt(7) === '-') ? s.slice(0, 10) : '';
+  }
+  function catFecha(iso) {
+    const s = catFechaSolo(iso);
+    if (!s) return '—';
+    const d = new Date(s + 'T00:00:00');
+    return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-ES');
+  }
+  // Semáforo por días restantes, igual que clasifica_urgencia() de Python.
+  function catUrg(dias) {
+    if (dias === null || isNaN(dias) || dias < 0) return '';
+    if (dias < 3) return 'roja';
+    if (dias < 7) return 'ambar';
+    return 'verde';
+  }
+  function catChipsCpv(cpv) {
+    const lista = Array.isArray(cpv) ? cpv.filter(Boolean) : [];
+    if (!lista.length) return '—';
+    const TOPE = 6;
+    const vis = lista.slice(0, TOPE), extra = lista.slice(TOPE);
+    let h = vis.map(function (c) { return '<code>' + catEsc(c) + '</code>'; }).join(' ');
+    if (extra.length) {
+      const mas = 'y ' + extra.length + ' más';
+      h += ' <span class="cpv-extra" hidden>'
+        + extra.map(function (c) { return '<code>' + catEsc(c) + '</code>'; }).join(' ')
+        + '</span><button type="button" class="cpv-mas" aria-expanded="false" data-abrir="'
+        + mas + '" data-cerrar="ocultar">' + mas + '</button>';
+    }
+    return h;
+  }
+
+  // HTML de una tarjeta de CATÁLOGO (origen buscador). Tarjeta NEUTRA (el catálogo no
+  // tiene 'categoria' del Radar) + badge de 'fuente'. Mismos data-* y controles que
+  // una tarjeta del Radar para que el semáforo/orden/estado/Detalles funcionen igual.
+  function construyeTarjetaCatalogo(fila) {
+    const id = fila.licitacion_id;
+    const finSolo = catFechaSolo(fila.fecha_fin_plazo);
+    const pubSolo = catFechaSolo(fila.fecha_publicacion);
+    const dias = finSolo ? diasHasta(finSolo) : NaN;
+    const urg = catUrg(dias);
+    // Estado PÚBLICO por fecha, calculado en render (nunca estático), como el Radar.
+    const estado = (finSolo && !isNaN(dias) && dias < 0) ? 'caducada' : 'activa';
+    let coletilla = '';
+    if (finSolo && !isNaN(dias)) {
+      if (dias > 0) coletilla = ' · <span class="quedan urg-tx-' + urg + '">' + (dias === 1 ? 'queda 1 día' : 'quedan ' + dias + ' días') + '</span>';
+      else if (dias === 0) coletilla = ' · <span class="vence-hoy urg-tx-roja">vence hoy</span>';
+      else coletilla = ' <span class="cerrado">· cerrado</span>';
+    }
+    const titulo = catEsc(fila.titulo || '(sin título)');
+    const enlace = fila.enlace ? catEsc(fila.enlace) : '';
+    const tituloHtml = enlace ? '<a href="' + enlace + '" target="_blank" rel="noopener">' + titulo + '</a>' : titulo;
+    const fuente = fila.fuente ? catEsc(fila.fuente) : '';
+    const org = fila.organo_contratacion ? '<div class="cat-org">' + catEsc(fila.organo_contratacion) + '</div>' : '';
+    const cpvArr = Array.isArray(fila.cpv) ? fila.cpv : [];
+    const importe = (fila.presupuesto_con_iva != null) ? String(fila.presupuesto_con_iva) : '';
+    const datos = '<div class="datos">'
+      + '<div class="dato"><span class="et-dato">Presupuesto (con IVA)</span><span class="val-dato">' + fmtEur(fila.presupuesto_con_iva) + '</span></div>'
+      + '<div class="dato"><span class="et-dato">Presupuesto (sin IVA)</span><span class="val-dato">' + fmtEur(fila.presupuesto_sin_iva) + '</span></div>'
+      + '<div class="dato"><span class="et-dato">Valor estimado</span><span class="val-dato">' + fmtEur(fila.valor_estimado) + '</span></div>'
+      + '<div class="dato"><span class="et-dato">Fin de plazo</span><span class="val-dato">' + catFecha(finSolo) + coletilla + '</span></div>'
+      + '<div class="dato"><span class="et-dato">Publicado</span><span class="val-dato">' + catFecha(pubSolo) + '</span></div>'
+      + '</div>';
+    return '<article class="card' + (urg ? ' urg-' + urg : '') + '"'
+      + ' data-importe="' + importe + '" data-fin-plazo="' + finSolo + '"'
+      + ' data-fecha-pub="' + pubSolo + '" data-fecha-subida=""'
+      + ' data-cpv="' + catEsc(cpvArr.join(' ')) + '"'
+      + ' data-plataforma="" data-region="" data-fuente="' + (fuente || 'estatal') + '"'
+      + ' data-titulo="' + titulo + '" data-licitacion-id="' + catEsc(id) + '"'
+      + ' data-estado="' + estado + '" data-favorita="false" data-origen="catalogo">'
+      + CONTROLES_CARD_JS
+      + '<h2 class="card-title">' + tituloHtml + '</h2>'
+      + org
+      + '<div class="tags"><span class="tag cat cat-catalogo">catálogo' + (fuente ? ' · ' + fuente : '') + '</span></div>'
+      + '<div class="cpv"><span class="et">CPV</span> ' + catChipsCpv(cpvArr) + '</div>'
+      + datos + '</article>';
+  }
+
+  // Tarjeta MÍNIMA para una marcada que el catálogo no devuelve (purgada/ausente): no
+  // rompemos la pestaña; mantenemos la estrella para poder quitarla de 'En observación'.
+  function construyeTarjetaCatalogoMinima(id) {
+    const idEsc = catEsc(id);
+    return '<article class="card" data-importe="" data-fin-plazo="" data-fecha-pub=""'
+      + ' data-fecha-subida="" data-cpv="" data-plataforma="" data-region="" data-fuente=""'
+      + ' data-titulo="' + idEsc + '" data-licitacion-id="' + idEsc + '"'
+      + ' data-estado="activa" data-favorita="false" data-origen="catalogo">'
+      + CONTROLES_CARD_JS
+      + '<h2 class="card-title">Licitación fuera del catálogo</h2>'
+      + '<div class="tags"><span class="tag cat cat-catalogo">catálogo</span></div>'
+      + '<p class="cat-hueco">No se encontró en el catálogo (pudo purgarse). Puedes quitarla de «En observación» con la estrella.</p>'
+      + '<div class="cat-org">' + idEsc + '</div></article>';
+  }
+
+  // Inserta una tarjeta de catálogo en el grid del Radar (si no existe ya y no es una
+  // nativa del JSON: en ese caso GANA el JSON). La registra en tarjetasPorId para que
+  // los listeners delegados (estado/estrella/Detalles) del grid la atiendan.
+  function _insertarCatalogo(id, htmlStr) {
+    if (idsRadarJSON.has(id) || !grid) return null;   // el JSON gana: no duplicar
+    let card = catalogoInyectado.get(id);
+    if (!card) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = htmlStr;
+      card = tmp.firstElementChild;
+      if (!card) return null;
+      // Estado PÚBLICO base (por fecha), para que pintaEstado() lo restaure al quitar
+      // el estado manual (igual que las nativas del Radar).
+      card.dataset.estadoBase = card.dataset.estado;
+      grid.appendChild(card);
+      catalogoInyectado.set(id, card);
+      tarjetasPorId.set(id, card);
+    }
+    return card;
+  }
+  function _pintarCatalogo(card, id) {
+    if (!card) return;
+    const dec = decisionesPorId.get(id) || { estado: null, favorita: true };
+    pintaEstado(card, dec.estado);
+    pintaFavorita(card, dec.favorita === true);
+  }
+  function inyectarCatalogo(fila) {
+    const id = fila && fila.licitacion_id;
+    if (!id) return null;
+    const card = _insertarCatalogo(id, construyeTarjetaCatalogo(fila));
+    _pintarCatalogo(card, id);
+    return card;
+  }
+  function inyectarCatalogoMinimo(id) {
+    const card = _insertarCatalogo(id, construyeTarjetaCatalogoMinima(id));
+    _pintarCatalogo(card, id);
+    return card;
+  }
+  function quitarCatalogo(id) {
+    const card = catalogoInyectado.get(id);
+    if (card) { card.remove(); catalogoInyectado.delete(id); tarjetasPorId.delete(id); }
+  }
+  function limpiarCatalogoInyectado() {
+    catalogoInyectado.forEach(function (card, id) { card.remove(); tarjetasPorId.delete(id); });
+    catalogoInyectado.clear();
+  }
+
+  // Trae del catálogo las marcadas (favorita) que NO están en el JSON del Radar y las
+  // inyecta en 'En observación'. Un solo select(...).in(...) por PK (sin RPC). Las que
+  // el catálogo no devuelva (purgadas) salen como tarjeta mínima. Termina con refrescarTodo.
+  async function hidratarObservacion() {
+    const faltantes = [];
+    decisionesPorId.forEach(function (d, id) {
+      if (d && d.favorita === true && !idsRadarJSON.has(id)) faltantes.push(id);
+    });
+    // Quita hidratadas obsoletas (ya no marcadas).
+    const objetivo = new Set(faltantes);
+    Array.from(catalogoInyectado.keys()).forEach(function (id) { if (!objetivo.has(id)) quitarCatalogo(id); });
+    if (!faltantes.length) { refrescarTodo(); return; }
+    let filas = [];
+    try {
+      const { data, error } = await supabase.from('licitaciones').select(COLS_CATALOGO).in('licitacion_id', faltantes);
+      if (error) throw error;
+      filas = data || [];
+    } catch (err) {
+      console.error('Error hidratando «En observación» desde el catálogo:', err.message || err);
+      faltantes.forEach(function (id) { inyectarCatalogoMinimo(id); });   // no rompemos la pestaña
+      refrescarTodo();
+      return;
+    }
+    const encontrados = new Set();
+    filas.forEach(function (fila) { encontrados.add(fila.licitacion_id); inyectarCatalogo(fila); });
+    faltantes.forEach(function (id) { if (!encontrados.has(id)) inyectarCatalogoMinimo(id); });
+    refrescarTodo();
+  }
+
+  // Tras marcar/quitar la estrella desde el BUSCADOR: refleja el cambio en 'En
+  // observación' al instante. Si es nativa del Radar, repinta su gemela; si viene del
+  // catálogo, la inyecta (al marcar) o la quita (al desmarcar). 'fila' = fila que el
+  // buscador ya tiene a mano (evita una consulta extra).
+  function sincronizarObservacionTrasFav(id, fila, favorita) {
+    if (idsRadarJSON.has(id)) {
+      const c = tarjetasPorId.get(id);
+      if (c) pintaFavorita(c, favorita === true);
+    } else if (favorita === true) {
+      if (fila) inyectarCatalogo(fila); else inyectarCatalogoMinimo(id);
+    } else {
+      quitarCatalogo(id);
+    }
+    refrescarTodo();
+  }
+
   // --- Leer la tabla 'decisiones', rellenar el Map y pintar (SOLO con sesión) -
   async function cargarDecisiones(session) {
     if (!session) return;                  // el rol anónimo no debe consultar
@@ -990,6 +1247,9 @@ JS_SUPABASE = """
       pintaFavorita(card, dec.favorita);
     });
     refrescarTodo();   // ya con data-estado/favorita reales: filtra, ordena y cuenta
+    // BG-5: hidrata en 'En observación' las marcadas del buscador que NO están en el
+    // JSON (trae del catálogo por PK). Async, sin bloquear: las nativas ya se ven.
+    hidratarObservacion();
   }
 
   // --- Guardar un cambio en Supabase y, si confirma, reflejarlo ------------
@@ -1001,26 +1261,14 @@ JS_SUPABASE = """
     const actual = decisionesPorId.get(id) || { estado: null, favorita: false };
     const estado = ('estado' in cambios) ? (cambios.estado || null) : (actual.estado || null);
     const favorita = ('favorita' in cambios) ? (cambios.favorita === true) : (actual.favorita === true);
-    const sinMarca = (estado === null && favorita === false);
-
     const sel = card.querySelector('.ctrl-estado');
     const btn = card.querySelector('.ctrl-estrella');
     if (sel) sel.disabled = true;          // bloqueamos mientras escribimos
     if (btn) btn.disabled = true;
     ocultarAviso(card);
     try {
-      if (sinMarca) {
-        // Sin estado ni favorita: la fila no debe existir -> delete + fuera del Map.
-        const { error } = await supabase.from('decisiones').delete().eq('licitacion_id', id);
-        if (error) throw error;
-        decisionesPorId.delete(id);
-      } else {
-        // Objeto COMPLETO; upsert con conflicto en licitacion_id (no pierde campos).
-        const fila = { licitacion_id: id, estado: estado, favorita: favorita, updated_at: new Date().toISOString() };
-        const { error } = await supabase.from('decisiones').upsert(fila, { onConflict: 'licitacion_id' });
-        if (error) throw error;
-        decisionesPorId.set(id, { estado: estado, favorita: favorita });
-      }
+      // Escritura por el núcleo compartido (mismo mecanismo que usa el buscador).
+      await persistirDecision(id, estado, favorita);
       // Confirmado por Supabase: AHORA sí reflejamos en la tarjeta (Fase 3 pintado).
       pintaEstado(card, estado);
       pintaFavorita(card, favorita);
@@ -1444,7 +1692,9 @@ JS_SUPABASE = """
   // públicos): título = data-titulo; fin de presentación = data-fin-plazo
   // (fecha_fin_plazo, el EndDate del CODICE). No hay campo "órgano" en los datos.
   function licitacionesRadar() {
-    return Array.from(document.querySelectorAll('.card[data-licitacion-id]')).map(function (card) {
+    // Excluimos las hidratadas del catálogo (BG-5): el Calendario del Radar sigue
+    // siendo solo del JSON; las de origen buscador viven únicamente en 'En observación'.
+    return Array.from(document.querySelectorAll('.card[data-licitacion-id]:not([data-origen="catalogo"])')).map(function (card) {
       return { titulo: card.dataset.titulo || '', finPresentacion: card.dataset.finPlazo || '', id: card.dataset.licitacionId };
     });
   }
@@ -2015,6 +2265,9 @@ JS_BUSCADOR_UI = """
   let bgPagina = 1;
   let bgYaBuscado = false;
   let bgCargando = false;
+  // BG-5: filas de la página actual por licitacion_id, para que el toggle de la
+  // estrella tenga a mano la fila del catálogo (evita re-consultar al hidratar).
+  const bgFilasPorId = new Map();
 
   // Estado de filtros: FUENTE DE VERDAD. Los pills / inputs / chips lo reflejan;
   // bgParams() lo traduce a los params de buscar(). '' = sin filtro (Auto/Todas).
@@ -2063,7 +2316,17 @@ JS_BUSCADOR_UI = """
     const fuente = f.fuente ? '<span class="bg-fuente">' + bgEscape(f.fuente) + '</span>' : '';
     const valor = (f.valor_estimado != null) ? '<span class="bg-valor">' + fmtEur(f.valor_estimado) + '</span>' : '';
     const sep = (fuente && valor) ? ' · ' : '';
-    return '<article class="card bg-card' + (urg ? ' urg-' + urg : '') + '">'
+    // BG-5: estrella «En observación» en cada resultado. Escribe en 'decisiones' por
+    // licitacion_id con el MISMO mecanismo del Radar (persistirDecision, módulo). El
+    // estado inicial de la estrella se lee del espejo decisionesPorId ya cargado.
+    const id = f.licitacion_id || '';
+    const marcada = !!((decisionesPorId.get(id) || {}).favorita);
+    const estrella = '<div class="card-ctrl bg-card-ctrl">'
+      + '<button type="button" class="ctrl-estrella' + (marcada ? ' marcada' : '') + '"'
+      + ' aria-pressed="' + (marcada ? 'true' : 'false') + '" aria-label="En observación"'
+      + ' title="Poner o quitar de «En observación»">' + (marcada ? '★' : '☆') + '</button></div>';
+    return '<article class="card bg-card' + (urg ? ' urg-' + urg : '') + '" data-licitacion-id="' + bgEscape(id) + '">'
+      + estrella
       + '<h2 class="card-title">' + tituloHtml + '</h2>'
       + org
       + '<div class="bg-meta">' + fuente + sep + valor + '</div>'
@@ -2187,6 +2450,7 @@ JS_BUSCADOR_UI = """
       return;
     }
     const filas = r.filas || [];
+    bgFilasPorId.clear();
     if(!filas.length){
       if(bgRes) bgRes.innerHTML = '';
       if(bgMsg){ bgMsg.hidden = false; bgMsg.textContent = 'Sin resultados. Prueba con otros términos o filtros.'; }
@@ -2194,6 +2458,7 @@ JS_BUSCADOR_UI = """
       if(bgPag) bgPag.hidden = true;
       return;
     }
+    filas.forEach(function(f){ if(f && f.licitacion_id) bgFilasPorId.set(f.licitacion_id, f); });
     if(bgMsg) bgMsg.hidden = true;
     if(bgRes) bgRes.innerHTML = filas.map(bgTarjeta).join('');
     const ini = (r.pagina - 1) * r.porPagina + 1;
@@ -2277,6 +2542,32 @@ JS_BUSCADOR_UI = """
     if(extra) extra.hidden = abierto;
     btn.setAttribute('aria-expanded', abierto ? 'false' : 'true');
     btn.textContent = abierto ? btn.dataset.abrir : btn.dataset.cerrar;
+  });
+
+  // BG-5: estrella «En observación» de cada resultado (delegado). Escribe en
+  // 'decisiones' con el MISMO núcleo del Radar (persistirDecision) y refleja el
+  // cambio en la pestaña 'En observación' al instante (sincronizarObservacionTrasFav).
+  async function bgToggleObservacion(card){
+    if(!sesionActiva || !card) return;
+    const id = card.getAttribute('data-licitacion-id'); if(!id) return;
+    const actual = decisionesPorId.get(id) || { estado:null, favorita:false };
+    const nuevaFav = !(actual.favorita === true);
+    const btn = card.querySelector('.ctrl-estrella');
+    if(btn) btn.disabled = true;
+    try{
+      await persistirDecision(id, actual.estado || null, nuevaFav);
+      pintaFavorita(card, nuevaFav);   // pinta la estrella del propio resultado
+      sincronizarObservacionTrasFav(id, bgFilasPorId.get(id) || null, nuevaFav);
+    }catch(err){
+      console.error('Error guardando «En observación» (buscador):', err.message || err);
+      pintaFavorita(card, actual.favorita === true);   // no mentir: revertir visual
+    }finally{
+      if(btn) btn.disabled = false;
+    }
+  }
+  if(bgRes) bgRes.addEventListener('click', function(e){
+    const btn = e.target.closest('.ctrl-estrella'); if(!btn) return;
+    const card = btn.closest('.card'); if(card) bgToggleObservacion(card);
   });
 
   function bgActualizarGate(){
@@ -2405,7 +2696,7 @@ def calcular_estado(fecha_fin, ahora):
 # sigue su estado público por fecha, que puede ser caducada). "Detalles" abre el panel
 # del contrato (tabla 'contratos'), privado igual que las decisiones.
 CONTROLES_CARD = """<div class="card-ctrl">
-        <button type="button" class="ctrl-estrella" aria-pressed="false" aria-label="Favorita" title="Marcar como favorita">☆</button>
+        <button type="button" class="ctrl-estrella" aria-pressed="false" aria-label="En observación" title="Poner o quitar de «En observación»">☆</button>
         <span class="ctrl-cap">Estado</span>
         <select class="ctrl-estado" aria-label="Estado manual">
           <option value="activa">Activa</option>
@@ -2535,7 +2826,7 @@ AJUSTES_MODAL = """  <div class="modal-fondo" id="ajustes-modal" hidden>
         <label class="aj-linea"><input type="checkbox" id="aj-ocultar-caducadas"> Ocultar caducadas por defecto</label>
         <label class="aj-linea">Pestaña inicial
           <select id="aj-pestana">
-            <option value="favoritas">Favoritas</option><option value="activas">Activas</option>
+            <option value="favoritas">En observación</option><option value="activas">Activas</option>
             <option value="presentadas">Presentadas</option><option value="ganadas">Ganadas</option>
             <option value="perdidas">Perdidas</option><option value="descartadas">Descartadas</option>
             <option value="caducadas">Caducadas</option><option value="todas">Todas</option>
@@ -2793,7 +3084,10 @@ DATOS_CONFIG_JS = (
 # el JS). Orden fijo y etiqueta; la pestaña activa por defecto es "Activas". El
 # contador (N) de cada una lo pone el JS tras cargar las decisiones (zona privada).
 PESTANAS = [
-    ("favoritas", "Favoritas"),
+    # Etiqueta de PRESENTACIÓN "En observación"; la clave interna sigue siendo
+    # "favoritas" y el campo guardado en 'decisiones' sigue siendo 'favorita' (una
+    # sola marca = la estrella). El rename es solo capa de visualización (BG-5).
+    ("favoritas", "En observación"),
     ("activas", "Activas"),
     ("presentadas", "Presentadas"),
     ("ganadas", "Ganadas"),
