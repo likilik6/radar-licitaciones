@@ -1,52 +1,67 @@
 -- buscador_rpc.sql  ·  BG-3/BG-4: RPC de escalada de la búsqueda
 -- ============================================================================
--- BG-3 (por qué la RPC): `WHERE tsv @@ q ORDER BY fecha_fin_plazo LIMIT 25` hace
--- que el planner recorra el índice de fecha y filtre el tsv AL VUELO; con un
--- término poco frecuente escanea miles de filas por fecha antes de juntar 25
--- aciertos -> 16,9 s -> timeout 57014. El GIN(tsv) existe, pero el planner no lo
--- elige. SOLUCIÓN: CTE MATERIALIZED = barrera de optimización. Fuerza a FILTRAR
--- primero (materializa el subconjunto que casa) y SÓLO DESPUÉS ordena y pagina
--- ese subconjunto (pequeño). No se toca statement_timeout.
+-- REQUISITO: ejecutar ANTES buscador_indices.sql (crea public.cpv_texto, el
+-- índice GIN trigram y los índices de orden en los que se apoya esta RPC).
 --
--- BG-4 incremento 2 (NOVEDADES en esta RPC):
---   1) p_texto pasa a ser OPCIONAL. La RPC ya no es solo "con texto".
---   2) NUEVO p_cpv_prefijo text[]: casa por PREFIJO de CPV ("empieza por", igual
---      que el Radar con intereses.yaml). PostgREST no sabe hacer prefijo sobre un
---      text[], así que se resuelve aquí con EXISTS + LIKE ANY sobre unnest(cpv).
---      Varios prefijos = OR entre ellos.
---   La web enruta por AQUÍ cuando hay texto O cuando hay filtro CPV por prefijo
---   (con o sin texto). Las búsquedas TRIVIALES (sin texto ni prefijo) siguen por
---   PostgREST. El CPV EXACTO (p_cpv, overlaps `&&`) se mantiene tal cual.
+-- BG-3 (por qué la RPC): con un término poco frecuente, `WHERE tsv @@ q ORDER BY
+-- fecha LIMIT 25` hacía que el planner recorriese el índice de fecha filtrando el
+-- tsv al vuelo -> 16,9 s -> timeout 57014. Se resolvió filtrando por el GIN(tsv)
+-- PRIMERO y ordenando el subconjunto pequeño.
 --
--- PRIVADO: execute solo a authenticated; además la función es SECURITY INVOKER,
--- así que la RLS de la tabla sigue aplicando.
+-- BG-4 inc2 — timeout con términos/prefijos AMPLIOS ("cai", CPV "9073"/"90").
+-- Causas: (1) conteo EXACTO de cientos de miles; (2) CPV-prefijo sin índice;
+-- (3) materializar un subconjunto enorme para ordenar+limitar (trae del heap
+-- TODAS las filas que casan aunque solo se usen 25).
 --
--- CÓMO USARLO: pega TODO este archivo en el SQL Editor de Supabase y pulsa "Run".
--- OJO (BG-4): esta versión AÑADE un parámetro (p_cpv_prefijo) -> cambia la FIRMA
--- de la función; por eso se hace DROP de la firma vieja (14 args) antes de crear
--- la nueva (15 args). Es DDL LIGERO (el GIN ya existe): no debería dar "Failed to
--- fetch". Si el editor se queja, ejecuta antes: set statement_timeout='120s';
+-- BG-4 inc2 (fix rendimiento) — SOLUCIÓN (sin tocar statement_timeout):
+--   · CONTEO ACOTADO + PÁGINA EN UNA CONSULTA: se materializa el subconjunto CAP-ado
+--     a v_umbral+1 (barrera; GIN/trigram primero) y de ahí salen conteo y página. Si
+--     NO se trunca (hit<=tope) -> SELECTIVO: total EXACTO y página correcta en UN
+--     escaneo. Si se trunca (hit=tope+1) -> AMPLIO: total = tope con topado=true (la
+--     web pone "más de N") y la página se recalcula por INDEX SCAN del índice de
+--     ORDEN (enable_sort=off) filtrando al vuelo (sin materializar el conjunto enorme).
+--   · CPV-PREFIJO por índice: cpv_texto(cpv) (' '+códigos) + LIKE '% <pref>%' se
+--     apoya en el GIN trigram (ver buscador_indices.sql). Varios prefijos = OR.
+--
+-- BG-4 inc2 (fix 0A000 + REGRESIÓN de sargabilidad) — ESTA VERSIÓN:
+--   · 0A000 + plan de la SELECTIVA: la función es VOLATILE y enable_sort=off se fija
+--     con `SET LOCAL` DENTRO de la rama AMPLIA (no a nivel de función). Fijarlo a
+--     nivel de función afectaba a la SELECTIVA (CTE materializada + join): los
+--     disable_cost del Sort se propagaban y elegía un plan pésimo -> timeout. Con
+--     SET LOCAL acotado, la SELECTIVA planifica normal (Bitmap Index Scan + Sort de
+--     un subconjunto pequeño). VOLATILE permite SET en el cuerpo (STABLE daría 0A000).
+--   · SARGABILIDAD: el patrón `(v_q is null OR tsv @@ v_q)` es NO-SARGABLE -> el
+--     planner NO usa licitaciones_tsv_gin -> Seq Scan de 588k -> hasta un término
+--     SELECTIVO (climatización) hacía que el probe (limit 5001) escanease toda la
+--     tabla -> timeout. FIX: el WHERE se CONSTRUYE dinámicamente e INLINEADO con
+--     quote_literal (sin params, sin IS NULL OR): `tsv @@ '...'::tsquery` solo si
+--     hay texto y `cpv_texto(cpv) like any('...'::text[])` solo si hay prefijo.
+--     Así el predicato que dirige el índice es una constante -> Bitmap Index Scan.
+--     Las tres consultas (probe/selectiva/amplia) comparten ese WHERE.
+--
+-- Enrutado desde la web: por AQUÍ van las búsquedas con texto O con prefijo CPV.
+-- Las triviales (sin texto ni prefijo) siguen por PostgREST. El CPV EXACTO (p_cpv,
+-- overlaps `&&`) se mantiene. PRIVADO: execute solo a authenticated + SECURITY
+-- INVOKER (respeta RLS). Firma sin cambios (15 args) -> create or replace basta.
 -- ============================================================================
 
 -- (Idempotente) Asegura el GIN sobre tsv por si se corre en un entorno limpio.
 create index if not exists licitaciones_tsv_gin on public.licitaciones using gin (tsv);
 
--- BG-4: la firma cambia (nuevo p_cpv_prefijo). `create or replace` NO permite
--- añadir parámetros -> hay que dropear la firma ANTERIOR (14 args) primero. Es
--- idempotente: en re-ejecuciones no encuentra la vieja y no pasa nada.
+-- Limpia la firma vieja de BG-3 (14 args, sin p_cpv_prefijo) si aún existiera.
 drop function if exists public.buscar_licitaciones(
   text, text[], text, numeric, numeric, text,
   timestamptz, timestamptz, timestamptz, timestamptz, text, boolean, integer, integer
 );
 
 create or replace function public.buscar_licitaciones(
-  p_texto        text        default null,     -- BG-4: ahora OPCIONAL
-  p_cpv          text[]      default null,      -- CPV EXACTO (overlaps &&)
-  p_cpv_prefijo  text[]      default null,      -- BG-4: CPV por PREFIJO (empieza por)
+  p_texto        text        default null,      -- OPCIONAL (búsqueda por prefijo puede ir sin texto)
+  p_cpv          text[]      default null,       -- CPV EXACTO (overlaps &&)
+  p_cpv_prefijo  text[]      default null,       -- CPV por PREFIJO ("empieza por")
   p_fuente       text        default null,
   p_importe_min  numeric     default null,
   p_importe_max  numeric     default null,
-  p_estado       text        default 'todas',   -- 'abierta' | 'cerrada' | 'todas'
+  p_estado       text        default 'todas',    -- 'abierta' | 'cerrada' | 'todas'
   p_fin_desde    timestamptz default null,
   p_fin_hasta    timestamptz default null,
   p_pub_desde    timestamptz default null,
@@ -58,7 +73,12 @@ create or replace function public.buscar_licitaciones(
 )
 returns json
 language plpgsql
-stable
+-- VOLATILE (no STABLE): necesario para poder hacer `SET LOCAL enable_sort = off`
+-- DENTRO del cuerpo, ACOTADO a la rama AMPLIA. Fijarlo a nivel de función afectaba
+-- también a la SELECTIVA y le arruinaba el plan (los disable_cost=1e10 del Sort se
+-- propagaban -> elegía p.ej. Seq Scan de 588k en el join -> timeout). Para un RPC
+-- de solo lectura llamado una vez por request, VOLATILE no tiene coste práctico.
+volatile
 security invoker
 set search_path = extensions, public, pg_catalog
 as $$
@@ -66,30 +86,45 @@ declare
   v_q        tsquery;
   v_cpv_pref text[];
   v_campo    text;
+  v_dir      text;
+  v_ord      text;
+  v_where    text;
+  v_sql      text;
   v_limit    integer;
   v_offset   integer;
   v_total    bigint;
+  v_hit      bigint;
+  v_aprox    boolean := false;
+  v_topado   boolean := false;
   v_filas    json;
+  v_combo    json;
+  -- Columnas de salida (mismas que COLUMNAS en buscador_api.js). Sin qualificar:
+  -- resuelven contra la única tabla del FROM / el join por licitacion_id.
+  v_cols     constant text :=
+    'licitacion_id, titulo, objeto, organo_contratacion, cpv, fuente, '
+    'presupuesto_con_iva, presupuesto_sin_iva, valor_estimado, '
+    'fecha_publicacion, fecha_fin_plazo, lugar_ejecucion, ccaa, enlace';
+  -- TOPE del conteo exacto y frontera selectivo/amplio. 5000 deja el conteo EXACTO
+  -- para casi todo (climatización≈3146) y solo lo muy amplio queda aproximado;
+  -- la rama SELECTIVA materializa como mucho ~5000 filas (rápido).
+  v_umbral   constant integer := 5000;
 begin
-  -- Prefijos CPV -> patrones LIKE, escapando los metacaracteres (\ % _) para que
-  -- solo actúen como prefijo literal + '%'. Empties fuera. Varios = OR (LIKE ANY).
+  -- Prefijos CPV -> patrones "CONTIENE '<espacio><prefijo>'" (trigram-friendly).
+  -- cpv_texto(cpv) antepone un espacio a cada código, así '% 9073%' casa cualquier
+  -- código que EMPIECE por 9073. Se escapan los metacaracteres LIKE (\ % _).
   if p_cpv_prefijo is not null then
-    select array_agg(
-             replace(replace(replace(btrim(px), '\', '\\'), '%', '\%'), '_', '\_') || '%'
-           )
+    select array_agg('% ' || replace(replace(replace(btrim(px), '\', '\\'), '%', '\%'), '_', '\_') || '%')
       into v_cpv_pref
       from unnest(p_cpv_prefijo) px
      where btrim(px) <> '';
   end if;
 
-  -- Texto (opcional). websearch + unaccent: el tsv se guardó como
-  -- to_tsvector('spanish', unaccent(..)); aplicamos unaccent aquí también.
+  -- Texto (opcional). unaccent para casar tildes (el tsv se guardó con unaccent).
   if p_texto is not null and btrim(p_texto) <> '' then
     v_q := websearch_to_tsquery('spanish', unaccent(p_texto));
   end if;
 
-  -- Esta RPC es para búsquedas CON texto O CON prefijo CPV. Las triviales (sin
-  -- ninguno de los dos) van por PostgREST; si llegan aquí es un bug de enrutado.
+  -- Solo con texto O con prefijo. Las triviales van por PostgREST.
   if v_q is null and v_cpv_pref is null then
     raise exception 'buscar_licitaciones: requiere p_texto o p_cpv_prefijo (las busquedas triviales van por PostgREST).';
   end if;
@@ -97,78 +132,113 @@ begin
   v_limit  := greatest(1, coalesce(p_por_pagina, 25));
   v_offset := greatest(0, (greatest(1, coalesce(p_pagina, 1)) - 1) * v_limit);
   v_campo  := case when p_orden_campo in ('fecha_fin_plazo','valor_estimado','fecha_publicacion')
-                   then p_orden_campo else 'fecha_fin_plazo' end;
+                   then p_orden_campo else 'fecha_fin_plazo' end;   -- lista blanca
+  v_dir    := case when p_orden_asc then 'asc' else 'desc' end;     -- lista blanca
+  v_ord    := v_campo || ' ' || v_dir || ' nulls last, licitacion_id asc';
 
-  with filtrado as materialized (
-    -- Solo id + claves de orden: materializar es barato aunque el match sea amplio.
-    -- Con texto, el GIN(tsv) filtra primero; sin texto manda el prefijo CPV.
-    select licitacion_id, fecha_fin_plazo, valor_estimado, fecha_publicacion
-    from public.licitaciones
-    where (v_q is null or tsv @@ v_q)                           -- <- GIN si hay texto
-      and (p_cpv is null or array_length(p_cpv, 1) is null or cpv && p_cpv)
-      and (v_cpv_pref is null
-           or exists (select 1 from unnest(cpv) c where c like any (v_cpv_pref)))
-      and (p_fuente is null or fuente = p_fuente)
-      and (p_importe_min is null or valor_estimado >= p_importe_min)
-      and (p_importe_max is null or valor_estimado <= p_importe_max)
-      and (p_fin_desde  is null or fecha_fin_plazo  >= p_fin_desde)
-      and (p_fin_hasta  is null or fecha_fin_plazo  <= p_fin_hasta)
-      and (p_pub_desde  is null or fecha_publicacion >= p_pub_desde)
-      and (p_pub_hasta  is null or fecha_publicacion <= p_pub_hasta)
-      and (
-            p_estado = 'todas'
-        or (p_estado = 'abierta' and (fecha_fin_plazo >= now() or fecha_fin_plazo is null))
-        or (p_estado = 'cerrada' and fecha_fin_plazo < now())
-      )
-  ),
-  pagina as (
-    -- Elige QUÉ 25 filas (orden dinámico por CASE; el desempate va por la PK).
-    select licitacion_id
-    from filtrado
-    order by
-      case when v_campo='fecha_fin_plazo'   and p_orden_asc     then fecha_fin_plazo   end asc  nulls last,
-      case when v_campo='fecha_fin_plazo'   and not p_orden_asc then fecha_fin_plazo   end desc nulls last,
-      case when v_campo='valor_estimado'    and p_orden_asc     then valor_estimado    end asc  nulls last,
-      case when v_campo='valor_estimado'    and not p_orden_asc then valor_estimado    end desc nulls last,
-      case when v_campo='fecha_publicacion' and p_orden_asc     then fecha_publicacion end asc  nulls last,
-      case when v_campo='fecha_publicacion' and not p_orden_asc then fecha_publicacion end desc nulls last,
-      licitacion_id asc
-    limit v_limit offset v_offset
-  )
-  select
-    (select count(*) from filtrado),
-    coalesce(
-      (select json_agg(row_to_json(x) order by
-          case when v_campo='fecha_fin_plazo'   and p_orden_asc     then x.fecha_fin_plazo   end asc  nulls last,
-          case when v_campo='fecha_fin_plazo'   and not p_orden_asc then x.fecha_fin_plazo   end desc nulls last,
-          case when v_campo='valor_estimado'    and p_orden_asc     then x.valor_estimado    end asc  nulls last,
-          case when v_campo='valor_estimado'    and not p_orden_asc then x.valor_estimado    end desc nulls last,
-          case when v_campo='fecha_publicacion' and p_orden_asc     then x.fecha_publicacion end asc  nulls last,
-          case when v_campo='fecha_publicacion' and not p_orden_asc then x.fecha_publicacion end desc nulls last,
-          x.licitacion_id asc)
-       from (
-         select li.licitacion_id, li.titulo, li.objeto, li.organo_contratacion, li.cpv, li.fuente,
-                li.presupuesto_con_iva, li.presupuesto_sin_iva, li.valor_estimado,
-                li.fecha_publicacion, li.fecha_fin_plazo, li.lugar_ejecucion, li.ccaa, li.enlace
-         from pagina pg
-         join public.licitaciones li using (licitacion_id)
-       ) x),
-      '[]'::json)
-  into v_total, v_filas;
+  -- =====================================================================
+  -- WHERE dinámico e INLINEADO (quote_literal -> seguro; SARGABLE: el predicado
+  -- que dirige el índice (tsv / cpv_texto) es una CONSTANTE, no `param IS NULL OR`).
+  -- Solo se añaden las condiciones presentes. Se comparte en las 3 consultas.
+  -- =====================================================================
+  v_where := 'true';
+  if v_q is not null then
+    v_where := v_where || ' and tsv @@ ' || quote_literal(v_q::text) || '::tsquery';
+  end if;
+  if v_cpv_pref is not null then
+    v_where := v_where || ' and public.cpv_texto(cpv) like any (' || quote_literal(v_cpv_pref::text) || '::text[])';
+  end if;
+  if p_cpv is not null and array_length(p_cpv, 1) is not null then
+    v_where := v_where || ' and cpv && ' || quote_literal(p_cpv::text) || '::text[]';
+  end if;
+  if p_fuente is not null then
+    v_where := v_where || ' and fuente = ' || quote_literal(p_fuente);
+  end if;
+  if p_importe_min is not null then
+    v_where := v_where || ' and valor_estimado >= ' || p_importe_min::text;   -- numeric: sin comillas
+  end if;
+  if p_importe_max is not null then
+    v_where := v_where || ' and valor_estimado <= ' || p_importe_max::text;
+  end if;
+  if p_fin_desde is not null then
+    v_where := v_where || ' and fecha_fin_plazo >= ' || quote_literal(p_fin_desde::text) || '::timestamptz';
+  end if;
+  if p_fin_hasta is not null then
+    v_where := v_where || ' and fecha_fin_plazo <= ' || quote_literal(p_fin_hasta::text) || '::timestamptz';
+  end if;
+  if p_pub_desde is not null then
+    v_where := v_where || ' and fecha_publicacion >= ' || quote_literal(p_pub_desde::text) || '::timestamptz';
+  end if;
+  if p_pub_hasta is not null then
+    v_where := v_where || ' and fecha_publicacion <= ' || quote_literal(p_pub_hasta::text) || '::timestamptz';
+  end if;
+  if p_estado = 'abierta' then
+    v_where := v_where || ' and (fecha_fin_plazo >= now() or fecha_fin_plazo is null)';
+  elsif p_estado = 'cerrada' then
+    v_where := v_where || ' and fecha_fin_plazo < now()';
+  end if;  -- 'todas' (o cualquier otro): sin filtro de estado
+
+  -- =====================================================================
+  -- UNA SOLA CONSULTA (conteo + página) para el caso SELECTIVO, evitando el doble
+  -- escaneo. Materializa el subconjunto CAP-ado a v_umbral+1 (barrera; filtra por
+  -- GIN/trigram PRIMERO) y de ahí saca el CONTEO ACOTADO y la PÁGINA.
+  --   · Si NO se trunca (hit <= tope): el subconjunto está COMPLETO -> conteo
+  --     EXACTO y página CORRECTA. Es la rama SELECTIVA, en UN único escaneo.
+  --   · Si se trunca (hit = tope+1): es AMPLIO -> esta página NO vale (orden sobre
+  --     un subconjunto ARBITRARIO de tope+1 filas); se recalcula por índice abajo.
+  -- Corre con enable_sort NORMAL (el SET LOCAL de la rama amplia va después): así
+  -- el Sort del subconjunto pequeño es barato y NO se distorsiona el plan.
+  -- =====================================================================
+  v_sql :=
+       'with filtrado as materialized ('
+    || ' select licitacion_id, fecha_fin_plazo, valor_estimado, fecha_publicacion'
+    || ' from public.licitaciones where ' || v_where
+    || ' limit ' || (v_umbral + 1)
+    || '), pagina as ('
+    || ' select licitacion_id from filtrado order by ' || v_ord
+    || ' limit ' || v_limit || ' offset ' || v_offset
+    || ') select json_build_object('
+    || '''hit'', (select count(*) from filtrado),'
+    || '''filas'', coalesce((select json_agg(row_to_json(x) order by ' || v_ord || ')'
+    || ' from (select ' || v_cols || ' from pagina pg join public.licitaciones li using (licitacion_id)) x), ''[]''::json))';
+  execute v_sql into v_combo;
+  v_hit := (v_combo->>'hit')::bigint;
+
+  if v_hit <= v_umbral then
+    -- SELECTIVO: subconjunto completo -> total EXACTO y la página del combo YA vale.
+    v_total := v_hit;
+    v_filas := v_combo->'filas';
+  else
+    -- =================================================================
+    -- AMPLIO (> tope): la página del combo NO vale (orden sobre subconjunto
+    -- arbitrario). Se recalcula SIN materializar: INDEX SCAN del índice de ORDEN
+    -- filtrando al vuelo (denso -> primeras 25 enseguida). v_ord = columna+dirección
+    -- concretas (listas blancas) que casan con un índice compuesto. enable_sort=off
+    -- (SET LOCAL, SOLO aquí; requiere función VOLATILE) obliga a orden por índice.
+    -- =================================================================
+    v_total  := v_umbral;   -- "más de v_umbral"
+    v_aprox  := true;
+    v_topado := true;
+    set local enable_sort = off;
+    v_sql :=
+         'select coalesce(json_agg(row_to_json(x) order by ' || v_ord || '), ''[]''::json)'
+      || ' from (select ' || v_cols || ' from public.licitaciones where ' || v_where
+      || ' order by ' || v_ord || ' limit ' || v_limit || ' offset ' || v_offset || ') x';
+    execute v_sql into v_filas;
+  end if;
 
   return json_build_object(
     'total',      v_total,
-    'filas',      v_filas,
+    'filas',      coalesce(v_filas, '[]'::json),
     'pagina',     greatest(1, coalesce(p_pagina, 1)),
     'porPagina',  v_limit,
-    'aproximado', false      -- el conteo es exacto sobre el subconjunto que casa
+    'aproximado', v_aprox,
+    'topado',     v_topado   -- true = 'total' es el TOPE; la web muestra "más de N"
   );
 end;
 $$;
 
--- PRIVADO: por defecto CREATE FUNCTION concede EXECUTE a PUBLIC; lo quitamos y
--- dejamos solo authenticated (anon no puede llamarla; además la RLS protege).
--- La firma incluye ya el nuevo p_cpv_prefijo (15 args).
+-- PRIVADO: solo authenticated (anon no; y la RLS protege por SECURITY INVOKER).
 revoke all on function public.buscar_licitaciones(
   text, text[], text[], text, numeric, numeric, text,
   timestamptz, timestamptz, timestamptz, timestamptz, text, boolean, integer, integer
@@ -178,22 +248,10 @@ grant execute on function public.buscar_licitaciones(
   timestamptz, timestamptz, timestamptz, timestamptz, text, boolean, integer, integer
 ) to authenticated;
 
--- Refresca el cache de esquema de PostgREST para que la nueva firma sea visible ya.
+-- Refresca el cache de esquema de PostgREST.
 notify pgrst, 'reload schema';
 
 -- ----------------------------------------------------------------------------
--- PRUEBA RÁPIDA (descomenta para probar en el editor):
--- select public.buscar_licitaciones(p_texto => 'climatizacion');
--- select public.buscar_licitaciones(p_cpv_prefijo => array['9073']);          -- familia 9073xxxx
--- select public.buscar_licitaciones(p_cpv_prefijo => array['90731100']);      -- código completo
--- select public.buscar_licitaciones(p_texto => 'aire', p_cpv_prefijo => array['9073'], p_importe_max => 200000);
---
--- RENDIMIENTO (BG-4): el prefijo CPV usa unnest(cpv)+LIKE, que NO aprovecha el
--- GIN(cpv) (ese índice sirve a `&&`/`@>`, no a LIKE sobre elementos). Con texto o
--- con otro filtro (fuente/importe/fechas) el subconjunto es pequeño y va sobrado.
--- Un prefijo MUY corto (p.ej. 2 dígitos) SIN ningún otro filtro obliga a recorrer
--- la tabla (~588k) con unnest+LIKE: puede ir lento. Si molesta, la salida NO es
--- subir statement_timeout, sino acotar (pedir >=4 dígitos o combinar con filtro) o,
--- si hiciera falta, un índice de expresión con pg_trgm sobre una representación
--- textual del array. De momento se deja sin índice extra (aviso a Alejandro).
+-- PRUEBAS / DIAGNÓSTICO: ver prueba_buscador.sql (EXPLAIN del probe -> debe ser
+-- Bitmap Index Scan y NO Seq Scan; y los 4 casos cai/9073/90/climatizacion).
 -- ----------------------------------------------------------------------------
