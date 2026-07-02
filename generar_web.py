@@ -241,6 +241,11 @@ CSS = """
   /* ---- Barra para ordenar las tarjetas ---- */
   .orden-barra { display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
   .orden-barra label { font-size:.85rem; color:var(--suave); font-weight:600; }
+  /* BG-5: en el subapartado 'En observación' (#vista-radar.modo-observacion) ocultamos
+     los controles PROPIOS del Radar: tablist de estados, filtro CPV y 'Ordenar por'.
+     Con clase (no atributo [hidden], que .tabs/.orden-barra {display:flex} pisaban). */
+  #vista-radar.modo-observacion #tabs,
+  #vista-radar.modo-observacion .orden-barra { display:none !important; }
   .orden-barra select {
     font:inherit; font-size:.9rem; padding:8px 12px; border-radius:9px; cursor:pointer;
     border:1px solid var(--borde); background:var(--panel); color:var(--texto);
@@ -989,6 +994,7 @@ JS_SUPABASE = """
     barraTabs.addEventListener('click', function (e) {
       const btn = e.target.closest('.tab');
       if (!btn) return;
+      if (vistaActiva === 'observacion') return;   // el tablist no gobierna 'En observación'
       seleccionarPestana(btn.dataset.pestana);
     });
   }
@@ -1627,7 +1633,6 @@ JS_SUPABASE = """
   // marcadas ('favoritas') y oculta el tablist + el filtro de CPV del Radar.
   const VISTAS  = ['radar', 'observacion', 'cartera', 'calendario', 'buscador'];
   const TITULOS = { radar: 'Radar', observacion: 'En observación', cartera: 'Cartera', calendario: 'Calendario', buscador: 'Buscador' };
-  const cpvBar  = selectCpv ? selectCpv.closest('.orden-barra') : null;   // barra "Filtrar por CPV"
   let vistaActiva = 'radar';   // vista por defecto
 
   // Ajusta el modo 'En observación' vs Radar sobre el MISMO grid: fuerza la pestaña
@@ -1650,10 +1655,11 @@ JS_SUPABASE = """
     });
     if (tituloSeccion) tituloSeccion.textContent = TITULOS[vistaActiva] || 'Radar';
     if (metaRadar) metaRadar.hidden = (vistaActiva !== 'radar');   // la meta es solo del radar
-    // Tablist + filtro de CPV: propios del Radar; ocultos en 'En observación'.
+    // Tablist + filtro CPV + 'Ordenar por' son PROPIOS del Radar: en 'En observación'
+    // los ocultamos con una clase en #vista-radar (su CSS los pone display:none). El
+    // atributo [hidden] NO valía: .tabs/.orden-barra {display:flex} lo pisaban.
     const enObs = (vistaActiva === 'observacion');
-    if (barraTabs) barraTabs.hidden = enObs;
-    if (cpvBar) cpvBar.hidden = enObs;
+    if (vistaRadar) vistaRadar.classList.toggle('modo-observacion', enObs);
     aplicarModoObservacion();
     // Al entrar con sesión, (re)cargamos la fuente correspondiente.
     if (vistaActiva === 'cartera' && sesionActiva) cargarCartera();
