@@ -139,8 +139,10 @@ order by fecha_fin_plazo asc nulls last, licitacion_id asc
 limit 25 offset 0;
 reset enable_sort;
 
--- E3) RAMA SELECTIVA (climatizacion). Espera: CTE materializada con Bitmap Index
---     Scan (licitaciones_tsv_gin) DENTRO, y luego un Sort del subconjunto + Limit.
+-- E3) RAMA SELECTIVA (climatizacion) — CON enable_sort NORMAL (como corre ahora la
+--     RPC: enable_sort=off solo se aplica, con SET LOCAL, a la rama AMPLIA). Espera:
+--     CTE materializada con Bitmap Index Scan (licitaciones_tsv_gin) DENTRO y un Sort
+--     BARATO del subconjunto (~3146) + Limit. Coste total moderado (NO 1e10).
 explain
 with filtrado as materialized (
   select licitacion_id, fecha_fin_plazo, valor_estimado, fecha_publicacion
@@ -150,6 +152,21 @@ with filtrado as materialized (
 select licitacion_id from filtrado
 order by fecha_fin_plazo asc nulls last, licitacion_id asc
 limit 25 offset 0;
+
+-- E3-mal) COMPARATIVA (diagnóstico): el MISMO plan con enable_sort=off (lo que hacía
+--     la versión anterior a nivel de función). Debe verse el Sort con coste
+--     DESORBITADO (~1e10) y/o un plan raro -> era la causa del timeout de la selectiva.
+set enable_sort = off;
+explain
+with filtrado as materialized (
+  select licitacion_id, fecha_fin_plazo, valor_estimado, fecha_publicacion
+  from public.licitaciones
+  where tsv @@ websearch_to_tsquery('spanish', unaccent('climatizacion'))
+)
+select licitacion_id from filtrado
+order by fecha_fin_plazo asc nulls last, licitacion_id asc
+limit 25 offset 0;
+reset enable_sort;
 
 -- E4) La RPC de punta a punta para los 4 casos (ya con ANALYZE = wall-clock real).
 --     No debe dar 0A000 ni timeout. climatizacion => topado=false, total exacto

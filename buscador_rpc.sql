@@ -14,18 +14,22 @@
 -- TODAS las filas que casan aunque solo se usen 25).
 --
 -- BG-4 inc2 (fix rendimiento) — SOLUCIÓN (sin tocar statement_timeout):
---   · CONTEO ACOTADO: un "probe" cuenta hasta un TOPE (v_umbral) y clasifica. Si
---     <= tope -> total EXACTO; si lo supera -> tope con topado=true (la web pone
---     "más de N"). El probe NO ordena -> barato.
---   · PLAN ADAPTATIVO: SELECTIVO(<=tope) -> CTE MATERIALIZED (GIN/trigram primero)
---     + orden del subconjunto pequeño. AMPLIO(>tope) -> sin materializar, página
---     por INDEX SCAN del índice de ORDEN (enable_sort=off) filtrando al vuelo.
+--   · CONTEO ACOTADO + PÁGINA EN UNA CONSULTA: se materializa el subconjunto CAP-ado
+--     a v_umbral+1 (barrera; GIN/trigram primero) y de ahí salen conteo y página. Si
+--     NO se trunca (hit<=tope) -> SELECTIVO: total EXACTO y página correcta en UN
+--     escaneo. Si se trunca (hit=tope+1) -> AMPLIO: total = tope con topado=true (la
+--     web pone "más de N") y la página se recalcula por INDEX SCAN del índice de
+--     ORDEN (enable_sort=off) filtrando al vuelo (sin materializar el conjunto enorme).
 --   · CPV-PREFIJO por índice: cpv_texto(cpv) (' '+códigos) + LIKE '% <pref>%' se
 --     apoya en el GIN trigram (ver buscador_indices.sql). Varios prefijos = OR.
 --
 -- BG-4 inc2 (fix 0A000 + REGRESIÓN de sargabilidad) — ESTA VERSIÓN:
---   · 0A000: los GUC (enable_sort) van en la cláusula SET de la función, NO en el
---     cuerpo (SET en el cuerpo está prohibido en funciones STABLE).
+--   · 0A000 + plan de la SELECTIVA: la función es VOLATILE y enable_sort=off se fija
+--     con `SET LOCAL` DENTRO de la rama AMPLIA (no a nivel de función). Fijarlo a
+--     nivel de función afectaba a la SELECTIVA (CTE materializada + join): los
+--     disable_cost del Sort se propagaban y elegía un plan pésimo -> timeout. Con
+--     SET LOCAL acotado, la SELECTIVA planifica normal (Bitmap Index Scan + Sort de
+--     un subconjunto pequeño). VOLATILE permite SET en el cuerpo (STABLE daría 0A000).
 --   · SARGABILIDAD: el patrón `(v_q is null OR tsv @@ v_q)` es NO-SARGABLE -> el
 --     planner NO usa licitaciones_tsv_gin -> Seq Scan de 588k -> hasta un término
 --     SELECTIVO (climatización) hacía que el probe (limit 5001) escanease toda la
@@ -69,14 +73,14 @@ create or replace function public.buscar_licitaciones(
 )
 returns json
 language plpgsql
-stable
+-- VOLATILE (no STABLE): necesario para poder hacer `SET LOCAL enable_sort = off`
+-- DENTRO del cuerpo, ACOTADO a la rama AMPLIA. Fijarlo a nivel de función afectaba
+-- también a la SELECTIVA y le arruinaba el plan (los disable_cost=1e10 del Sort se
+-- propagaban -> elegía p.ej. Seq Scan de 588k en el join -> timeout). Para un RPC
+-- de solo lectura llamado una vez por request, VOLATILE no tiene coste práctico.
+volatile
 security invoker
 set search_path = extensions, public, pg_catalog
--- GUC a nivel de FUNCIÓN (NO en el cuerpo: `SET` en el cuerpo daría 0A000 al ser
--- STABLE). enable_sort=off: la rama AMPLIA obtiene el orden del ÍNDICE (Index
--- Scan) en vez de un Sort masivo; en la SELECTIVA el sort del subconjunto (<=tope)
--- es un soft-disable (se hace igual, pocas filas).
-set enable_sort = off
 as $$
 declare
   v_q        tsquery;
@@ -93,6 +97,7 @@ declare
   v_aprox    boolean := false;
   v_topado   boolean := false;
   v_filas    json;
+  v_combo    json;
   -- Columnas de salida (mismas que COLUMNAS en buscador_api.js). Sin qualificar:
   -- resuelven contra la única tabla del FROM / el join por licitacion_id.
   v_cols     constant text :=
@@ -174,45 +179,47 @@ begin
   end if;  -- 'todas' (o cualquier otro): sin filtro de estado
 
   -- =====================================================================
-  -- PROBE = conteo ACOTADO (hasta v_umbral+1) y clasificador. NO ordena; el
-  -- predicado sargable -> Bitmap Index Scan (GIN/trigram) y se corta pronto.
+  -- UNA SOLA CONSULTA (conteo + página) para el caso SELECTIVO, evitando el doble
+  -- escaneo. Materializa el subconjunto CAP-ado a v_umbral+1 (barrera; filtra por
+  -- GIN/trigram PRIMERO) y de ahí saca el CONTEO ACOTADO y la PÁGINA.
+  --   · Si NO se trunca (hit <= tope): el subconjunto está COMPLETO -> conteo
+  --     EXACTO y página CORRECTA. Es la rama SELECTIVA, en UN único escaneo.
+  --   · Si se trunca (hit = tope+1): es AMPLIO -> esta página NO vale (orden sobre
+  --     un subconjunto ARBITRARIO de tope+1 filas); se recalcula por índice abajo.
+  -- Corre con enable_sort NORMAL (el SET LOCAL de la rama amplia va después): así
+  -- el Sort del subconjunto pequeño es barato y NO se distorsiona el plan.
   -- =====================================================================
-  execute 'select count(*) from (select 1 from public.licitaciones where '
-       || v_where || ' limit ' || (v_umbral + 1) || ') s'
-    into v_hit;
+  v_sql :=
+       'with filtrado as materialized ('
+    || ' select licitacion_id, fecha_fin_plazo, valor_estimado, fecha_publicacion'
+    || ' from public.licitaciones where ' || v_where
+    || ' limit ' || (v_umbral + 1)
+    || '), pagina as ('
+    || ' select licitacion_id from filtrado order by ' || v_ord
+    || ' limit ' || v_limit || ' offset ' || v_offset
+    || ') select json_build_object('
+    || '''hit'', (select count(*) from filtrado),'
+    || '''filas'', coalesce((select json_agg(row_to_json(x) order by ' || v_ord || ')'
+    || ' from (select ' || v_cols || ' from pagina pg join public.licitaciones li using (licitacion_id)) x), ''[]''::json))';
+  execute v_sql into v_combo;
+  v_hit := (v_combo->>'hit')::bigint;
 
   if v_hit <= v_umbral then
-    v_total := v_hit;      -- total EXACTO (el probe contó todo el subconjunto)
-    v_aprox := false;
+    -- SELECTIVO: subconjunto completo -> total EXACTO y la página del combo YA vale.
+    v_total := v_hit;
+    v_filas := v_combo->'filas';
   else
-    v_total := v_umbral;   -- "más de v_umbral"
-    v_aprox := true;
+    -- =================================================================
+    -- AMPLIO (> tope): la página del combo NO vale (orden sobre subconjunto
+    -- arbitrario). Se recalcula SIN materializar: INDEX SCAN del índice de ORDEN
+    -- filtrando al vuelo (denso -> primeras 25 enseguida). v_ord = columna+dirección
+    -- concretas (listas blancas) que casan con un índice compuesto. enable_sort=off
+    -- (SET LOCAL, SOLO aquí; requiere función VOLATILE) obliga a orden por índice.
+    -- =================================================================
+    v_total  := v_umbral;   -- "más de v_umbral"
+    v_aprox  := true;
     v_topado := true;
-  end if;
-
-  if not v_aprox then
-    -- =================================================================
-    -- SELECTIVO (<= tope): CTE MATERIALIZED (filtra por GIN/trigram PRIMERO,
-    -- barrera de optimización) y ordena solo ese subconjunto pequeño. Rápido a
-    -- cualquier profundidad de página.
-    -- =================================================================
-    v_sql :=
-         'with filtrado as materialized ('
-      || ' select licitacion_id, fecha_fin_plazo, valor_estimado, fecha_publicacion'
-      || ' from public.licitaciones where ' || v_where
-      || '), pagina as ('
-      || ' select licitacion_id from filtrado order by ' || v_ord
-      || ' limit ' || v_limit || ' offset ' || v_offset
-      || ') select coalesce((select json_agg(row_to_json(x) order by ' || v_ord || ')'
-      || ' from (select ' || v_cols || ' from pagina pg join public.licitaciones li using (licitacion_id)) x), ''[]''::json)';
-    execute v_sql into v_filas;
-  else
-    -- =================================================================
-    -- AMPLIO (> tope): sin materializar. Página por INDEX SCAN del índice de
-    -- ORDEN (enable_sort=off, a nivel de función) filtrando al vuelo. Denso ->
-    -- las primeras 25 salen enseguida. v_ord usa columna+dirección concretas
-    -- (listas blancas) que casan EXACTAMENTE con un índice compuesto.
-    -- =================================================================
+    set local enable_sort = off;
     v_sql :=
          'select coalesce(json_agg(row_to_json(x) order by ' || v_ord || '), ''[]''::json)'
       || ' from (select ' || v_cols || ' from public.licitaciones where ' || v_where
