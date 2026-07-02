@@ -80,6 +80,9 @@ def _cpv_activos_de_config(config, defaults):
 # más opciones en el futuro; basta con añadir más diccionarios a esta lista.
 OPCIONES_MENU = [
     {"nombre": "Radar", "vista": "radar", "enlace": "#vista-radar", "icono": "📡"},
+    # Subapartado de Radar (BG-5): reutiliza el bloque #vista-radar mostrando la vista
+    # híbrida de marcadas (JSON + catálogo). 'sub' = sub-item indentado; 'badge' = nº marcadas.
+    {"nombre": "En observación", "vista": "observacion", "enlace": "#vista-radar", "icono": "★", "sub": True, "badge": True},
     {"nombre": "Buscador", "vista": "buscador", "enlace": "#vista-buscador", "icono": "🔍"},
     {"nombre": "Cartera", "vista": "cartera", "enlace": "#vista-cartera", "icono": "💼"},
     {"nombre": "Calendario", "vista": "calendario", "enlace": "#vista-calendario", "icono": "📅"},
@@ -133,6 +136,14 @@ CSS = """
   .nav-item:hover { background:rgba(255,255,255,.06); color:#fff; }
   .nav-item.activo { background:var(--sidebar-activo); color:#fff; box-shadow:0 6px 16px rgba(99,102,241,.35); }
   .nav-icono { font-size:1rem; }
+  /* BG-5: sub-item 'En observación' bajo Radar (indentado, estrella ámbar) + badge contador. */
+  .nav-item.nav-sub { margin-left:18px; padding-top:8px; padding-bottom:8px; font-size:.88rem; }
+  .nav-item.nav-sub .nav-icono { color:#f59e0b; }
+  .nav-count {
+    margin-left:auto; background:rgba(255,255,255,.16); color:#fff; font-weight:700;
+    font-size:.72rem; min-width:20px; text-align:center; padding:1px 7px; border-radius:999px;
+  }
+  .nav-item.activo .nav-count { background:rgba(255,255,255,.28); }
 
   /* ---- Contenido ---- */
   .contenido { margin-left:264px; min-height:100vh; }
@@ -769,6 +780,7 @@ JS_SUPABASE = """
   const selectCpv = document.getElementById('filtro-cpv');   // desplegable de filtro por CPV
   const barraTabs = document.getElementById('tabs');
   const vacioPestana = document.getElementById('vacio-pestana');   // mensaje "pestaña vacía"
+  const navObsCount = document.querySelector('.nav-item[data-vista="observacion"] .nav-count');  // badge del menú
   let pestanaActiva = 'activas';   // pestaña activa por defecto
 
   // 'Hoy' a medianoche para ordenar por días restantes (igual que antes).
@@ -941,14 +953,20 @@ JS_SUPABASE = """
   // Contador GLOBAL por pestaña: nº de tarjetas que le pertenecen (NO depende del
   // filtro de categoría ni de la pestaña activa; solo de data-estado/favorita).
   function actualizarContadores() {
-    if (!barraTabs) return;
     const todas = cards();
-    barraTabs.querySelectorAll('.tab').forEach(function (tab) {
+    if (barraTabs) barraTabs.querySelectorAll('.tab').forEach(function (tab) {
       const p = tab.dataset.pestana;
       const n = todas.filter(function (c) { return perteneceAPestana(c, p); }).length;
       const span = tab.querySelector('.tab-count');
       if (span) span.textContent = '(' + n + ')';
     });
+    // BG-5: badge del menú 'En observación' = nº de marcadas (mismo criterio que la
+    // antigua pestaña 'favoritas': nativas marcadas + hidratadas del catálogo).
+    if (navObsCount) {
+      const n = todas.filter(function (c) { return perteneceAPestana(c, 'favoritas'); }).length;
+      navObsCount.textContent = n;
+      navObsCount.hidden = (n === 0);
+    }
   }
 
   // Tras un cambio de datos (carga/guardado) o al revelar el radar: recalcula
@@ -1051,10 +1069,11 @@ JS_SUPABASE = """
     return (s.length >= 10 && s.charAt(4) === '-' && s.charAt(7) === '-') ? s.slice(0, 10) : '';
   }
   function catFecha(iso) {
-    const s = catFechaSolo(iso);
+    const s = catFechaSolo(iso);   // 'YYYY-MM-DD'
     if (!s) return '—';
-    const d = new Date(s + 'T00:00:00');
-    return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-ES');
+    // dd/mm/aaaa CON ceros (igual que formatea_fecha del Radar); sin depender del locale
+    // (toLocaleDateString daba '12/5/2026' sin cero en algunos entornos).
+    return s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4);
   }
   // Semáforo por días restantes, igual que clasifica_urgencia() de Python.
   function catUrg(dias) {
@@ -1603,13 +1622,25 @@ JS_SUPABASE = """
   const calendarioCont  = document.getElementById('calendario-contenido');
   const tituloSeccion   = document.getElementById('titulo-seccion');
   const metaRadar       = document.getElementById('meta-radar');
-  const VISTAS  = ['radar', 'cartera', 'calendario', 'buscador'];
-  const TITULOS = { radar: 'Radar', cartera: 'Cartera', calendario: 'Calendario', buscador: 'Buscador' };
+  // BG-5: 'observacion' es un subapartado que REUTILIZA el bloque del Radar
+  // (#vista-radar): mismas tarjetas, controles y modales; solo fuerza la vista de
+  // marcadas ('favoritas') y oculta el tablist + el filtro de CPV del Radar.
+  const VISTAS  = ['radar', 'observacion', 'cartera', 'calendario', 'buscador'];
+  const TITULOS = { radar: 'Radar', observacion: 'En observación', cartera: 'Cartera', calendario: 'Calendario', buscador: 'Buscador' };
+  const cpvBar  = selectCpv ? selectCpv.closest('.orden-barra') : null;   // barra "Filtrar por CPV"
   let vistaActiva = 'radar';   // vista por defecto
+
+  // Ajusta el modo 'En observación' vs Radar sobre el MISMO grid: fuerza la pestaña
+  // 'favoritas' al entrar y la deshace al volver al Radar (donde 'favoritas' ya no es tab).
+  function aplicarModoObservacion() {
+    if (vistaActiva === 'observacion') seleccionarPestana('favoritas');
+    else if (vistaActiva === 'radar' && pestanaActiva === 'favoritas') seleccionarPestana('activas');
+  }
 
   function mostrarVista(nombre) {
     vistaActiva = (VISTAS.indexOf(nombre) >= 0) ? nombre : 'radar';
-    if (vistaRadar)      vistaRadar.hidden      = (vistaActiva !== 'radar');
+    const enRadar = (vistaActiva === 'radar' || vistaActiva === 'observacion');
+    if (vistaRadar)      vistaRadar.hidden      = !enRadar;                        // Radar y 'En observación' comparten bloque
     if (vistaCartera)    vistaCartera.hidden    = (vistaActiva !== 'cartera');
     if (vistaCalendario) vistaCalendario.hidden = (vistaActiva !== 'calendario');
     if (vistaBuscador)   vistaBuscador.hidden   = (vistaActiva !== 'buscador');   // BG-4
@@ -1619,6 +1650,11 @@ JS_SUPABASE = """
     });
     if (tituloSeccion) tituloSeccion.textContent = TITULOS[vistaActiva] || 'Radar';
     if (metaRadar) metaRadar.hidden = (vistaActiva !== 'radar');   // la meta es solo del radar
+    // Tablist + filtro de CPV: propios del Radar; ocultos en 'En observación'.
+    const enObs = (vistaActiva === 'observacion');
+    if (barraTabs) barraTabs.hidden = enObs;
+    if (cpvBar) cpvBar.hidden = enObs;
+    aplicarModoObservacion();
     // Al entrar con sesión, (re)cargamos la fuente correspondiente.
     if (vistaActiva === 'cartera' && sesionActiva) cargarCartera();
     if (vistaActiva === 'calendario' && sesionActiva) cargarCalendario();
@@ -2194,7 +2230,10 @@ JS_SUPABASE = """
     if (!vista) return;
     ocultarCaducadas = !!vista.ocultar_caducadas;
     if (selectOrden && vista.orden_inicial) selectOrden.value = vista.orden_inicial;
-    if (vista.pestana_inicial) seleccionarPestana(vista.pestana_inicial);
+    // BG-5: si la pestaña inicial guardada es 'favoritas', abrimos el subapartado
+    // 'En observación' (ya no es una pestaña del Radar); si no, pestaña normal.
+    if (vista.pestana_inicial === 'favoritas') mostrarVista('observacion');
+    else if (vista.pestana_inicial) seleccionarPestana(vista.pestana_inicial);
     else actualizarVista();
   }
   // Al cargar la página: lee la config (lectura pública), monta el filtro de vista
@@ -3084,10 +3123,10 @@ DATOS_CONFIG_JS = (
 # el JS). Orden fijo y etiqueta; la pestaña activa por defecto es "Activas". El
 # contador (N) de cada una lo pone el JS tras cargar las decisiones (zona privada).
 PESTANAS = [
-    # Etiqueta de PRESENTACIÓN "En observación"; la clave interna sigue siendo
-    # "favoritas" y el campo guardado en 'decisiones' sigue siendo 'favorita' (una
-    # sola marca = la estrella). El rename es solo capa de visualización (BG-5).
-    ("favoritas", "En observación"),
+    # BG-5: 'En observación' YA NO es una pestaña del Radar; es un subapartado propio
+    # del menú lateral (vista 'observacion', reutiliza este mismo grid). La lógica de
+    # pestaña 'favoritas' se conserva (perteneceAPestana/badge), pero sin botón en el
+    # tablist. El campo guardado en 'decisiones' sigue siendo 'favorita' (la estrella).
     ("activas", "Activas"),
     ("presentadas", "Presentadas"),
     ("ganadas", "Ganadas"),
@@ -3186,11 +3225,17 @@ else:
 # La primera opción se marca como "activa" (es la que se está viendo).
 opciones_html = []
 for i, opcion in enumerate(OPCIONES_MENU):
-    clase = "nav-item activo" if i == 0 else "nav-item"
+    clases = ["nav-item"]
+    if opcion.get("sub"):
+        clases.append("nav-sub")          # sub-item indentado (BG-5: 'En observación')
+    if i == 0:
+        clases.append("activo")           # Radar = vista por defecto
+    # Badge contador (nº de marcadas); arranca oculto, lo rellena el JS tras login.
+    badge = '<span class="nav-count" hidden></span>' if opcion.get("badge") else ""
     opciones_html.append(
-        f'<a class="{clase}" data-vista="{opcion["vista"]}" href="{html.escape(opcion["enlace"])}">'
+        f'<a class="{" ".join(clases)}" data-vista="{opcion["vista"]}" href="{html.escape(opcion["enlace"])}">'
         f'<span class="nav-icono">{opcion["icono"]}</span>'
-        f'<span>{html.escape(opcion["nombre"])}</span></a>'
+        f'<span>{html.escape(opcion["nombre"])}</span>{badge}</a>'
     )
 menu_html = "\n        ".join(opciones_html)
 
