@@ -418,6 +418,10 @@ CSS = """
   .modal-pie .btn-pri:disabled { opacity:.6; cursor:progress; }
   .modal-pie .btn-sec { border:1px solid var(--borde); background:var(--panel); color:var(--texto); }
   .modal-pie .btn-sec:hover { background:#e2e8f0; }
+  /* Botón "Añadir/Actualizar a cartera" (acción positiva; verde). */
+  .modal-pie .btn-cartera { border-color:#86efac; color:#15803d; }
+  .modal-pie .btn-cartera:hover:not(:disabled) { background:#dcfce7; border-color:#4ade80; }
+  .modal-pie .btn-cartera:disabled { opacity:.5; cursor:not-allowed; }
 
   /* ---- Panel de ajustes del radar (⚙️) ---- */
   .ajustes-btn { font-size:1rem; line-height:1; padding:6px 9px; }
@@ -562,6 +566,13 @@ CSS = """
   }
   .cartera-tabla tbody tr:hover { background:#f8fafc; }
   .cartera-tabla .fila-resuelto { opacity:.5; }      /* estado "Resuelto": atenuada */
+  /* Badge 📡 en filas de cartera enlazadas a un contrato (abre el modal Detalles). */
+  .cart-radar-badge {
+    font:inherit; font-size:.82rem; line-height:1; cursor:pointer; vertical-align:middle;
+    padding:1px 6px; margin-left:6px; border-radius:6px;
+    border:1px solid #bfdbfe; background:#eff6ff;
+  }
+  .cart-radar-badge:hover { background:#dbeafe; border-color:#93c5fd; }
   /* Botón "Docs" de cada fila de la cartera (abre el modal de documentos). */
   .cart-docs-btn {
     font:inherit; font-size:.78rem; font-weight:600; cursor:pointer; padding:4px 10px; border-radius:7px;
@@ -1128,6 +1139,10 @@ JS_SUPABASE = """
     const org = fila.organo_contratacion ? '<div class="cat-org">' + catEsc(fila.organo_contratacion) + '</div>' : '';
     const cpvArr = Array.isArray(fila.cpv) ? fila.cpv : [];
     const importe = (fila.presupuesto_con_iva != null) ? String(fila.presupuesto_con_iva) : '';
+    // Datos de la licitación para el snapshot a cartera (mismo patrón que las del Radar).
+    const dataObjeto = catEsc(fila.objeto || fila.titulo || '');
+    const dataOrgano = catEsc(fila.organo_contratacion || '');
+    const dataPresuSin = (fila.presupuesto_sin_iva != null) ? String(fila.presupuesto_sin_iva) : '';
     const datos = '<div class="datos">'
       + '<div class="dato"><span class="et-dato">Presupuesto (con IVA)</span><span class="val-dato">' + fmtEur(fila.presupuesto_con_iva) + '</span></div>'
       + '<div class="dato"><span class="et-dato">Presupuesto (sin IVA)</span><span class="val-dato">' + fmtEur(fila.presupuesto_sin_iva) + '</span></div>'
@@ -1141,6 +1156,7 @@ JS_SUPABASE = """
       + ' data-cpv="' + catEsc(cpvArr.join(' ')) + '"'
       + ' data-plataforma="" data-region="" data-fuente="' + (fuente || 'estatal') + '"'
       + ' data-titulo="' + titulo + '" data-licitacion-id="' + catEsc(id) + '"'
+      + ' data-objeto="' + dataObjeto + '" data-organo="' + dataOrgano + '" data-presu-sin="' + dataPresuSin + '"'
       + ' data-estado="' + estado + '" data-favorita="false" data-origen="catalogo">'
       + CONTROLES_CARD_JS
       + '<h2 class="card-title">' + tituloHtml + '</h2>'
@@ -1430,6 +1446,12 @@ JS_SUPABASE = """
   const docTipo     = document.getElementById('doc-tipo');
   const docSubir    = document.getElementById('doc-subir');
   let contratoId = null;   // licitacion_id del contrato/documentos abierto en el panel
+  // --- Enlace contrato -> cartera (botón "Añadir/Actualizar a cartera" del pie) ---
+  const btnCartera = document.getElementById('contrato-cartera');
+  const carteraOk  = document.getElementById('cartera-ok');
+  let contratoExiste = false;    // ¿hay fila en 'contratos' para esta licitación?
+  let carteraEnlazada = null;    // id (uuid) de la fila de 'cartera' enlazada, o null
+  let contratoLicMeta = null;    // {objeto, cliente, presupuestoSin, titulo} de la licitación (solo INSERT)
 
   function campoC(col) { return document.getElementById('c-' + col); }
   function limpiarFormC() {
@@ -1452,31 +1474,80 @@ JS_SUPABASE = """
   }
   function avisoC(msg) { if (modalAviso) { modalAviso.textContent = msg || ''; modalAviso.hidden = !msg; } }
   function okC(mostrar) { if (modalOk) modalOk.hidden = !mostrar; }
+  function okCartera(msg) { if (carteraOk) { if (msg) { carteraOk.textContent = msg; carteraOk.hidden = false; } else { carteraOk.hidden = true; } } }
+  // 'YYYY-MM-DD' (input date) -> 'dd/mm/aaaa' con ceros; null si no es fecha válida.
+  function fmtDDMMYYYY(v) {
+    const s = (v == null ? '' : String(v)).slice(0, 10);
+    if (!(s.length === 10 && s.charAt(4) === '-' && s.charAt(7) === '-')) return null;
+    return s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4);
+  }
+  // Estado del botón cartera: sin contrato -> deshabilitado; enlazada -> "Actualizar"; si no -> "Añadir".
+  function actualizarBotonCartera() {
+    if (!btnCartera) return;
+    const enlazada = !!carteraEnlazada;   // ya hay fila en cartera para esta licitación
+    btnCartera.textContent = enlazada ? 'Actualizar en cartera' : 'Añadir a cartera';
+    if (!contratoExiste) {
+      // Sin contrato guardado no se puede volcar; el TEXTO sí refleja si ya está enlazada
+      // (p. ej. fila legacy enlazada por SQL y aún sin contrato: dice "Actualizar", deshabilitado).
+      btnCartera.disabled = true;
+      btnCartera.title = enlazada ? 'Guarda primero el contrato para actualizar' : 'Guarda primero el contrato';
+    } else {
+      btnCartera.disabled = false;
+      btnCartera.title = enlazada ? 'Re-sincroniza en la cartera los campos que vienen del contrato' : 'Copia este contrato a la cartera';
+    }
+  }
 
   function cerrarContrato() {
     if (modal) modal.hidden = true;
     contratoId = null;
+    contratoExiste = false; carteraEnlazada = null; contratoLicMeta = null;
+    okCartera('');
   }
 
-  // Abrir el panel para UNA tarjeta: leer su fila de 'contratos' y rellenar el form.
-  async function abrirContrato(card) {
-    if (!sesionActiva || !modal || !card) return;
-    const id = card.getAttribute('data-licitacion-id');
+  // Núcleo: abre el panel para una licitación (por id). Lee su fila de 'contratos' y si
+  // está enlazada a 'cartera' (en paralelo). 'licMeta' = datos de la licitación para el
+  // snapshot a cartera (solo se usan al INSERTAR); al abrir desde la cartera va null.
+  async function abrirContratoCore(id, subtitulo, licMeta) {
+    if (!sesionActiva || !modal || !id) return;
     contratoId = id;
-    if (modalSub) modalSub.textContent = card.getAttribute('data-titulo') || '';
-    limpiarFormC(); avisoC(''); okC(false);
+    contratoLicMeta = licMeta || null;
+    contratoExiste = false; carteraEnlazada = null;
+    if (modalSub) modalSub.textContent = subtitulo || '';
+    limpiarFormC(); avisoC(''); okC(false); okCartera('');
+    actualizarBotonCartera();              // arranca deshabilitado hasta saber si hay contrato
     modal.hidden = false;                  // mostramos ya (vacío) y rellenamos al llegar
-    pintarDocumentos(id);                  // carga y pinta la lista de documentos de esta licitación
+    pintarDocumentos(id);                  // lista de documentos de esta licitación
     try {
-      const { data, error } = await supabase.from('contratos').select('*')
-        .eq('licitacion_id', id).maybeSingle();   // 0 o 1 fila (licitacion_id es PK)
-      if (error) throw error;
+      // Contrato + estado de enlace a cartera, en paralelo (mismo licitacion_id).
+      const [rC, rK] = await Promise.all([
+        supabase.from('contratos').select('*').eq('licitacion_id', id).maybeSingle(),
+        supabase.from('cartera').select('id').eq('licitacion_id', id).maybeSingle(),
+      ]);
       if (contratoId !== id || modal.hidden) return;   // se cambió/cerró entre tanto
-      rellenarFormC(data);                 // data === null -> formulario vacío
+      if (rC.error) throw rC.error;
+      rellenarFormC(rC.data);              // data === null -> formulario vacío
+      contratoExiste = !!rC.data;
+      carteraEnlazada = (rK && !rK.error && rK.data) ? rK.data.id : null;   // si falla el enlace, tratamos como no enlazada
+      actualizarBotonCartera();
     } catch (err) {
       console.error('Error leyendo contrato:', err);
       avisoC('No se pudieron cargar los datos: ' + (err.message || err));
     }
+  }
+  // Abrir desde una TARJETA (Radar o catálogo): id + subtítulo + datos de la licitación.
+  function abrirContrato(card) {
+    if (!card) return;
+    abrirContratoCore(card.getAttribute('data-licitacion-id'), card.getAttribute('data-titulo') || '', {
+      objeto: card.getAttribute('data-objeto') || '',
+      cliente: card.getAttribute('data-organo') || '',
+      presupuestoSin: card.getAttribute('data-presu-sin') || '',
+      titulo: card.getAttribute('data-titulo') || '',
+    });
+  }
+  // Abrir por licitacion_id SIN tarjeta (badge de la cartera): la fila ya existe en
+  // cartera, así que el botón será "Actualizar" (solo campos del contrato). Sin licMeta.
+  function abrirContratoPorId(id, subtitulo) {
+    abrirContratoCore(id, subtitulo || '', null);
   }
 
   // Guardar: upsert con licitacion_id + updated_at (igual que en decisiones).
@@ -1489,12 +1560,13 @@ JS_SUPABASE = """
       fila[c] = (COLS_NUM_CONTRATO.indexOf(c) >= 0) ? numONull(v) : txtONull(v);
     });
     if (btnGuardarC) btnGuardarC.disabled = true;
-    avisoC(''); okC(false);
+    avisoC(''); okC(false); okCartera('');
     try {
       const { error } = await supabase.from('contratos').upsert(fila, { onConflict: 'licitacion_id' });
       if (error) throw error;
-      okC(true);                           // feedback breve y cerramos
-      setTimeout(cerrarContrato, 800);
+      okC(true);                           // feedback; NO cerramos: ya se puede "Añadir a cartera"
+      contratoExiste = true;               // hay contrato guardado -> habilita el botón cartera
+      actualizarBotonCartera();
     } catch (err) {
       console.error('Error guardando contrato:', err);
       avisoC('No se pudo guardar: ' + (err.message || err));   // no mentimos: no cerramos
@@ -1503,7 +1575,92 @@ JS_SUPABASE = """
     }
   }
 
+  // --- Añadir/Actualizar en cartera (snapshot MANUAL del contrato) -------------
+  // INSERT (aún no enlazada): todos los campos mapeados. UPDATE (ya enlazada): SOLO los
+  // que vienen del contrato (expediente/importes/fechas/prórroga); los curados a mano
+  // (cliente/objeto/presupuesto/estado/notas) NO se pisan. Enlace por onConflict:
+  // 'licitacion_id' (requiere el índice único de cartera_enlace.sql).
+  async function guardarEnCartera() {
+    if (!sesionActiva || !contratoId || !contratoExiste) return;
+    if (btnCartera) btnCartera.disabled = true;
+    avisoC(''); okC(false); okCartera('');
+    try {
+      // (1) RELEER el enlace JUSTO ahora: nunca decidimos INSERT/UPDATE con un flag
+      //     obsoleto o errado de la apertura. Si no podemos saberlo con certeza (error),
+      //     abortamos: preferimos no arriesgar pisar campos curados a mano.
+      const { data: kRow, error: kErr } = await supabase.from('cartera')
+        .select('id').eq('licitacion_id', contratoId).maybeSingle();
+      if (kErr) throw kErr;
+      carteraEnlazada = kRow ? kRow.id : null;
+
+      // Campos que VIENEN del contrato (leídos del form = la verdad tras guardar).
+      const vFin = campoC('fecha_fin') ? campoC('fecha_fin').value : '';   // YYYY-MM-DD (input date)
+      const sync = {
+        licitacion_id: contratoId,
+        expediente: txtONull(campoC('num_expediente') ? campoC('num_expediente').value : ''),
+        importe_adjudicacion: numONull(campoC('importe_sin_iva') ? campoC('importe_sin_iva').value : ''),
+        importe_total_civa: numONull(campoC('importe_con_iva') ? campoC('importe_con_iva').value : ''),
+        fecha_adjudicacion: fmtDDMMYYYY(campoC('fecha_adjudicacion') ? campoC('fecha_adjudicacion').value : ''),
+        fecha_inicio: fmtDDMMYYYY(campoC('fecha_inicio') ? campoC('fecha_inicio').value : ''),
+        prorrogas: fmtDDMMYYYY(campoC('prorroga_hasta') ? campoC('prorroga_hasta').value : ''),
+        fin_vigencia: fmtDDMMYYYY(vFin),
+        fin_vigencia_fecha: (vFin && vFin.length >= 10) ? vFin.slice(0, 10) : null,
+      };
+
+      let filaId = carteraEnlazada;        // id (uuid) de la fila destino, si ya la conocemos
+      let esActualizar = !!carteraEnlazada;
+
+      // (2) Si NO está enlazada por licitacion_id, ¿hay una fila LEGACY (licitacion_id
+      //     NULL) con el MISMO expediente? Ofrecemos ENLAZARLA en vez de duplicar (evita
+      //     el doble conteo del KPI). El casamiento manual por SQL sigue disponible.
+      if (!esActualizar && sync.expediente) {
+        const { data: legacy, error: lErr } = await supabase.from('cartera')
+          .select('id,cliente').is('licitacion_id', null).eq('expediente', sync.expediente);
+        if (lErr) throw lErr;
+        if (legacy && legacy.length === 1) {
+          const quien = legacy[0].cliente ? ' (' + legacy[0].cliente + ')' : '';
+          if (window.confirm('Ya hay una fila en la cartera con el expediente «' + sync.expediente +
+              '» sin enlazar' + quien + '.\\n¿Enlazarla a este contrato en vez de crear una fila nueva? (Recomendado)')) {
+            esActualizar = true; filaId = legacy[0].id;
+          }
+        }
+      }
+
+      if (esActualizar) {
+        // UPDATE por id: SOLO los campos del contrato (fija licitacion_id si era legacy).
+        // NUNCA pisa los curados a mano (cliente/objeto/presupuesto/estado/notas).
+        const { error } = await supabase.from('cartera').update(sync).eq('id', filaId);
+        if (error) throw error;
+        carteraEnlazada = filaId;
+        okCartera('Actualizado en cartera ✓');
+      } else {
+        // INSERT de fila NUEVA (con los campos de la licitación, que no se re-sincronizan).
+        // Si por una carrera ya existiera esa licitacion_id, el índice único hace FALLAR el
+        // INSERT (se avisa), en vez de pisar en silencio los campos curados.
+        const m = contratoLicMeta || {};
+        const fila = Object.assign({}, sync, {
+          objeto: m.objeto || m.titulo || null,
+          cliente: (m.cliente && String(m.cliente).trim()) ? m.cliente : '(completar por SQL)',
+          presupuesto_licitacion: numONull(m.presupuestoSin),
+          estado: 'Vigente',
+          notas: txtONull(campoC('notas') ? campoC('notas').value : ''),
+        });
+        const { data, error } = await supabase.from('cartera').insert(fila).select('id').maybeSingle();
+        if (error) throw error;
+        if (data && data.id) carteraEnlazada = data.id;
+        okCartera('Añadido a cartera ✓');
+      }
+      if (vistaActiva === 'cartera') cargarCartera();   // si estamos en la Cartera, refresca ya
+    } catch (err) {
+      console.error('Error guardando en cartera:', err);
+      avisoC('No se pudo guardar en cartera: ' + (err.message || err));
+    } finally {
+      actualizarBotonCartera();   // reevalúa disabled/texto (ahora enlazada -> "Actualizar")
+    }
+  }
+
   if (modalForm) modalForm.addEventListener('submit', function (e) { e.preventDefault(); guardarContrato(); });
+  if (btnCartera) btnCartera.addEventListener('click', guardarEnCartera);
   const btnCerrarC = document.getElementById('contrato-cerrar');
   const btnCancelarC = document.getElementById('contrato-cancelar');
   if (btnCerrarC) btnCerrarC.addEventListener('click', cerrarContrato);
@@ -1713,12 +1870,21 @@ JS_SUPABASE = """
       <th class="num">Adjudicación (s/IVA)</th><th>Estado</th><th>Ver</th></tr></thead><tbody>`;
     for (const f of filas) {
       const resuelto = (f.estado || '').toLowerCase().includes('resuelto');
-      html += `<tr class="${resuelto ? 'fila-resuelto' : ''}" data-cartera-id="${f.id}" title="${(f.notas || '').replace(/"/g,'&quot;')}">
+      // Badge en filas ENLAZADAS a un contrato (por licitacion_id); clic -> modal Detalles.
+      const licId = f.licitacion_id || '';
+      // Escapamos con catEsc (& < > ") todo texto que venga de datos (algunos ya llegan
+      // del feed externo vía la nueva pieza cartera: cliente<-organismo, objeto).
+      const radarBadge = licId
+        ? ' <button type="button" class="cart-radar-badge" data-licid="' + catEsc(licId)
+          + '" data-lictit="' + catEsc(f.objeto || f.cliente || '')
+          + '" title="Ver ficha del contrato (Detalles)">📡</button>'
+        : '';
+      html += `<tr class="${resuelto ? 'fila-resuelto' : ''}" data-cartera-id="${f.id}" title="${catEsc(f.notas || '')}">
         <td class="col-venc">${badgeVigencia(f.fin_vigencia_fecha, f.fin_vigencia)}</td>
-        <td>${f.cliente||''}</td>
-        <td>${f.ccaa ? '<span class="chip">'+f.ccaa+'</span>' : ''}</td>
+        <td>${catEsc(f.cliente || '')}${radarBadge}</td>
+        <td>${f.ccaa ? '<span class="chip">'+catEsc(f.ccaa)+'</span>' : ''}</td>
         <td class="num">${fmtEur(f.importe_adjudicacion)}</td>
-        <td>${f.estado ? '<span class="chip">'+f.estado+'</span>' : ''}</td>
+        <td>${f.estado ? '<span class="chip">'+catEsc(f.estado)+'</span>' : ''}</td>
         <td><button type="button" class="cart-docs-btn">Ver</button></td></tr>`;
     }
     html += `</tbody></table>`;
@@ -2027,6 +2193,10 @@ JS_SUPABASE = """
   // Clic en una fila de la cartera (o en su botón "Ver") -> abre el detalle.
   if (carteraCont) {
     carteraCont.addEventListener('click', function (e) {
+      // El badge 📡 abre el modal Detalles por licitacion_id (tiene prioridad sobre la
+      // fila, que abre el modal de documentos de la cartera).
+      const badge = e.target.closest('.cart-radar-badge');
+      if (badge) { abrirContratoPorId(badge.getAttribute('data-licid'), badge.getAttribute('data-lictit') || ''); return; }
       const tr = e.target.closest('tr[data-cartera-id]');
       if (!tr) return;
       abrirDocsCartera(tr.getAttribute('data-cartera-id'));
@@ -2781,6 +2951,8 @@ CONTRATO_MODAL = """  <div class="modal-fondo" id="contrato-modal" hidden>
         <div class="modal-pie">
           <span class="contrato-aviso" id="contrato-aviso" hidden></span>
           <span class="contrato-ok" id="contrato-ok" hidden>Guardado ✓</span>
+          <span class="contrato-ok" id="cartera-ok" hidden>Hecho ✓</span>
+          <button type="button" class="btn-sec btn-cartera" id="contrato-cartera" disabled title="Guarda primero el contrato">Añadir a cartera</button>
           <button type="button" class="btn-sec" id="contrato-cancelar">Cerrar</button>
           <button type="submit" class="btn-pri" id="contrato-guardar">Guardar</button>
         </div>
@@ -3025,6 +3197,14 @@ def construye_tarjeta(lic, es_nueva, hoy, estado):
         data_fecha_subida = ""
     # data-titulo va dentro de comillas dobles, y 'titulo' ya está escapado: seguro.
 
+    # Datos de la LICITACIÓN para el snapshot a cartera (botón del modal Detalles).
+    # El Radar guarda 'organismo' (órgano de contratación = cliente) y NO trae 'objeto'
+    # (usamos el título como respaldo). Se escapan porque van en atributos.
+    data_objeto = html.escape(lic.get("objeto") or lic.get("titulo", ""))
+    data_organo = html.escape(lic.get("organismo") or "")
+    _presu_sin = lic.get("presupuesto_sin_iva")
+    data_presu_sin = "" if _presu_sin is None else f"{_presu_sin}"
+
     # data-licitacion-id: el MISMO id del JSON (entry.id). Es la clave con la que el
     # navegador casa cada fila de la tabla 'decisiones' de Supabase con su tarjeta.
     lic_id = html.escape(lic.get("id", ""))
@@ -3040,6 +3220,7 @@ def construye_tarjeta(lic, es_nueva, hoy, estado):
       data-cpv="{data_cpv}"
       data-plataforma="{data_plataforma}" data-region="{data_region}" data-fuente="{data_fuente}"
       data-titulo="{titulo}" data-licitacion-id="{lic_id}"
+      data-objeto="{data_objeto}" data-organo="{data_organo}" data-presu-sin="{data_presu_sin}"
       data-estado="{estado}" data-favorita="false">
       {CONTROLES_CARD}
       <h2 class="card-title"><a href="{enlace}" target="_blank" rel="noopener">{titulo}</a></h2>
