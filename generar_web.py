@@ -455,8 +455,11 @@ CSS = """
   .aj-linea select, .aj-linea input[type=number] { font:inherit; font-size:.85rem; padding:6px 9px; border-radius:8px; border:1px solid var(--borde); background:#fff; }
   .aj-msg { font-size:.82rem; font-weight:600; margin-right:auto; }
   .aj-msg.ok { color:#15803d; } .aj-msg.err { color:#b91c1c; }
-  .contrato-aviso { font-size:.82rem; color:#b91c1c; font-weight:600; margin-right:auto; }
-  .contrato-ok { font-size:.82rem; color:#15803d; font-weight:700; margin-right:auto; }
+  /* Hueco de feedback SIEMPRE presente (aunque los mensajes estén ocultos): fija los
+     botones a la derecha para que no salten al aparecer "Guardado ✓"/"Añadido ✓". */
+  .pie-feedback { margin-right:auto; display:inline-flex; align-items:center; gap:10px; min-height:1.1em; }
+  .contrato-aviso { font-size:.82rem; color:#b91c1c; font-weight:600; }
+  .contrato-ok { font-size:.82rem; color:#15803d; font-weight:700; }
   @media (max-width:560px) { .contrato-form { grid-template-columns:1fr; } }
 
   /* ---- Documentos (PDF) dentro del modal: privados, vía Storage tras login ---- */
@@ -2192,11 +2195,23 @@ JS_SUPABASE = """
 
   // Clic en una fila de la cartera (o en su botón "Ver") -> abre el detalle.
   if (carteraCont) {
+    // En un clic REAL de ratón, el evento 'click' puede retargetearse al <td> (mousedown y
+    // mouseup caen en subelementos distintos), y entonces e.target.closest('.cart-radar-badge')
+    // fallaba y se abría el modal de la FILA (documentos) en vez del de Detalles. Recordamos
+    // el badge del 'pointerdown' (que sí apunta al elemento pulsado) y lo usamos de respaldo;
+    // además cortamos la propagación en la rama del badge.
+    let cartBadgeDown = null;
+    carteraCont.addEventListener('pointerdown', function (e) {
+      cartBadgeDown = e.target.closest('.cart-radar-badge');
+    });
     carteraCont.addEventListener('click', function (e) {
-      // El badge 📡 abre el modal Detalles por licitacion_id (tiene prioridad sobre la
-      // fila, que abre el modal de documentos de la cartera).
-      const badge = e.target.closest('.cart-radar-badge');
-      if (badge) { abrirContratoPorId(badge.getAttribute('data-licid'), badge.getAttribute('data-lictit') || ''); return; }
+      const badge = e.target.closest('.cart-radar-badge') || cartBadgeDown;
+      cartBadgeDown = null;
+      if (badge) {
+        e.stopPropagation();
+        abrirContratoPorId(badge.getAttribute('data-licid'), badge.getAttribute('data-lictit') || '');
+        return;
+      }
       const tr = e.target.closest('tr[data-cartera-id]');
       if (!tr) return;
       abrirDocsCartera(tr.getAttribute('data-cartera-id'));
@@ -2949,9 +2964,11 @@ CONTRATO_MODAL = """  <div class="modal-fondo" id="contrato-modal" hidden>
         <label>Prórroga hasta<input type="date" id="c-prorroga_hasta"></label>
         <label class="ancho">Notas<textarea id="c-notas" rows="3"></textarea></label>
         <div class="modal-pie">
-          <span class="contrato-aviso" id="contrato-aviso" hidden></span>
-          <span class="contrato-ok" id="contrato-ok" hidden>Guardado ✓</span>
-          <span class="contrato-ok" id="cartera-ok" hidden>Hecho ✓</span>
+          <span class="pie-feedback">
+            <span class="contrato-aviso" id="contrato-aviso" hidden></span>
+            <span class="contrato-ok" id="contrato-ok" hidden>Guardado ✓</span>
+            <span class="contrato-ok" id="cartera-ok" hidden>Hecho ✓</span>
+          </span>
           <button type="button" class="btn-sec btn-cartera" id="contrato-cartera" disabled title="Guarda primero el contrato">Añadir a cartera</button>
           <button type="button" class="btn-sec" id="contrato-cancelar">Cerrar</button>
           <button type="submit" class="btn-pri" id="contrato-guardar">Guardar</button>
