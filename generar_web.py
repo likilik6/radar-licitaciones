@@ -542,6 +542,9 @@ CSS = """
   .bg-card .bg-fuente { text-transform:capitalize; font-weight:600; }
   .bg-card .bg-plazo { font-size:.82rem; color:var(--suave); border-top:1px solid var(--borde); padding-top:9px; margin-top:4px; }
   .bg-card .bg-plazo .et { color:var(--suave); }
+  .bg-card .bg-exp { font-size:.82rem; color:var(--suave); margin-bottom:8px; }
+  .bg-card .bg-exp .et { color:var(--suave); }
+  .bg-exp-input { min-width:190px; }
   #bg-resultados .card.urg-roja  { border-color:#fca5a5; background:rgba(185,28,28,.06); }
   #bg-resultados .card.urg-ambar { border-color:#fcd34d; background:rgba(180,83,9,.06); }
   #bg-resultados .card.urg-verde { border-color:#86efac; background:rgba(21,128,61,.05); }
@@ -1060,7 +1063,7 @@ JS_SUPABASE = """
   }
 
   // Columnas del catálogo (public.licitaciones) para hidratar una tarjeta. Sin tsv.
-  const COLS_CATALOGO = 'licitacion_id,titulo,objeto,organo_contratacion,cpv,fuente,'
+  const COLS_CATALOGO = 'licitacion_id,titulo,objeto,num_expediente,organo_contratacion,cpv,fuente,'
     + 'presupuesto_con_iva,presupuesto_sin_iva,valor_estimado,fecha_publicacion,fecha_fin_plazo,enlace';
 
   // Controles (estrella + estado + Detalles) IGUALES que los del Radar (CONTROLES_CARD
@@ -1146,7 +1149,11 @@ JS_SUPABASE = """
     const dataObjeto = catEsc(fila.objeto || fila.titulo || '');
     const dataOrgano = catEsc(fila.organo_contratacion || '');
     const dataPresuSin = (fila.presupuesto_sin_iva != null) ? String(fila.presupuesto_sin_iva) : '';
+    const numExpRow = fila.num_expediente
+      ? '<div class="dato"><span class="et-dato">Nº de expediente</span><span class="val-dato">' + catEsc(fila.num_expediente) + '</span></div>'
+      : '';
     const datos = '<div class="datos">'
+      + numExpRow
       + '<div class="dato"><span class="et-dato">Presupuesto (con IVA)</span><span class="val-dato">' + fmtEur(fila.presupuesto_con_iva) + '</span></div>'
       + '<div class="dato"><span class="et-dato">Presupuesto (sin IVA)</span><span class="val-dato">' + fmtEur(fila.presupuesto_sin_iva) + '</span></div>'
       + '<div class="dato"><span class="et-dato">Valor estimado</span><span class="val-dato">' + fmtEur(fila.valor_estimado) + '</span></div>'
@@ -2475,6 +2482,7 @@ JS_BUSCADOR_UI = """
   const bgAvanz   = document.getElementById('bg-avanzado');
   const bgCpv     = document.getElementById('bg-cpv');
   const bgCpvAdd  = document.getElementById('bg-cpv-add');
+  const bgExp     = document.getElementById('bg-exp');
   const bgImpMin  = document.getElementById('bg-imp-min');
   const bgImpMax  = document.getElementById('bg-imp-max');
   const bgFinDesde= document.getElementById('bg-fin-desde');
@@ -2504,6 +2512,7 @@ JS_BUSCADOR_UI = """
   const bgFiltros = {
     fuente: '', estado: '', orden: 'fecha_fin_plazo:asc',
     cpvPrefijo: [],                       // prefijos CPV (OR) -> RPC
+    expediente: '',                       // Nº de expediente (contiene, normalizado) -> RPC
     impMin: '', impMax: '',               // valor_estimado (rango)
     finDesde: '', finHasta: '',           // fecha_fin_plazo (rango, yyyy-mm-dd)
     pubDesde: '', pubHasta: '',           // fecha_publicacion (rango, yyyy-mm-dd)
@@ -2513,6 +2522,9 @@ JS_BUSCADOR_UI = """
   function bgFecha(iso){ if(!iso) return '—'; const d = new Date(iso); return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-ES'); }
   function bgDias(iso){ if(!iso) return null; const h = new Date(); h.setHours(0,0,0,0); const d = new Date(iso); if(Number.isNaN(d.getTime())) return null; d.setHours(0,0,0,0); return Math.round((d - h) / 86400000); }
   function bgUrg(dias){ if(dias == null || dias < 0) return ''; if(dias < 3) return 'roja'; if(dias < 7) return 'ambar'; return 'verde'; }
+  // Normaliza un Nº de expediente IGUAL que la BD (MAYÚSCULAS, sin espacios / . -),
+  // para decidir en cliente si tiene el mínimo de 3 chars que dispara el filtro.
+  function bgNormExp(s){ return String(s == null ? '' : s).toUpperCase().replace(/[\\s./-]/g, ''); }
 
   function bgChipsCpv(cpv){
     const lista = Array.isArray(cpv) ? cpv.filter(Boolean) : [];
@@ -2555,11 +2567,13 @@ JS_BUSCADOR_UI = """
       + '<button type="button" class="ctrl-estrella' + (marcada ? ' marcada' : '') + '"'
       + ' aria-pressed="' + (marcada ? 'true' : 'false') + '" aria-label="En observación"'
       + ' title="Poner o quitar de «En observación»">' + (marcada ? '★' : '☆') + '</button></div>';
+    const exp = f.num_expediente ? '<div class="bg-exp"><span class="et">Nº exp.</span> ' + bgEscape(f.num_expediente) + '</div>' : '';
     return '<article class="card bg-card' + (urg ? ' urg-' + urg : '') + '" data-licitacion-id="' + bgEscape(id) + '">'
       + estrella
       + '<h2 class="card-title">' + tituloHtml + '</h2>'
       + org
       + '<div class="bg-meta">' + fuente + sep + valor + '</div>'
+      + exp
       + '<div class="cpv"><span class="et">CPV</span> ' + bgChipsCpv(f.cpv) + '</div>'
       + '<div class="bg-plazo"><span class="et">Fin de plazo</span> ' + bgFecha(f.fecha_fin_plazo) + coletilla + '</div>'
       + '</article>';
@@ -2573,6 +2587,7 @@ JS_BUSCADOR_UI = """
       fuente: f.fuente || undefined,
       estado: f.estado || undefined,
       cpvPrefijo: f.cpvPrefijo.length ? f.cpvPrefijo.slice() : undefined,
+      expediente: f.expediente || undefined,
       importeMin: f.impMin !== '' ? f.impMin : undefined,
       importeMax: f.impMax !== '' ? f.impMax : undefined,
       // Rango por día: 'desde' = inicio del día; 'hasta' = fin del día (inclusivo).
@@ -2625,6 +2640,9 @@ JS_BUSCADOR_UI = """
     if(f.fuente) chips.push({ tipo:'fuente', txt:'Fuente: ' + (FUENTE[f.fuente] || f.fuente) });
     if(f.estado) chips.push({ tipo:'estado', txt:'Estado: ' + (ESTADO[f.estado] || f.estado) });
     f.cpvPrefijo.forEach(function(p){ chips.push({ tipo:'cpv', val:p, txt:'CPV ' + p + '…' }); });
+    // Solo mostramos el chip de expediente si de verdad dispara (>=3 chars normalizados),
+    // para no engañar: con menos, el filtro no se aplica (búsqueda trivial).
+    if(bgNormExp(f.expediente).length >= 3) chips.push({ tipo:'exp', txt:'Expediente: ' + f.expediente });
     if(f.impMin !== '' || f.impMax !== ''){
       let t;
       if(f.impMin !== '' && f.impMax !== '') t = fmtEur(Number(f.impMin)) + ' – ' + fmtEur(Number(f.impMax));
@@ -2655,11 +2673,12 @@ JS_BUSCADOR_UI = """
     if(bgTexto) bgTexto.value = '';
     bgFiltros.fuente = ''; bgFiltros.estado = ''; bgFiltros.orden = 'fecha_fin_plazo:asc';
     bgFiltros.cpvPrefijo = [];
+    bgFiltros.expediente = '';
     bgFiltros.impMin = ''; bgFiltros.impMax = '';
     bgFiltros.finDesde = ''; bgFiltros.finHasta = ''; bgFiltros.pubDesde = ''; bgFiltros.pubHasta = '';
     bgSelPill('fuente', ''); bgSelPill('estado', '');
     if(bgOrden) bgOrden.value = 'fecha_fin_plazo:asc';
-    [bgImpMin, bgImpMax, bgFinDesde, bgFinHasta, bgPubDesde, bgPubHasta, bgCpv].forEach(function(el){ if(el) el.value = ''; });
+    [bgImpMin, bgImpMax, bgFinDesde, bgFinHasta, bgPubDesde, bgPubHasta, bgCpv, bgExp].forEach(function(el){ if(el) el.value = ''; });
     bgSincroniza();
   }
 
@@ -2737,6 +2756,12 @@ JS_BUSCADOR_UI = """
   if(bgCpvAdd) bgCpvAdd.addEventListener('click', bgAddCpv);
   if(bgCpv) bgCpv.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); bgAddCpv(); } });
 
+  // Nº de expediente: al confirmar (blur/Enter) actualiza estado y relanza.
+  if(bgExp){
+    bgExp.addEventListener('change', function(){ bgFiltros.expediente = bgExp.value; bgSincroniza(); });
+    bgExp.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); bgFiltros.expediente = bgExp.value; bgSincroniza(); } });
+  }
+
   // Importe y fechas: al confirmar (change = blur/Enter) actualizan estado y relanzan.
   if(bgImpMin)   bgImpMin.addEventListener('change', function(){ bgFiltros.impMin = bgImpMin.value; bgSincroniza(); });
   if(bgImpMax)   bgImpMax.addEventListener('change', function(){ bgFiltros.impMax = bgImpMax.value; bgSincroniza(); });
@@ -2756,6 +2781,7 @@ JS_BUSCADOR_UI = """
     if(tipo === 'fuente'){ bgFiltros.fuente = ''; bgSelPill('fuente', ''); }
     else if(tipo === 'estado'){ bgFiltros.estado = ''; bgSelPill('estado', ''); }
     else if(tipo === 'cpv'){ const v = chip.dataset.val; bgFiltros.cpvPrefijo = bgFiltros.cpvPrefijo.filter(function(p){ return p !== v; }); }
+    else if(tipo === 'exp'){ bgFiltros.expediente = ''; if(bgExp) bgExp.value = ''; }
     else if(tipo === 'importe'){ bgFiltros.impMin = ''; bgFiltros.impMax = ''; if(bgImpMin) bgImpMin.value = ''; if(bgImpMax) bgImpMax.value = ''; }
     else if(tipo === 'fin'){ bgFiltros.finDesde = ''; bgFiltros.finHasta = ''; if(bgFinDesde) bgFinDesde.value = ''; if(bgFinHasta) bgFinHasta.value = ''; }
     else if(tipo === 'pub'){ bgFiltros.pubDesde = ''; bgFiltros.pubHasta = ''; if(bgPubDesde) bgPubDesde.value = ''; if(bgPubHasta) bgPubHasta.value = ''; }
@@ -3187,7 +3213,12 @@ def construye_tarjeta(lic, es_nueva, hoy, estado):
     else:
         fin_plazo = f'{fin_plazo_txt} <span class="cerrado">· cerrado</span>'
 
-    datos_html = f"""<div class="datos">
+    # Nº de expediente del órgano (si el feed lo trae). Va como fila del bloque de datos.
+    _num_exp = lic.get("num_expediente")
+    num_exp_row = (f'\n        <div class="dato"><span class="et-dato">Nº de expediente</span>'
+                   f'<span class="val-dato">{html.escape(_num_exp)}</span></div>') if _num_exp else ""
+
+    datos_html = f"""<div class="datos">{num_exp_row}
         <div class="dato"><span class="et-dato">Presupuesto (con IVA)</span><span class="val-dato">{presu_con}</span></div>
         <div class="dato"><span class="et-dato">Presupuesto (sin IVA)</span><span class="val-dato">{presu_sin}</span></div>
         <div class="dato"><span class="et-dato">Valor estimado</span><span class="val-dato">{valor_est}</span></div>
@@ -3563,6 +3594,11 @@ pagina = f"""<!DOCTYPE html>
               <button id="bg-cpv-add" class="bg-mini-btn" type="button">Añadir</button>
             </div>
             <small class="bg-hint">Enter o «Añadir». Varios códigos = casa cualquiera. «9073» → familia 9073xxxx.</small>
+          </div>
+          <div class="bg-campo">
+            <label for="bg-exp">Nº de expediente</label>
+            <input id="bg-exp" class="bg-input-sm bg-exp-input" type="text" autocomplete="off" placeholder="p. ej. V/0013/A/26/2">
+            <small class="bg-hint">Busca por contenido; ignora «/ . -» y mayúsculas. Mínimo 3 caracteres.</small>
           </div>
           <div class="bg-campo">
             <label for="bg-imp-min">Importe estimado (€)</label>

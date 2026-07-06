@@ -293,6 +293,7 @@ for lic in licitaciones_filtradas:
             "enlace": lic["enlace"],
             "cpv": lic["cpv"],
             "fuente": lic["fuente"],
+            "num_expediente": lic["num_expediente"],
             "organismo": lic["organismo"],
             "plataforma": lic["plataforma"],
             "region": lic["region"],
@@ -322,6 +323,9 @@ for lic in licitaciones_filtradas:
         datos[clave]["valor_estimado"] = lic["valor_estimado"]
         datos[clave]["fecha_fin_plazo"] = lic["fecha_fin_plazo"]
         datos[clave]["fecha_publicacion"] = lic["fecha_publicacion"]
+        # Nº de expediente: lo refrescamos también (y rellena las entradas antiguas
+        # que aún no lo tuvieran, cuando se las vuelve a ver).
+        datos[clave]["num_expediente"] = lic["num_expediente"]
         # Territorio: lo refrescamos también (y de paso rellena las entradas
         # antiguas que aún no lo tuvieran, cuando se las vuelve a ver).
         datos[clave]["organismo"] = lic["organismo"]
@@ -335,6 +339,7 @@ for lic in licitaciones_filtradas:
 # pone el valor si falta; no pisa los que ya estén.
 for registro_guardado in datos.values():
     registro_guardado.setdefault("fuente", "estatal")
+    registro_guardado.setdefault("num_expediente", None)
     registro_guardado.setdefault("organismo", None)
     registro_guardado.setdefault("plataforma", None)
     registro_guardado.setdefault("region", None)
