@@ -35,6 +35,7 @@ const COLUMNAS = [
   'licitacion_id',
   'titulo',
   'objeto',
+  'num_expediente',
   'organo_contratacion',
   'cpv',
   'fuente',
@@ -95,6 +96,9 @@ export function crearBuscador(supabase) {
   //                            (p. ej. "9073" -> 9073xxxx), como el Radar. FUERZA la
   //                            RPC (con o sin texto), porque PostgREST no hace prefijo
   //                            sobre text[]. Cada prefijo se usa trim() tal cual.
+  //   expediente   string   -> Nº de expediente del órgano. Casa por CONTENIDO e
+  //                            ignorando / . - y mayúsculas (normalizado). Solo dispara
+  //                            con >=3 chars normalizados; FUERZA la RPC (con o sin texto).
   //   fuente       'estatal' | 'agregadas'
   //   importeMin / importeMax  -> rango sobre valor_estimado
   //   estado       'abierta' | 'cerrada' | 'todas'   (ver default abajo)
@@ -129,6 +133,12 @@ export function crearBuscador(supabase) {
     const texto = aTexto(params.texto);
     const cpvs = Array.isArray(params.cpv) ? params.cpv.map(aTexto).filter(Boolean) : [];
     const cpvPrefijos = Array.isArray(params.cpvPrefijo) ? params.cpvPrefijo.map(aTexto).filter(Boolean) : [];
+    // Nº de expediente: normalizamos (MAYÚSCULAS, sin espacios / . -) SOLO para decidir
+    // si dispara el filtro (>=3 chars; un fragmento más corto casaría cientos de miles).
+    // A la RPC va el término TAL CUAL: ella re-normaliza igual (public.norm_expediente).
+    const expedienteRaw = aTexto(params.expediente);
+    const expedienteNorm = expedienteRaw ? expedienteRaw.toUpperCase().replace(/[\s./-]/g, '') : '';
+    const expediente = expedienteNorm.length >= 3 ? expedienteRaw : null;
     const fuente = params.fuente === 'estatal' || params.fuente === 'agregadas' ? params.fuente : null;
     const impMin = aNumero(params.importeMin);
     const impMax = aNumero(params.importeMax);
@@ -144,7 +154,7 @@ export function crearBuscador(supabase) {
     // DEFAULT: 'abierta' SOLO si no hay ningún otro filtro (pantalla de entrada =
     // "primeras N abiertas"); si hay otro filtro (incluido texto), 'todas'.
     const hayOtrosFiltros = !!(
-      texto || cpvs.length || cpvPrefijos.length || fuente ||
+      texto || cpvs.length || cpvPrefijos.length || expediente || fuente ||
       impMin !== null || impMax !== null ||
       finDesde || finHasta || pubDesde || pubHasta
     );
@@ -157,9 +167,9 @@ export function crearBuscador(supabase) {
     // CAMINO 1 · CON TEXTO  O  CON PREFIJO CPV -> RPC (filtra primero; conteo
     // exacto sobre el subconjunto que casa).
     // ======================================================================
-    if (texto || cpvPrefijos.length) {
+    if (texto || cpvPrefijos.length || expediente) {
       const rpcParams = {
-        p_texto: texto,                                 // puede ir null (solo prefijo CPV)
+        p_texto: texto,                                 // puede ir null (solo prefijo CPV / expediente)
         p_cpv: cpvs.length ? cpvs : null,               // CPV exacto (overlaps)
         p_fuente: fuente,
         p_importe_min: impMin,
@@ -179,6 +189,11 @@ export function crearBuscador(supabase) {
       // aún no se re-desplegó buscador_rpc.sql. Degradación segura: lo único que
       // exige la RPC nueva es el propio filtro CPV por prefijo.
       if (cpvPrefijos.length) rpcParams.p_cpv_prefijo = cpvPrefijos;
+      // Ídem con p_expediente: solo se envía si hay expediente válido (>=3 chars
+      // normalizados). Texto/CPV-solo no lo mandan, así que siguen casando la RPC
+      // anterior si aún no se re-desplegó el SQL; el filtro de expediente exige la
+      // RPC nueva (16 args) + expediente_schema.sql.
+      if (expediente) rpcParams.p_expediente = expediente;
       const { data, error } = await supabase.rpc('buscar_licitaciones', rpcParams);
       if (error) return fallo(error);
       return {

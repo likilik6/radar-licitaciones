@@ -188,6 +188,13 @@ def extrae_entrada(entrada, fuente):
     region = a_texto(entrada.findtext(base_lugar + "cbc:CountrySubentity", namespaces=NS))
     region_codigo = a_texto(entrada.findtext(base_lugar + "cbc:CountrySubentityCode", namespaces=NS))
 
+    # Nº de EXPEDIENTE del órgano (cbc:ContractFolderID, hijo directo de
+    # ContractFolderStatus). Es el código interno del expediente (p. ej. "V/0013/A/26/2"),
+    # NO el atom:id (ese es la clave universal 'id'). Se guarda TAL CUAL, sin normalizar:
+    # la normalización para buscar (mayúsculas, quitar / . - espacios) se hace en la BD.
+    num_expediente = a_texto(entrada.findtext(
+        ".//place:ContractFolderStatus/cbc:ContractFolderID", namespaces=NS))
+
     return {
         "id": id_unico,
         "titulo": titulo,
@@ -195,6 +202,7 @@ def extrae_entrada(entrada, fuente):
         "enlace": enlace,
         "cpv": cpvs,
         "fuente": fuente,
+        "num_expediente": num_expediente,
         "organismo": organismo,
         "plataforma": plataforma,
         "region": region,

@@ -178,6 +178,7 @@ def fila_para_tabla(reg):
         "licitacion_id": reg["id"],
         "titulo": reg["titulo"],
         "objeto": reg["objeto"],
+        "num_expediente": reg["num_expediente"],
         "organo_contratacion": reg["organismo"],
         "cpv": reg["cpv"],
         "fuente": reg["fuente"],

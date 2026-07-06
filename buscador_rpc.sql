@@ -39,10 +39,16 @@
 --     Así el predicato que dirige el índice es una constante -> Bitmap Index Scan.
 --     Las tres consultas (probe/selectiva/amplia) comparten ese WHERE.
 --
--- Enrutado desde la web: por AQUÍ van las búsquedas con texto O con prefijo CPV.
--- Las triviales (sin texto ni prefijo) siguen por PostgREST. El CPV EXACTO (p_cpv,
--- overlaps `&&`) se mantiene. PRIVADO: execute solo a authenticated + SECURITY
--- INVOKER (respeta RLS). Firma sin cambios (15 args) -> create or replace basta.
+-- Enrutado desde la web: por AQUÍ van las búsquedas con texto, prefijo CPV O Nº de
+-- expediente. Las triviales (sin nada de eso) siguen por PostgREST. El CPV EXACTO
+-- (p_cpv, overlaps `&&`) se mantiene. PRIVADO: execute solo a authenticated +
+-- SECURITY INVOKER (respeta RLS).
+--
+-- EXPEDIENTE (nuevo): p_expediente filtra por public.norm_expediente(num_expediente)
+-- LIKE '%<frag normalizado>%' (contiene, ignora / . - y mayúsculas). Se apoya en el
+-- índice GIN trigram licitaciones_expediente_trgm (ver expediente_schema.sql, correr
+-- ANTES). Solo dispara con >=3 chars normalizados. Añadir p_expediente cambia la firma
+-- (15 -> 16 args): hay que DROPear la de 15 antes de crear (create or replace no basta).
 -- ============================================================================
 
 -- (Idempotente) Asegura el GIN sobre tsv por si se corre en un entorno limpio.
@@ -51,6 +57,12 @@ create index if not exists licitaciones_tsv_gin on public.licitaciones using gin
 -- Limpia la firma vieja de BG-3 (14 args, sin p_cpv_prefijo) si aún existiera.
 drop function if exists public.buscar_licitaciones(
   text, text[], text, numeric, numeric, text,
+  timestamptz, timestamptz, timestamptz, timestamptz, text, boolean, integer, integer
+);
+-- Limpia la firma de BG-4 (15 args, sin p_expediente): añadir el arg crea un OVERLOAD
+-- que haría ambigua la llamada; hay que quitarla antes de recrear con 16 args.
+drop function if exists public.buscar_licitaciones(
+  text, text[], text[], text, numeric, numeric, text,
   timestamptz, timestamptz, timestamptz, timestamptz, text, boolean, integer, integer
 );
 
@@ -69,7 +81,8 @@ create or replace function public.buscar_licitaciones(
   p_orden_campo  text        default 'fecha_fin_plazo',
   p_orden_asc    boolean     default true,
   p_pagina       integer     default 1,
-  p_por_pagina   integer     default 25
+  p_por_pagina   integer     default 25,
+  p_expediente   text        default null        -- Nº de expediente (contiene, normalizado; >=3 chars)
 )
 returns json
 language plpgsql
@@ -85,6 +98,7 @@ as $$
 declare
   v_q        tsquery;
   v_cpv_pref text[];
+  v_exp      text;
   v_campo    text;
   v_dir      text;
   v_ord      text;
@@ -103,7 +117,7 @@ declare
   v_cols     constant text :=
     'licitacion_id, titulo, objeto, organo_contratacion, cpv, fuente, '
     'presupuesto_con_iva, presupuesto_sin_iva, valor_estimado, '
-    'fecha_publicacion, fecha_fin_plazo, lugar_ejecucion, ccaa, enlace';
+    'fecha_publicacion, fecha_fin_plazo, lugar_ejecucion, ccaa, enlace, num_expediente';
   -- TOPE del conteo exacto y frontera selectivo/amplio. 5000 deja el conteo EXACTO
   -- para casi todo (climatización≈3146) y solo lo muy amplio queda aproximado;
   -- la rama SELECTIVA materializa como mucho ~5000 filas (rápido).
@@ -124,9 +138,15 @@ begin
     v_q := websearch_to_tsquery('spanish', unaccent(p_texto));
   end if;
 
-  -- Solo con texto O con prefijo. Las triviales van por PostgREST.
-  if v_q is null and v_cpv_pref is null then
-    raise exception 'buscar_licitaciones: requiere p_texto o p_cpv_prefijo (las busquedas triviales van por PostgREST).';
+  -- Nº de expediente (opcional): se normaliza IGUAL que el índice; solo dispara con
+  -- >=3 chars normalizados (un fragmento más corto casaría cientos de miles de filas).
+  if p_expediente is not null and length(public.norm_expediente(p_expediente)) >= 3 then
+    v_exp := public.norm_expediente(p_expediente);
+  end if;
+
+  -- Solo con texto O prefijo CPV O expediente. Las triviales van por PostgREST.
+  if v_q is null and v_cpv_pref is null and v_exp is null then
+    raise exception 'buscar_licitaciones: requiere p_texto, p_cpv_prefijo o p_expediente (>=3 chars) (las busquedas triviales van por PostgREST).';
   end if;
 
   v_limit  := greatest(1, coalesce(p_por_pagina, 25));
@@ -150,6 +170,14 @@ begin
   end if;
   if p_cpv is not null and array_length(p_cpv, 1) is not null then
     v_where := v_where || ' and cpv && ' || quote_literal(p_cpv::text) || '::text[]';
+  end if;
+  if v_exp is not null then
+    -- CONTIENE el fragmento normalizado; predicado CONSTANTE -> Bitmap Index Scan del
+    -- índice GIN trigram sobre public.norm_expediente(num_expediente). Se escapan los
+    -- metacaracteres LIKE (\ % _). La expresión del LIKE coincide EXACTAMENTE con la del
+    -- índice (misma función cualificada) para que el planner lo use.
+    v_where := v_where || ' and public.norm_expediente(num_expediente) like '
+      || quote_literal('%' || replace(replace(replace(v_exp, '\', '\\'), '%', '\%'), '_', '\_') || '%');
   end if;
   if p_fuente is not null then
     v_where := v_where || ' and fuente = ' || quote_literal(p_fuente);
@@ -239,13 +267,14 @@ end;
 $$;
 
 -- PRIVADO: solo authenticated (anon no; y la RLS protege por SECURITY INVOKER).
+-- Firma de 16 args (con p_expediente al final).
 revoke all on function public.buscar_licitaciones(
   text, text[], text[], text, numeric, numeric, text,
-  timestamptz, timestamptz, timestamptz, timestamptz, text, boolean, integer, integer
+  timestamptz, timestamptz, timestamptz, timestamptz, text, boolean, integer, integer, text
 ) from public;
 grant execute on function public.buscar_licitaciones(
   text, text[], text[], text, numeric, numeric, text,
-  timestamptz, timestamptz, timestamptz, timestamptz, text, boolean, integer, integer
+  timestamptz, timestamptz, timestamptz, timestamptz, text, boolean, integer, integer, text
 ) to authenticated;
 
 -- Refresca el cache de esquema de PostgREST.
