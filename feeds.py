@@ -11,7 +11,7 @@
 import re
 import time
 import requests
-from datetime import date
+from datetime import date, timedelta
 from lxml import etree
 
 # Espacio de nombres mínimo para navegar el ATOM: localizar las entradas
@@ -177,20 +177,26 @@ def a_booleano(valor):
 
 def a_fecha(valor):
     """Fecha del feed ('2026-06-03' o '2026-06-03T00:00:00') recortada a 'AAAA-MM-DD'
-    para una columna DATE. None si no viene o no es una fecha de CALENDARIO válida.
-    Validamos con datetime.date (no solo el formato): así una fecha malformada del feed
-    (p. ej. '2026-13-40' o '2026-02-30') se descarta como None en vez de provocar un
-    400 de Postgres que abortaría el lote entero al insertar."""
+    para una columna DATE. None si no viene, si no es una fecha de CALENDARIO válida, o
+    si es IMPLAUSIBLE (basura de origen del feed). Dos filtros:
+      1) Validez de calendario (datetime.date): descarta '2026-13-40' o '2026-02-30' que
+         provocarían un 400 de Postgres y abortarían el lote al insertar.
+      2) Ventana plausible: el feed trae fechas de adjudicación absurdas (años '0001',
+         fechas muy futuras). Fuera de [2000-01-01, hoy+2 años] -> None, para no meter
+         ruido en fecha_adjudicacion (usada por la vista de competencia y por D2).
+    NOTA: a_fecha se usa SOLO para fecha_adjudicacion (AwardDate); la ventana está tuneada
+    para eso. Las otras fechas del feed (fin de plazo, publicación) NO pasan por aquí."""
     valor = a_texto(valor)
     if valor is None:
         return None
     d = valor[:10]
     if len(d) == 10 and d[4] == "-" and d[7] == "-":
         try:
-            date(int(d[:4]), int(d[5:7]), int(d[8:10]))   # valida calendario real
-            return d
+            fecha = date(int(d[:4]), int(d[5:7]), int(d[8:10]))   # valida calendario real
         except ValueError:
             return None
+        if date(2000, 1, 1) <= fecha <= date.today() + timedelta(days=730):
+            return d
     return None
 
 

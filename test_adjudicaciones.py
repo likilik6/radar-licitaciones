@@ -211,6 +211,7 @@ def test_no_regresion_extrae_entrada():
 
 
 def test_a_fecha():
+    from datetime import date, timedelta
     # válidas: se recorta a AAAA-MM-DD
     check(a_fecha("2026-06-03") == "2026-06-03", "a_fecha: fecha simple")
     check(a_fecha("2026-06-03T10:00:00") == "2026-06-03", "a_fecha: con hora")
@@ -220,6 +221,13 @@ def test_a_fecha():
     check(a_fecha("2026-00-00") is None, "a_fecha: ceros -> None")
     check(a_fecha("no-es-fecha") is None, "a_fecha: basura -> None")
     check(a_fecha(None) is None, "a_fecha: None -> None")
+    # IMPLAUSIBLES (basura de origen del feed) -> None
+    check(a_fecha("0001-01-03") is None, "a_fecha: año 0001 -> None")
+    check(a_fecha("1999-12-31") is None, "a_fecha: antes de 2000 -> None")
+    lejos = (date.today() + timedelta(days=3 * 365)).isoformat()   # +3 años: fuera de la ventana
+    check(a_fecha(lejos) is None, "a_fecha: muy futura (>hoy+2años) -> None")
+    dentro = (date.today() + timedelta(days=30)).isoformat()       # +1 mes: dentro
+    check(a_fecha(dentro) == dentro, "a_fecha: futuro cercano -> se conserva")
     print("  OK test_a_fecha")
 
 

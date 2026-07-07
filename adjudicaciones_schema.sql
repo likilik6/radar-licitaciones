@@ -31,6 +31,12 @@
 --   · cif_adjudicatario = ''  -> lote DESIERTO (TenderResult sin WinningParty).
 --   · El CIF se guarda NORMALIZADO (MAYÚSCULAS, sin espacios/'/'/'.'/'-'), para que
 --     el cruce D2 (CIF de LODEPA) y la agregación por CIF de la fase E casen.
+--   · BASURA DE ORIGEN en el CIF: una minoría de filas (~5.800) trae en el ID del
+--     adjudicatario texto que NO es un CIF (p. ej. "VERRESOLUCIÓN...", DNIs de persona
+--     con asteriscos). NO se limpia (el dato de origen manda y no se puede reconstruir):
+--     la VISTA DE COMPETENCIA (fase E) la filtrará, p. ej. con
+--        where cif_adjudicatario ~ '^[A-Z0-9]+$'
+--     al agregar por CIF. El cruce D2 no se ve afectado (los CIF de LODEPA son limpios).
 -- lote y cif son NOT NULL DEFAULT '' A PROPÓSITO: el on_conflict de PostgREST solo
 -- acepta constraints sobre COLUMNAS PLANAS (no índices de expresión con coalesce),
 -- así que la clave de idempotencia se apoya en columnas que nunca son NULL.
@@ -94,6 +100,19 @@ create policy "adjudicaciones_select_authenticated" on public.adjudicaciones
 grant select, insert, update, delete on public.adjudicaciones to service_role;
 
 -- ----------------------------------------------------------------------------
--- 5) Estadísticas al día (para buenos planes en las consultas de la fase E).
+-- 5) Saneo de fechas IMPLAUSIBLES ya cargadas (basura de origen del feed: años
+--    '0001', fechas absurdamente futuras). El extractor ya acota al insertar de
+--    aquí en adelante (feeds.a_fecha: fuera de [2000-01-01, hoy+2 años] -> NULL);
+--    este UPDATE limpia lo que entró ANTES de ese cambio. Es IDEMPOTENTE: una vez
+--    saneado, el WHERE ya no casa. MISMA ventana que el extractor (coherencia).
+-- ----------------------------------------------------------------------------
+update public.adjudicaciones
+   set fecha_adjudicacion = null
+ where fecha_adjudicacion is not null
+   and (fecha_adjudicacion < date '2000-01-01'
+        or fecha_adjudicacion > current_date + interval '2 years');
+
+-- ----------------------------------------------------------------------------
+-- 6) Estadísticas al día (para buenos planes en las consultas de la fase E).
 analyze public.adjudicaciones;
 -- ----------------------------------------------------------------------------
