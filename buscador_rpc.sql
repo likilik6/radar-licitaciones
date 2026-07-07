@@ -201,7 +201,10 @@ begin
     v_where := v_where || ' and fecha_publicacion <= ' || quote_literal(p_pub_hasta::text) || '::timestamptz';
   end if;
   if p_estado = 'abierta' then
-    v_where := v_where || ' and (fecha_fin_plazo >= now() or fecha_fin_plazo is null)';
+    -- 'abierta' = fecha de fin FUTURA (SARGABLE: rango por índice desde now()).
+    -- Se quitó el 'OR fecha_fin_plazo IS NULL' (no sargable; con orden fin_plazo ASC
+    -- recorría las cerradas pasadas -> timeout). Las de fin de plazo NULL caen en 'todas'.
+    v_where := v_where || ' and fecha_fin_plazo >= now()';
   elsif p_estado = 'cerrada' then
     v_where := v_where || ' and fecha_fin_plazo < now()';
   end if;  -- 'todas' (o cualquier otro): sin filtro de estado

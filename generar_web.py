@@ -555,6 +555,10 @@ CSS = """
   .cat-org { font-size:.82rem; color:var(--suave); margin:2px 0 8px; word-break:break-word; }
   .cat-hueco { font-size:.85rem; color:var(--suave); margin:6px 0; }
   .bg-pag { display:flex; align-items:center; justify-content:center; gap:14px; margin:20px 0 8px; }
+  /* El atributo [hidden] no basta contra `.bg-pag{display:flex}` (author gana al UA);
+     con esta regla (especificidad 0,2,0 > 0,1,0) bgPag.hidden=true oculta de verdad la
+     paginación y no queda un "Página 1 de N" heredado en la vista vacía / de error. */
+  .bg-pag[hidden] { display:none; }
   .bg-pag-btn { font:inherit; font-size:.86rem; font-weight:600; cursor:pointer; padding:8px 14px; border-radius:8px; border:1px solid var(--borde); background:var(--panel); color:var(--texto); }
   .bg-pag-btn:hover:not(:disabled) { border-color:var(--acento); color:var(--acento-2); }
   .bg-pag-btn:disabled { opacity:.45; cursor:default; }
@@ -2682,20 +2686,40 @@ JS_BUSCADOR_UI = """
     bgSincroniza();
   }
 
+  // ¿El error es un timeout de sentencia (57014)? La 1ª consulta tras inactividad puede
+  // expirar y la 2ª ir instantánea (arranque en frío conocido de Postgres).
+  function bgEs57014(err){
+    if(!err) return false;
+    const code = (err.code || '') + '';
+    const msg = (err.message || '') + '';
+    return code === '57014' || /statement timeout/i.test(msg);
+  }
+  // Búsqueda con UN auto-reintento si la 1ª da 57014, para que el primer acceso en frío
+  // no enseñe el error. Reintenta la MISMA consulta tras una breve espera (una sola vez).
+  async function bgBuscarR(params){
+    let r = await bgBuscar(params);
+    if(r && r.error && bgEs57014(r.error)){
+      if(bgMsg){ bgMsg.hidden = false; bgMsg.textContent = 'Reintentando…'; }
+      await new Promise(function(res){ setTimeout(res, 700); });
+      r = await bgBuscar(params);   // único reintento; su resultado se devuelve tal cual
+    }
+    return r;
+  }
+
   async function bgRun(){
     if(!sesionActiva){ bgActualizarGate(); return; }
     if(bgCargando) return;
     bgCargando = true;
     bgYaBuscado = true;
     if(bgMsg){ bgMsg.hidden = false; bgMsg.textContent = 'Buscando…'; }
-    if(bgPag) bgPag.hidden = true;
-    const r = await bgBuscar(bgParams());
+    if(bgPag){ bgPag.hidden = true; if(bgPagInfo) bgPagInfo.textContent = ''; }
+    const r = await bgBuscarR(bgParams());
     bgCargando = false;
     if(r.error){
       if(bgRes) bgRes.innerHTML = '';
       if(bgMsg){ bgMsg.hidden = false; bgMsg.textContent = 'Error en la búsqueda: ' + (r.error.message || r.error); }
       if(bgCont) bgCont.textContent = '';
-      if(bgPag) bgPag.hidden = true;
+      if(bgPag){ bgPag.hidden = true; if(bgPagInfo) bgPagInfo.textContent = ''; }   // sin "Página N" heredado
       return;
     }
     const filas = r.filas || [];

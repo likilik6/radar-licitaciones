@@ -148,9 +148,12 @@ export function crearBuscador(supabase) {
     const pubHasta = aISO(params.fechaPubHasta);
 
     // Estado (DERIVADO, no se guarda).
-    //   'abierta' -> fin de plazo en el futuro  O  sin plazo (NULL).
+    //   'abierta' -> fin de plazo en el FUTURO (fecha_fin_plazo >= ahora). Las que NO
+    //               tienen fecha de fin NO cuentan como abiertas (aparecen solo en 'todas').
+    //               (Antes 'abierta' incluía las NULL, pero ese OR-null no es sargable y
+    //                con el orden fin_plazo ASC provocaba timeout 57014 en la vista inicial.)
     //   'cerrada' -> fin de plazo ya pasado (los NULL NO cuentan como cerrada).
-    //   'todas'   -> no filtra por estado.
+    //   'todas'   -> no filtra por estado (aquí caen también las de fin de plazo NULL).
     // DEFAULT: 'abierta' SOLO si no hay ningún otro filtro (pantalla de entrada =
     // "primeras N abiertas"); si hay otro filtro (incluido texto), 'todas'.
     const hayOtrosFiltros = !!(
@@ -222,7 +225,11 @@ export function crearBuscador(supabase) {
       if (finHasta) q = q.lte('fecha_fin_plazo', finHasta);
       if (pubDesde) q = q.gte('fecha_publicacion', pubDesde);
       if (pubHasta) q = q.lte('fecha_publicacion', pubHasta);
-      if (estado === 'abierta') q = q.or(`fecha_fin_plazo.gte.${ahora},fecha_fin_plazo.is.null`);
+      // 'abierta' = fecha de fin FUTURA. SARGABLE: es un rango por el índice
+      // (fecha_fin_plazo, licitacion_id) desde 'ahora' -> instantáneo. El antiguo
+      // 'OR fecha_fin_plazo IS NULL' rompía el rango y, con orden fin_plazo ASC, el
+      // índice recorría TODAS las cerradas (pasadas) antes de las abiertas -> timeout.
+      if (estado === 'abierta') q = q.gte('fecha_fin_plazo', ahora);
       else if (estado === 'cerrada') q = q.lt('fecha_fin_plazo', ahora);
       return q;
     };
