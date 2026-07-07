@@ -259,19 +259,21 @@ export function crearBuscador(supabase) {
     if (rDatos.error) return fallo(rDatos.error);
     const estimado = rEstim.error ? null : (rEstim.count ?? 0);
 
-    // Si la estimación es PEQUEÑA, un count exacto es barato -> total exacto.
+    // Count EXACTO cuando la estimación es PEQUEÑA (barato) O cuando NO hay estimación
+    // (el probe 'planned' falló/503): así un fallo del probe de estimación NO deja el
+    // contador en 0. Solo si la estimación es GRANDE devolvemos la estimación aproximada
+    // (para no contar cientos de miles de filas exactas).
     const nUmbral = aNumero(params.umbralCountExacto);
     const umbralExacto = nUmbral && nUmbral > 0 ? Math.floor(nUmbral) : UMBRAL_COUNT_EXACTO_DEF;
-    if (estimado !== null && estimado < umbralExacto) {
+    if (estimado === null || estimado < umbralExacto) {
       const rExacto = await contar('exact');
       if (!rExacto.error && rExacto.count != null) return ok(rDatos.data, rExacto.count, false);
-      // Si el exacto falla (p.ej. estimación errónea + timeout), degradamos al
-      // estimado en vez de romper la página.
-      return ok(rDatos.data, estimado, true);
+      // El exacto también falló: usa la estimación si la había; si no, 0 aproximado.
+      return ok(rDatos.data, estimado ?? 0, true);
     }
 
-    // Conjunto grande (o sin estimación): devolvemos la estimación, aproximada.
-    return ok(rDatos.data, estimado ?? 0, true);
+    // Conjunto grande: devolvemos la estimación, aproximada.
+    return ok(rDatos.data, estimado, true);
   }
 
   // Utilidad para re-comprobar (en el futuro) si ccaa / lugar_ejecucion ya se
