@@ -111,6 +111,9 @@ jobs:
         run: pip install -r requirements.txt
 
       # 1) Ingesta incremental: upsert de TODO el feed en vivo (estatal + agregadas).
+      #    También puebla public.adjudicaciones (Fase D1) con las adjudicaciones que
+      #    llegan cada día por el MISMO feed (delete+insert por expediente). Si la tabla
+      #    aún no existe, ingiere el catálogo igual y solo salta las adjudicaciones.
       - name: Ingesta diaria al catálogo
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

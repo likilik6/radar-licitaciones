@@ -3,6 +3,12 @@
 # Qué hace: vuelca la ventana de 2 años (estatal 643 + agregadas 1044) a la tabla
 # public.licitaciones de Supabase, con upsert idempotente y en streaming.
 #
+# ADJUDICACIONES (Fase D1): con el extractor actualizado, este MISMO backfill también
+# puebla public.adjudicaciones (una fila por lote/adjudicatario, upsert idempotente).
+# El "re-backfill" de la fase D1 es, sin más, RE-LANZAR este workflow a mano. Requisito
+# previo: haber ejecutado adjudicaciones_schema.sql en el SQL Editor de Supabase (si la
+# tabla no existe, el backfill ingiere el catálogo igual y solo salta las adjudicaciones).
+#
 # SEPARADO del Radar: NO toca data/licitaciones.json ni la web. Es otro destino.
 #
 # Solo se dispara A MANO (workflow_dispatch) desde la pestaña "Actions". Lee la URL

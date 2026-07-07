@@ -8,8 +8,10 @@
 # El MISMO extractor sirve para todos los feeds porque todos vienen en el mismo
 # formato (ATOM con el bloque CODICE donde está el CPV). Añadir un feed nuevo es
 # solo añadir una entrada a la lista FEEDS de abajo.
+import re
 import time
 import requests
+from datetime import date
 from lxml import etree
 
 # Espacio de nombres mínimo para navegar el ATOM: localizar las entradas
@@ -114,11 +116,14 @@ def descarga_entradas(url, max_paginas=MAX_PAGINAS, pausa=PAUSA_ENTRE_PAGINAS):
 #   - cbc:  componentes básicos (donde vive el código CPV, importes, fechas...).
 #   - cac:  componentes agregados (proyecto, presupuesto, proceso de licitación...).
 #   - place: extensión de la Plataforma (ContractFolderStatus, fecha de publicación...).
+#   - pce:  extensión de la Plataforma, componentes BÁSICOS (donde vive el
+#           ContractFolderStatusCode: estado del expediente, ADJ/RES/EV...).
 NS = {
     "atom": "http://www.w3.org/2005/Atom",
     "cbc": "urn:dgpe:names:draft:codice:schema:xsd:CommonBasicComponents-2",
     "cac": "urn:dgpe:names:draft:codice:schema:xsd:CommonAggregateComponents-2",
     "place": "urn:dgpe:names:draft:codice-place-ext:schema:xsd:CommonAggregateComponents-2",
+    "pce": "urn:dgpe:names:draft:codice-place-ext:schema:xsd:CommonBasicComponents-2",
 }
 
 
@@ -141,6 +146,160 @@ def a_numero(valor):
         return float(valor)
     except ValueError:
         return None
+
+
+def a_entero(valor):
+    """Convierte un texto del feed a int. Acepta '12' y '12.0'. None si no se puede."""
+    valor = a_texto(valor)
+    if valor is None:
+        return None
+    try:
+        return int(valor)
+    except ValueError:
+        try:
+            return int(float(valor))
+        except ValueError:
+            return None
+
+
+def a_booleano(valor):
+    """Convierte 'true'/'false' (SMEAwardedIndicator) a bool. None si no viene/otro."""
+    valor = a_texto(valor)
+    if valor is None:
+        return None
+    v = valor.lower()
+    if v in ("true", "1", "si", "sí", "yes"):
+        return True
+    if v in ("false", "0", "no"):
+        return False
+    return None
+
+
+def a_fecha(valor):
+    """Fecha del feed ('2026-06-03' o '2026-06-03T00:00:00') recortada a 'AAAA-MM-DD'
+    para una columna DATE. None si no viene o no es una fecha de CALENDARIO válida.
+    Validamos con datetime.date (no solo el formato): así una fecha malformada del feed
+    (p. ej. '2026-13-40' o '2026-02-30') se descarta como None en vez de provocar un
+    400 de Postgres que abortaría el lote entero al insertar."""
+    valor = a_texto(valor)
+    if valor is None:
+        return None
+    d = valor[:10]
+    if len(d) == 10 and d[4] == "-" and d[7] == "-":
+        try:
+            date(int(d[:4]), int(d[5:7]), int(d[8:10]))   # valida calendario real
+            return d
+        except ValueError:
+            return None
+    return None
+
+
+def normaliza_cif(valor):
+    """Normaliza un CIF/NIF para el cruce por CIF (fase D2) y la agregación (fase E):
+    MAYÚSCULAS y sin espacios, puntos, guiones ni barras. None si no hay valor.
+    OJO: se aplica IGUAL en el extractor y donde se comparen los CIF de LODEPA."""
+    valor = a_texto(valor)
+    if valor is None:
+        return None
+    limpio = re.sub(r"[\s./-]", "", valor).upper()
+    return limpio or None
+
+
+# Etiquetas legibles del cbc:ResultCode (code list oficial TenderResultCode-2.09 de
+# la PLACSP). El código crudo se guarda aparte (resultado_code); esto es solo para
+# leerlo. Para AGREGAR por "adjudicado vs desierto" en la fase E, el criterio fiable
+# es la PRESENCIA de adjudicatario (cif_adjudicatario != ''), no el código.
+TENDER_RESULT_LABELS = {
+    "1": "Adjudicado provisionalmente",
+    "2": "Adjudicado definitivamente",
+    "3": "Desierto",
+    "4": "Desistimiento",
+    "5": "Renuncia",
+    "6": "Desierto provisionalmente",
+    "7": "Desierto definitivamente",
+    "8": "Adjudicado",
+    "9": "Formalizado",
+    "10": "Licitador mejor valorado",
+    "11": "Encargo formalizado",
+}
+
+
+def _id_adjudicatario(winning):
+    """De un cac:WinningParty devuelve (id_bruto, schemeName). Prefiere el ID con
+    schemeName='NIF'; si no hay, coge el PRIMER PartyIdentification/ID que haya y
+    devuelve su scheme (puede ser 'UTE', 'OTROS'...). (id_bruto sin normalizar aún.)"""
+    ids = winning.findall("cac:PartyIdentification/cbc:ID", NS)
+    if not ids:
+        return None, None
+    elegido = None
+    for idel in ids:
+        if (idel.get("schemeName") or "").upper() == "NIF":
+            elegido = idel
+            break
+    if elegido is None:
+        elegido = ids[0]
+    return a_texto(elegido.text), a_texto(elegido.get("schemeName"))
+
+
+def extrae_adjudicaciones(entrada):
+    """Extrae los bloques cac:TenderResult (uno por LOTE) del CODICE de una <entry>.
+
+    Devuelve una LISTA de dicts, UNA FILA POR (lote, adjudicatario):
+      - un lote adjudicado a un único CIF -> una fila;
+      - un lote con varios cac:WinningParty (acuerdo marco / UTE separadas) -> una
+        fila por adjudicatario (el importe del lote se repite en cada una);
+      - un lote DESIERTO (TenderResult sin WinningParty) -> una fila con
+        cif_adjudicatario / adjudicatario / id_scheme = None.
+    Lista VACÍA si el expediente aún no trae adjudicación.
+
+    La PRESENCIA del bloque TenderResult es la señal fiable: NO se condiciona la
+    extracción al estado del expediente (hay estados intermedios, p. ej.
+    'parcialmente adjudicada'). El estado se guarda solo como contexto.
+
+    Campos None cuando el feed no los trae (el convenio '' para lote/cif de la
+    tabla se aplica AL UPSERTAR, no aquí; ver backfill_catalogo.fila_adjudicacion)."""
+    # Estado del expediente (ADJ/RES/EV/...): SOLO contexto; no decide si extraer.
+    estado_exp = a_texto(entrada.findtext(
+        ".//place:ContractFolderStatus/pce:ContractFolderStatusCode", namespaces=NS))
+
+    filas = []
+    for tr in entrada.findall(".//place:ContractFolderStatus/cac:TenderResult", NS):
+        resultado_code = a_texto(tr.findtext("cbc:ResultCode", namespaces=NS))
+        resultado = TENDER_RESULT_LABELS.get(resultado_code) if resultado_code else None
+        # Datos comunes del lote (compartidos por todos sus adjudicatarios).
+        proyecto = tr.find("cac:AwardedTenderedProject", NS)
+        lote = importe_sin_iva = importe_con_iva = None
+        if proyecto is not None:
+            lote = a_texto(proyecto.findtext("cbc:ProcurementProjectLotID", namespaces=NS))
+            base_total = "cac:LegalMonetaryTotal/"
+            importe_sin_iva = a_numero(proyecto.findtext(base_total + "cbc:TaxExclusiveAmount", namespaces=NS))
+            importe_con_iva = a_numero(proyecto.findtext(base_total + "cbc:PayableAmount", namespaces=NS))
+        comun = {
+            "lote": lote,
+            "resultado_code": resultado_code,
+            "resultado": resultado,
+            "es_pyme": a_booleano(tr.findtext("cbc:SMEAwardedIndicator", namespaces=NS)),
+            "importe_sin_iva": importe_sin_iva,
+            "importe_con_iva": importe_con_iva,
+            "n_ofertas": a_entero(tr.findtext("cbc:ReceivedTenderQuantity", namespaces=NS)),
+            "fecha_adjudicacion": a_fecha(tr.findtext("cbc:AwardDate", namespaces=NS)),
+            "estado_expediente": estado_exp,
+        }
+
+        ganadores = tr.findall("cac:WinningParty", NS)
+        if not ganadores:
+            # Lote desierto / sin adjudicatario: una fila con CIF/nombre None.
+            filas.append({**comun, "cif_adjudicatario": None, "id_scheme": None, "adjudicatario": None})
+            continue
+        for win in ganadores:
+            id_bruto, scheme = _id_adjudicatario(win)
+            filas.append({
+                **comun,
+                "cif_adjudicatario": normaliza_cif(id_bruto),
+                "id_scheme": scheme,
+                "adjudicatario": a_texto(win.findtext("cac:PartyName/cbc:Name", namespaces=NS)),
+            })
+    return filas
 
 
 def extrae_entrada(entrada, fuente):
@@ -195,6 +354,12 @@ def extrae_entrada(entrada, fuente):
     num_expediente = a_texto(entrada.findtext(
         ".//place:ContractFolderStatus/cbc:ContractFolderID", namespaces=NS))
 
+    # Adjudicaciones (cac:TenderResult, una por lote/adjudicatario). Lista vacía si el
+    # expediente aún no tiene adjudicación. ADITIVO: los consumidores actuales del dict
+    # (filtrar.py, backfill fila_para_tabla) leen claves explícitas y lo ignoran; solo
+    # lo usa el nuevo upsert a public.adjudicaciones. NO cambia el JSON del Radar.
+    adjudicaciones = extrae_adjudicaciones(entrada)
+
     return {
         "id": id_unico,
         "titulo": titulo,
@@ -213,4 +378,5 @@ def extrae_entrada(entrada, fuente):
         "fecha_fin_plazo": fecha_fin_plazo,
         "fecha_publicacion": fecha_publicacion,
         "fecha_actualizacion": fecha_actualizacion,
+        "adjudicaciones": adjudicaciones,
     }

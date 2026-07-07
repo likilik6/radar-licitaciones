@@ -70,6 +70,10 @@ sys.stdout.reconfigure(encoding="utf-8")
 # --- Constantes -------------------------------------------------------------
 SUPABASE_URL = "https://uzktrhpgkyctlnqgdsys.supabase.co"
 TABLA = "licitaciones"
+TABLA_ADJ = "adjudicaciones"                # competencia por CIF (una fila por lote/adjudicatario)
+# Clave de idempotencia del upsert de adjudicaciones: las columnas PLANAS del UNIQUE
+# de adjudicaciones_schema.sql (lote/cif son NOT NULL DEFAULT '' justo para esto).
+ADJ_ON_CONFLICT = "licitacion_id,lote,cif_adjudicatario"
 LIMITE_GRATIS_MB = 500          # plan gratuito de Supabase (~500 MB de base de datos)
 BASE = "https://contrataciondelsectorpublico.gob.es/sindicacion"
 
@@ -357,25 +361,35 @@ def construir_unidades(solo=None, periodos=None):
     return [(f, p) for f in fuentes for p in usar]
 
 
-def _sube_lote(sesion, url, headers, filas, reintentos=4):
-    """Sube un lote (lista de filas, sin licitacion_id repetido) con reintentos y
-    backoff. Lanza si agota los reintentos o ante un 4xx de datos (que no sea 429)."""
-    cuerpo = json.dumps(filas, ensure_ascii=False).encode("utf-8")
+def _con_reintentos(hacer_peticion, descripcion, reintentos=4):
+    """Ejecuta hacer_peticion() (un callable que devuelve una requests.Response) con
+    REINTENTOS y backoff exponencial. Reintenta ante 429/5xx y errores de red; lanza de
+    inmediato ante un 4xx de datos (≠429), y SystemExit al agotar los intentos. Devuelve
+    la respuesta 2xx. Lo comparten el upsert (_sube_lote) y el DELETE de adjudicaciones
+    (_borra_adjudicaciones): la ruta destructiva debe ser tan resiliente como la de subida."""
     ultimo = None
     for intento in range(1, reintentos + 1):
         try:
-            r = sesion.post(url, headers=headers, data=cuerpo, timeout=120)
+            r = hacer_peticion()
             if r.status_code in (200, 201, 204):
-                return
+                return r
             if 400 <= r.status_code < 500 and r.status_code != 429:
                 raise RuntimeError(f"HTTP {r.status_code}: {r.text[:300]}")
             ultimo = RuntimeError(f"HTTP {r.status_code}: {r.text[:200]}")
         except requests.RequestException as e:
             ultimo = e
         espera = 2 ** intento
-        print(f"      reintento {intento}/{reintentos} en {espera}s ({ultimo})")
+        print(f"      reintento {intento}/{reintentos} en {espera}s ({descripcion}: {ultimo})")
         time.sleep(espera)
-    raise SystemExit(f"Fallo subiendo un lote tras {reintentos} intentos: {ultimo}")
+    raise SystemExit(f"Fallo en {descripcion} tras {reintentos} intentos: {ultimo}")
+
+
+def _sube_lote(sesion, url, headers, filas, reintentos=4):
+    """Sube un lote (lista de filas, sin licitacion_id repetido) con reintentos y
+    backoff. Lanza si agota los reintentos o ante un 4xx de datos (que no sea 429)."""
+    cuerpo = json.dumps(filas, ensure_ascii=False).encode("utf-8")
+    _con_reintentos(lambda: sesion.post(url, headers=headers, data=cuerpo, timeout=120),
+                    "subir un lote", reintentos)
 
 
 def _preparar_upsert():
@@ -400,6 +414,139 @@ def _preparar_upsert():
     return sesion, headers, endpoint, url_base
 
 
+# --- ADJUDICACIONES (competencia por CIF) — upsert a public.adjudicaciones -----
+# ADITIVO al backfill: se apoya en la MISMA sesión/headers de upsert. El extractor
+# (feeds.extrae_entrada) ya emite reg["adjudicaciones"] (lista, una por lote/
+# adjudicatario). Aquí solo mapeamos a columnas y subimos.
+def fila_adjudicacion(licitacion_id, adj):
+    """Mapea un dict de feeds.extrae_adjudicaciones (+ su licitacion_id) a las columnas
+    de public.adjudicaciones. Aplica el convenio de la tabla: lote/cif None -> ''
+    (columnas planas para el on_conflict del upsert). Los demás campos van tal cual
+    (None = null). updated_at = ahora."""
+    return {
+        "licitacion_id": licitacion_id,
+        "lote": adj["lote"] or "",
+        "resultado_code": adj["resultado_code"],
+        "resultado": adj["resultado"],
+        "cif_adjudicatario": adj["cif_adjudicatario"] or "",
+        "id_scheme": adj["id_scheme"],
+        "adjudicatario": adj["adjudicatario"],
+        "es_pyme": adj["es_pyme"],
+        "importe_sin_iva": adj["importe_sin_iva"],
+        "importe_con_iva": adj["importe_con_iva"],
+        "n_ofertas": adj["n_ofertas"],
+        "fecha_adjudicacion": adj["fecha_adjudicacion"],
+        "estado_expediente": adj["estado_expediente"],
+        "updated_at": AHORA_ISO,
+    }
+
+
+def _dedup_adj(filas):
+    """Colapsa filas con la MISMA clave (licitacion_id, lote, cif_adjudicatario): un
+    upsert de PostgREST NO permite afectar dos veces la misma fila en ON CONFLICT.
+    La última gana. Imprescindible antes de subir un lote."""
+    por_clave = {}
+    for f in filas:
+        por_clave[(f["licitacion_id"], f["lote"], f["cif_adjudicatario"])] = f
+    return list(por_clave.values())
+
+
+def _tabla_adjudicaciones_lista(sesion, url_base, headers, reintentos=3):
+    """¿Está creada public.adjudicaciones? Sirve para NO romper la ingesta del catálogo
+    si el despliegue del código va por delante de la ejecución de adjudicaciones_schema.sql.
+
+    Distingue el caso REAL de tabla ausente (404/PGRST205 -> devuelve False y salta las
+    adjudicaciones, avisando) de un BLIP transitorio (5xx / error de red): ante lo
+    transitorio REINTENTA con backoff, y si tras los reintentos sigue sin poder confirmar,
+    asume que la tabla SÍ existe y continúa (mejor que saltar en silencio todo un
+    re-backfill de horas; si de verdad faltara, el primer upsert fallaría ruidosamente y
+    con reintentos). Se re-evalúa en cada ejecución."""
+    h = {**headers, "Range": "0-0"}
+    url = f"{url_base}/rest/v1/{TABLA_ADJ}?select=id"
+    ultimo = None
+    for intento in range(1, reintentos + 1):
+        try:
+            r = sesion.get(url, headers=h, timeout=60)
+        except requests.RequestException as e:
+            ultimo = e
+        else:
+            if r.status_code < 400:
+                return True
+            # 404 / PGRST205 = la tabla no existe: caso esperado, saltar sin reintentar.
+            if r.status_code == 404 or "PGRST205" in r.text or "does not exist" in r.text.lower():
+                print(f"  AVISO: public.{TABLA_ADJ} no existe todavía (HTTP {r.status_code}). "
+                      f"¿Ejecutaste adjudicaciones_schema.sql? SALTO la escritura de "
+                      f"adjudicaciones (el catálogo de licitaciones se ingiere con normalidad).")
+                return False
+            ultimo = RuntimeError(f"HTTP {r.status_code}: {r.text[:200]}")
+        if intento < reintentos:
+            espera = 2 ** intento
+            print(f"    sondeo de public.{TABLA_ADJ}: reintento {intento}/{reintentos} "
+                  f"en {espera}s ({ultimo})")
+            time.sleep(espera)
+    print(f"  AVISO: no pude confirmar public.{TABLA_ADJ} ({ultimo}); asumo que existe y "
+          f"continúo (los upserts reintentan y fallarían ruidosamente si no estuviera).")
+    return True
+
+
+def _borra_adjudicaciones(sesion, url_base, headers, licitacion_ids, trozo=50):
+    """DELETE de las filas de adjudicaciones de esos licitacion_id (en trozos, por el
+    límite de longitud de la URL). Se usa SOLO en la ingesta diaria, antes de
+    reinsertar: así un expediente re-publicado cuyo adjudicatario cambió REEMPLAZA sus
+    filas y no deja huérfanas. Sobre la tabla vacía (primera carga) es un no-op barato.
+
+    in.("url1","url2",...): comillas dobles porque los licitacion_id son URLs largas;
+    requests las url-encodea y PostgREST las decodifica (no llevan comas ni comillas)."""
+    ids = list(licitacion_ids)
+    base = f"{url_base}/rest/v1/{TABLA_ADJ}"
+    h = {**headers, "Prefer": "return=minimal"}
+    for i in range(0, len(ids), trozo):
+        chunk = ids[i:i + trozo]
+        expr = "in.(" + ",".join('"' + x.replace('"', '\\"') + '"' for x in chunk) + ")"
+        # Mismos reintentos/backoff que el upsert: un 429/5xx transitorio NO debe abortar
+        # la ingesta a mitad del delete+insert (dejaría expedientes sin sus filas).
+        _con_reintentos(lambda expr=expr: sesion.delete(base, headers=h,
+                                                        params={"licitacion_id": expr}, timeout=120),
+                        "DELETE adjudicaciones")
+
+
+def sube_adjudicaciones(sesion, url_base, headers, filas, reemplazar):
+    """Sube filas de adjudicaciones y devuelve cuántas subió.
+      · reemplazar=False (RE-BACKFILL): upsert idempotente por la clave del PASO 1
+        (merge-duplicates). La tabla se puebla con el estado ACTUAL de los ZIP y cada
+        licitacion_id se procesa una sola vez por ejecución, así que no hay huérfanas.
+      · reemplazar=True (INGESTA DIARIA): delete+insert por licitacion_id, para que un
+        expediente re-publicado con el adjudicatario corregido reemplace sus filas.
+    Deduplica por la clave antes de subir (ver _dedup_adj). Usa los MISMOS headers de
+    upsert (merge-duplicates) que las licitaciones; el endpoint apunta a adjudicaciones."""
+    filas = _dedup_adj(filas)
+    if not filas:
+        return 0
+    if reemplazar:
+        _borra_adjudicaciones(sesion, url_base, headers, {f["licitacion_id"] for f in filas})
+    endpoint = f"{url_base}/rest/v1/{TABLA_ADJ}?on_conflict={ADJ_ON_CONFLICT}"
+    for i in range(0, len(filas), 500):
+        _sube_lote(sesion, endpoint, headers, filas[i:i + 500])
+    return len(filas)
+
+
+def _resumen_adjudicaciones(sesion, url_base, headers):
+    """count(*) total de adjudicaciones vía REST + el SQL exacto para los distintos
+    (licitacion_id con adjudicación y CIF distintos), que la API REST no calcula."""
+    base = f"{url_base}/rest/v1/{TABLA_ADJ}"
+    total = _cuenta(sesion, base, headers, "?select=id")
+    print("-" * 78)
+    print("ADJUDICACIONES (competencia por CIF)")
+    print(f"  filas totales en public.adjudicaciones: "
+          + (f"{total:,}" if total is not None else "(no disponible)"))
+    print("  Distintos (la API REST no hace count(distinct); míralo en el SQL Editor):")
+    print("    select count(*) filas,")
+    print("           count(distinct licitacion_id) expedientes_con_adjudicacion,")
+    print("           count(distinct cif_adjudicatario) filter (where cif_adjudicatario <> '') cif_distintos,")
+    print("           count(*) filter (where cif_adjudicatario =  '') lotes_desiertos")
+    print("      from public.adjudicaciones;")
+
+
 def carga(unidades, limpiar=True):
     """Procesa las unidades (fuente, periodo) en STREAMING: descarga un ZIP →
     parsea sus .atom → upsert → libera el ZIP antes del siguiente, para no llenar
@@ -419,8 +566,12 @@ def carga(unidades, limpiar=True):
     # upserts redundantes (~2-3×) sin cambiar el resultado en las columnas que
     # guardamos (estables; el estado, que no guardamos, es lo que varía).
     vistos_run = set()
+    # ¿Está creada public.adjudicaciones? Si no, se ingiere el catálogo igual y solo
+    # se salta la parte de adjudicaciones (defensa para el orden de despliegue).
+    escribir_adj = _tabla_adjudicaciones_lista(sesion, url_base, headers)
 
     total = 0
+    total_adj = 0
     for fuente, periodo in unidades:
         clave_u = f"{fuente}_{periodo}"
         if clave_u in unidades_ok:
@@ -447,18 +598,28 @@ def carga(unidades, limpiar=True):
             # el mismo lote: Postgres no deja afectar dos veces la misma fila en ON
             # CONFLICT) Y entre unidades de esta ejecución (vistos_run).
             por_id = {}
+            adj_por_id = {}
             for entrada in entradas:
                 reg = extrae_entrada(entrada, fuente)
                 rid = reg["id"]
                 if rid in vistos_run:
                     continue
                 por_id[rid] = fila_para_tabla(reg)
+                # Adjudicaciones del snapshot más reciente de este expediente (las de
+                # reapariciones antiguas se saltan con el mismo dedup por licitacion_id).
+                if reg["adjudicaciones"]:
+                    adj_por_id[rid] = [fila_adjudicacion(rid, a) for a in reg["adjudicaciones"]]
             filas = list(por_id.values())
             for i in range(0, len(filas), 500):
                 lote = filas[i:i + 500]
                 _sube_lote(sesion, endpoint, headers, lote)
                 total += len(lote)
                 filas_unidad += len(lote)
+            # Adjudicaciones: upsert idempotente (sin borrar en el re-backfill; ver
+            # sube_adjudicaciones). Aditivo al upsert del catálogo, no lo cambia.
+            if escribir_adj:
+                adj_filas = [r for filas_id in adj_por_id.values() for r in filas_id]
+                total_adj += sube_adjudicaciones(sesion, url_base, headers, adj_filas, reemplazar=False)
             vistos_run.update(por_id.keys())
             atoms_ok.add(clave_a)
             _guarda_estado(unidades_ok, atoms_ok)
@@ -478,7 +639,10 @@ def carga(unidades, limpiar=True):
 
     print("=" * 78)
     print(f"Carga terminada. Filas upsertadas (con repeticiones entre .atom): {total:,}")
+    print(f"Filas de adjudicaciones upsertadas: {total_adj:,}")
     _resumen_post_carga(sesion, url_base, headers)
+    if escribir_adj:
+        _resumen_adjudicaciones(sesion, url_base, headers)
 
 
 def _cuenta(sesion, base_tabla, headers, filtro="?select=licitacion_id"):
@@ -537,6 +701,8 @@ def diario(fuentes):
     print("=" * 78)
 
     total = 0
+    total_adj = 0
+    escribir_adj = _tabla_adjudicaciones_lista(sesion, url_base, headers)
     vistos = set()   # dedup por ejecución: el feed trae cada licitación en varias páginas
     for feed in FEEDS:
         if feed["fuente"] not in fuentes:
@@ -547,22 +713,36 @@ def diario(fuentes):
         # La primera aparición de un id es su snapshot más reciente (el feed va de lo
         # más nuevo a lo más viejo): nos quedamos con esa.
         por_id = {}
+        adj_por_id = {}
         for entrada in entradas:
             reg = extrae_entrada(entrada, feed["fuente"])
-            if reg["id"] in vistos:
+            rid = reg["id"]
+            if rid in vistos:
                 continue
-            por_id[reg["id"]] = fila_para_tabla(reg)
+            por_id[rid] = fila_para_tabla(reg)
+            if reg["adjudicaciones"]:
+                adj_por_id[rid] = [fila_adjudicacion(rid, a) for a in reg["adjudicaciones"]]
         filas = list(por_id.values())
         for i in range(0, len(filas), 500):
             lote = filas[i:i + 500]
             _sube_lote(sesion, endpoint, headers, lote)
             total += len(lote)
+        # Adjudicaciones: delete+insert por licitacion_id (reemplazar=True), para que un
+        # expediente re-publicado con el adjudicatario corregido reemplace sus filas.
+        n_adj = 0
+        if escribir_adj:
+            adj_filas = [r for filas_id in adj_por_id.values() for r in filas_id]
+            n_adj = sube_adjudicaciones(sesion, url_base, headers, adj_filas, reemplazar=True)
+            total_adj += n_adj
         vistos.update(por_id.keys())
-        print(f"  upsert «{feed['fuente']}»: {len(filas):,} filas (acumulado {total:,})")
+        print(f"  upsert «{feed['fuente']}»: {len(filas):,} filas (acumulado {total:,})"
+              f"  ·  adjudicaciones: {n_adj:,}")
 
     print("=" * 78)
-    print(f"Ingesta diaria terminada. Filas upsertadas: {total:,}")
+    print(f"Ingesta diaria terminada. Filas upsertadas: {total:,}  ·  adjudicaciones: {total_adj:,}")
     _resumen_post_carga(sesion, url_base, headers)
+    if escribir_adj:
+        _resumen_adjudicaciones(sesion, url_base, headers)
 
 
 # --- PURGA de la ventana (vía RPC en Supabase) ------------------------------
