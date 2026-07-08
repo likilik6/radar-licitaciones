@@ -846,11 +846,20 @@ JS_SUPABASE = """
   };
   // ¿La tarjeta pertenece a una pestaña? data-estado es el estado EFECTIVO.
   function perteneceAPestana(card, pestana) {
-    // Tarjetas HIDRATADAS del catálogo (buscador): aparecen SOLO en 'En observación'
-    // y solo mientras sigan marcadas. NO se propagan a las pestañas por estado ni a
-    // 'Todas' (esas siguen leyendo únicamente el JSON del Radar). BG-5, límite de alcance.
+    // Tarjetas HIDRATADAS del catálogo (buscador / D2). Pertenecen a:
+    //   · 'En observación' (favoritas) si tienen la estrella marcada  [BG-5], y
+    //   · su pestaña de ESTADO (ganadas/perdidas/presentadas/descartadas) si tienen
+    //     un estado MANUAL — p.ej. las GANADAS auto-marcadas por CIF (D2), que van con
+    //     favorita=false y, sin esto, quedaban inyectadas pero invisibles.
+    // NO se cuelan en 'Todas' ni en 'Activas'/'Caducadas' (esas leen solo el JSON del
+    // Radar): una hidratada SIN estado manual (solo estrella) lleva data-estado con su
+    // base pública (activa/caducada), que aquí NO cuenta como pertenencia.
     if (card.dataset.origen === 'catalogo') {
-      return pestana === 'favoritas' && card.dataset.favorita === 'true';
+      if (pestana === 'favoritas') return card.dataset.favorita === 'true';
+      if (pestana === 'todas') return false;
+      const est = card.dataset.estado;
+      const esManual = (est === 'ganada' || est === 'perdida' || est === 'presentada' || est === 'descartada');
+      return esManual && est === ESTADO_DE_PESTANA[pestana];
     }
     if (pestana === 'todas') return true;
     if (pestana === 'favoritas') return card.dataset.favorita === 'true';  // sin importar estado
@@ -1261,19 +1270,45 @@ JS_SUPABASE = """
     if (!faltantes.length) { refrescarTodo(); return; }
     let filas = [];
     try {
+      // Instrumentado a PROPÓSITO (que NUNCA vuelva a fallar en silencio): si ves el
+      // 'pidiendo' pero no el 'recibidas', el que cuelga es el fetch; si ves ambos, el
+      // fallo está en el pintado de abajo.
+      console.info('Hidratación: pidiendo', faltantes.length, 'filas del catálogo…');
       const { data, error } = await supabase.from('licitaciones').select(COLS_CATALOGO).in('licitacion_id', faltantes);
       if (error) throw error;
       filas = data || [];
+      console.info('Hidratación: recibidas', filas.length, 'filas del catálogo.');
     } catch (err) {
-      console.error('Error hidratando «En observación» desde el catálogo:', err.message || err);
-      faltantes.forEach(function (id) { inyectarCatalogoMinimo(id); });   // no rompemos la pestaña
-      refrescarTodo();
+      console.error('Hidratación: fallo leyendo el catálogo (licitaciones):', err && (err.message || err));
+      // No rompemos la pestaña: caemos a tarjetas mínimas (con su estado/estrella).
+      faltantes.forEach(function (id) { _inyectaSeguro(null, id); });
+      _refrescaSeguro();
       return;
     }
+    // Pintado AISLADO por tarjeta: si una fila rompe, se registra y se sigue con las
+    // demás (una tarjeta mala NUNCA debe vaciar toda la pestaña).
     const encontrados = new Set();
-    filas.forEach(function (fila) { encontrados.add(fila.licitacion_id); inyectarCatalogo(fila); });
-    faltantes.forEach(function (id) { if (!encontrados.has(id)) inyectarCatalogoMinimo(id); });
-    refrescarTodo();
+    filas.forEach(function (fila) {
+      const id = fila && fila.licitacion_id;
+      if (id) encontrados.add(id);
+      _inyectaSeguro(fila, id);
+    });
+    faltantes.forEach(function (id) { if (!encontrados.has(id)) _inyectaSeguro(null, id); });
+    _refrescaSeguro();
+  }
+
+  // Inyecta una tarjeta (completa si hay 'fila'; mínima si no) AISLANDO la excepción:
+  // cualquier fallo se registra y NO propaga (así no aborta el resto del pintado).
+  function _inyectaSeguro(fila, id) {
+    try {
+      if (fila) inyectarCatalogo(fila); else inyectarCatalogoMinimo(id);
+    } catch (e) {
+      console.error('Hidratación: no pude pintar la tarjeta', id, e);
+    }
+  }
+  function _refrescaSeguro() {
+    try { refrescarTodo(); }
+    catch (e) { console.error('Hidratación: refrescarTodo() falló tras inyectar tarjetas:', e); }
   }
 
   // Tras marcar/quitar la estrella desde el BUSCADOR: refleja el cambio en 'En
@@ -1309,8 +1344,11 @@ JS_SUPABASE = """
     refrescarTodo();   // ya con data-estado/favorita reales: filtra, ordena y cuenta
     // BG-5 + D2: hidrata desde el catálogo las decisiones (favoritas y/o con estado
     // manual, p.ej. GANADAS auto-marcadas por CIF) que NO están en el JSON del Radar,
-    // por PK. Async, sin bloquear: las nativas ya se ven.
-    hidratarObservacion();
+    // por PK. Async, sin bloquear: las nativas ya se ven. El .catch evita que un fallo
+    // de la promesa se pierda en silencio (era la causa del bug: promesa flotante).
+    hidratarObservacion().catch(function (e) {
+      console.error('Hidratación «En observación / Ganadas» falló (promesa):', e && (e.message || e));
+    });
   }
 
   // --- Guardar un cambio en Supabase y, si confirma, reflejarlo ------------
