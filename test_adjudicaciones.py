@@ -18,7 +18,11 @@ from lxml import etree
 
 import feeds
 from feeds import extrae_adjudicaciones, extrae_entrada, normaliza_cif, a_fecha
-from backfill_catalogo import fila_adjudicacion, fila_para_tabla, _dedup_adj
+import backfill_catalogo
+from backfill_catalogo import (
+    fila_adjudicacion, fila_para_tabla, _dedup_adj,
+    automarcar_ganadas, _informe_automarcar, CIFS_LODEPA, RPC_AUTOMARCAR,
+)
 
 NSDECL = (
     'xmlns="http://www.w3.org/2005/Atom" '
@@ -241,6 +245,98 @@ def test_dedup_adj():
     print("  OK test_dedup_adj")
 
 
+# --- Fase D2 · glue Python de automarcar_ganadas (sin red, con sesión falsa) ---
+class _FakeResp:
+    def __init__(self, status_code, payload=None, text=""):
+        self.status_code = status_code
+        self._payload = payload
+        self.text = text
+
+    def json(self):
+        if self._payload is None:
+            raise ValueError("sin JSON")
+        return self._payload
+
+
+class _FakeSesion:
+    """Captura el último POST y devuelve respuestas programadas (una por llamada)."""
+    def __init__(self, respuestas):
+        self._respuestas = list(respuestas)
+        self.llamadas = []
+
+    def post(self, url, headers=None, json=None, timeout=None):
+        self.llamadas.append({"url": url, "headers": headers, "json": json})
+        return self._respuestas.pop(0)
+
+
+def test_automarcar_cif_normalizado():
+    # La constante del pipeline (único sitio) queda NORMALIZADA (mayúsculas, sin
+    # separadores), lista para casar con los cif_adjudicatario de la tabla.
+    check(CIFS_LODEPA == ["B86833753"], f"CIFS_LODEPA normalizado, era {CIFS_LODEPA!r}")
+    check(all(c == normaliza_cif(c) for c in CIFS_LODEPA), "CIFS_LODEPA: todos normalizados")
+    print("  OK test_automarcar_cif_normalizado")
+
+
+def test_automarcar_peticion_ok():
+    payload = {"simular": False, "n_marcadas": 1, "ya_ganadas": 0, "n_discrepancias": 0,
+               "marcadas": [{"licitacion_id": "url-1", "accion": "insert",
+                             "estado_anterior": None, "adjudicatario": "LODEPA SL",
+                             "importe_sin_iva": 1234.0}],
+               "discrepancias": []}
+    ses = _FakeSesion([_FakeResp(200, payload)])
+    headers = {"apikey": "K", "Authorization": "Bearer K", "Content-Type": "application/json",
+               "Prefer": "resolution=merge-duplicates,return=minimal"}
+    res = automarcar_ganadas(ses, "https://x.supabase.co", headers, simular=False)
+    check(res == payload, "automarcar: devuelve el jsonb parseado")
+    llam = ses.llamadas[0]
+    check(llam["url"].endswith(f"/rest/v1/rpc/{RPC_AUTOMARCAR}"), f"automarcar: URL RPC, era {llam['url']}")
+    check(llam["json"] == {"cifs": CIFS_LODEPA, "simular": False}, f"automarcar: cuerpo, era {llam['json']}")
+    check("Prefer" not in llam["headers"], "automarcar: no manda Prefer (es una función, no upsert)")
+    print("  OK test_automarcar_peticion_ok")
+
+
+def test_automarcar_simular_flag():
+    ses = _FakeSesion([_FakeResp(200, {"simular": True, "n_marcadas": 0, "ya_ganadas": 0,
+                                       "n_discrepancias": 0, "marcadas": [], "discrepancias": []})])
+    automarcar_ganadas(ses, "https://x.supabase.co", {}, simular=True)
+    check(ses.llamadas[0]["json"]["simular"] is True, "automarcar: propaga simular=True")
+    print("  OK test_automarcar_simular_flag")
+
+
+def test_automarcar_rpc_ausente_salta():
+    # 404 / PGRST202 (RPC no desplegada) -> None, sin excepción (no rompe la ingesta).
+    ses = _FakeSesion([_FakeResp(404, None, text='{"code":"PGRST202","message":"Could not find the function"}')])
+    res = automarcar_ganadas(ses, "https://x.supabase.co", {}, simular=False)
+    check(res is None, "automarcar: RPC ausente -> None (salta, no revienta)")
+    print("  OK test_automarcar_rpc_ausente_salta")
+
+
+def test_automarcar_sin_cifs_salta():
+    # Sin CIF configurados: no-op silencioso (no llega a hacer POST).
+    guardado = backfill_catalogo.CIFS_LODEPA
+    try:
+        backfill_catalogo.CIFS_LODEPA = []
+        ses = _FakeSesion([])   # si intentara postear, _FakeSesion.pop reventaría
+        res = automarcar_ganadas(ses, "https://x.supabase.co", {}, simular=False)
+        check(res is None and ses.llamadas == [], "automarcar: sin CIF no hace POST")
+    finally:
+        backfill_catalogo.CIFS_LODEPA = guardado
+    print("  OK test_automarcar_sin_cifs_salta")
+
+
+def test_informe_automarcar_no_revienta():
+    # El informe legible aguanta respuesta poblada (con discrepancias) y vacía.
+    _informe_automarcar({"simular": False, "n_marcadas": 1, "ya_ganadas": 2,
+                         "marcadas": [{"accion": "update", "licitacion_id": "url-2",
+                                       "estado_anterior": "presentada", "adjudicatario": "LODEPA SL",
+                                       "importe_sin_iva": None}],
+                         "discrepancias": [{"licitacion_id": "url-3", "estado_actual": "perdida",
+                                            "adjudicatario": None, "importe_sin_iva": 9.0}]})
+    _informe_automarcar({"simular": True, "n_marcadas": 0, "ya_ganadas": 0,
+                         "marcadas": [], "discrepancias": []})
+    print("  OK test_informe_automarcar_no_revienta")
+
+
 def smoke_vivo():
     import requests, time
     from feeds import CABECERAS, ATOM_NS, FEEDS
@@ -286,6 +382,12 @@ def main():
     test_no_regresion_extrae_entrada()
     test_a_fecha()
     test_dedup_adj()
+    test_automarcar_cif_normalizado()
+    test_automarcar_peticion_ok()
+    test_automarcar_simular_flag()
+    test_automarcar_rpc_ausente_salta()
+    test_automarcar_sin_cifs_salta()
+    test_informe_automarcar_no_revienta()
     if "--vivo" in sys.argv:
         smoke_vivo()
     print("\nTODO OK ✔")

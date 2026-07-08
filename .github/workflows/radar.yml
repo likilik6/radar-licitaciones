@@ -114,6 +114,9 @@ jobs:
       #    También puebla public.adjudicaciones (Fase D1) con las adjudicaciones que
       #    llegan cada día por el MISMO feed (delete+insert por expediente). Si la tabla
       #    aún no existe, ingiere el catálogo igual y solo salta las adjudicaciones.
+      #    Fase D2: al terminar, hace el cruce CIF de LODEPA -> public.decisiones
+      #    (RPC automarcar_ganadas_lodepa, idempotente) para auto-marcar las GANADAS.
+      #    Si esa RPC no está desplegada, avisa y sigue (no rompe la ingesta).
       - name: Ingesta diaria al catálogo
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
