@@ -22,6 +22,7 @@ import backfill_catalogo
 from backfill_catalogo import (
     fila_adjudicacion, fila_para_tabla, _dedup_adj,
     automarcar_ganadas, _informe_automarcar, CIFS_LODEPA, RPC_AUTOMARCAR,
+    refrescar_competidores, RPC_REFRESCAR_COMPETIDORES,
 )
 
 NSDECL = (
@@ -337,6 +338,27 @@ def test_informe_automarcar_no_revienta():
     print("  OK test_informe_automarcar_no_revienta")
 
 
+# --- Fase E · glue Python de refrescar_competidores (sin red) -----------------
+def test_refrescar_competidores_ok():
+    ses = _FakeSesion([_FakeResp(200, None, text="77624")])
+    headers = {"apikey": "K", "Authorization": "Bearer K",
+               "Prefer": "resolution=merge-duplicates,return=minimal"}
+    n = refrescar_competidores(ses, "https://x.supabase.co", headers)
+    check(n == 77624, f"refrescar: devuelve el nº de CIF, era {n!r}")
+    llam = ses.llamadas[0]
+    check(llam["url"].endswith(f"/rest/v1/rpc/{RPC_REFRESCAR_COMPETIDORES}"),
+          f"refrescar: URL RPC, era {llam['url']}")
+    check("Prefer" not in llam["headers"], "refrescar: no manda Prefer (es una función)")
+    print("  OK test_refrescar_competidores_ok")
+
+
+def test_refrescar_competidores_rpc_ausente_salta():
+    ses = _FakeSesion([_FakeResp(404, None, text='{"code":"PGRST202","message":"Could not find the function"}')])
+    n = refrescar_competidores(ses, "https://x.supabase.co", {})
+    check(n is None, "refrescar: RPC ausente -> None (salta, no revienta)")
+    print("  OK test_refrescar_competidores_rpc_ausente_salta")
+
+
 def smoke_vivo():
     import requests, time
     from feeds import CABECERAS, ATOM_NS, FEEDS
@@ -388,6 +410,8 @@ def main():
     test_automarcar_rpc_ausente_salta()
     test_automarcar_sin_cifs_salta()
     test_informe_automarcar_no_revienta()
+    test_refrescar_competidores_ok()
+    test_refrescar_competidores_rpc_ausente_salta()
     if "--vivo" in sys.argv:
         smoke_vivo()
     print("\nTODO OK ✔")
