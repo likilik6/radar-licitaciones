@@ -9,6 +9,11 @@
 # previo: haber ejecutado adjudicaciones_schema.sql en el SQL Editor de Supabase (si la
 # tabla no existe, el backfill ingiere el catálogo igual y solo salta las adjudicaciones).
 #
+# AUTO-MARCAR (Fase D2): al terminar, este backfill hace el cruce CIF de LODEPA ->
+# public.decisiones (RPC automarcar_ganadas_lodepa; idempotente). Si esa RPC no está
+# desplegada (automarcar_ganadas.sql), avisa y sigue. Para la pasada suelta sin
+# reingerir, usa el workflow "Auto-marcar ganadas (D2)" (automarcar.yml).
+#
 # SEPARADO del Radar: NO toca data/licitaciones.json ni la web. Es otro destino.
 #
 # Solo se dispara A MANO (workflow_dispatch) desde la pestaña "Actions". Lee la URL

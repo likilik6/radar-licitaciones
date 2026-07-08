@@ -1,0 +1,62 @@
+# Fase D2 · AUTO-MARCAR GANADAS por CIF (LODEPA) — ejecución MANUAL.
+#
+# Qué hace: cruza public.adjudicaciones (poblada en D1) con public.decisiones vía la
+# RPC public.automarcar_ganadas_lodepa y marca estado='ganada' las que ha ganado
+# LODEPA (CIF en backfill_catalogo.CIFS_LODEPA). Idempotente y en segundos (NO
+# reingiere el catálogo). Es la "pasada inicial one-shot" sobre lo ya backfilleado.
+#
+# El cruce DIARIO ya corre solo dentro de `python backfill_catalogo.py --diario`
+# (workflow radar.yml); esto es solo el disparo manual / previsualización.
+#
+# Requisito previo: haber ejecutado automarcar_ganadas.sql en el SQL Editor de
+# Supabase (crea la RPC). Si no está, el paso avisa y sale sin escribir.
+#
+# Lee la URL y la service_role de los SECRETS del repo; nunca del código.
+
+name: Auto-marcar ganadas (D2)
+
+on:
+  workflow_dispatch:
+    inputs:
+      simular:
+        description: "Solo previsualizar (no escribe). Desmárcalo para APLICAR."
+        type: boolean
+        required: false
+        default: true
+
+concurrency:
+  group: automarcar-ganadas
+  cancel-in-progress: false
+
+jobs:
+  automarcar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar librerías
+        run: pip install -r requirements.txt
+
+      - name: Auto-marcar ganadas (D2)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+          SIMULAR: ${{ inputs.simular }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE" ]; then
+            echo "Faltan los secrets SUPABASE_URL y/o SUPABASE_SERVICE_ROLE." >&2
+            exit 1
+          fi
+          args="--automarcar"
+          if [ "$SIMULAR" = "true" ]; then args="$args --simular"; fi
+          echo "Ejecutando: python backfill_catalogo.py $args"
+          python backfill_catalogo.py $args

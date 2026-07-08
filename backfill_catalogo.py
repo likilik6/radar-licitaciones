@@ -62,7 +62,7 @@ from lxml import etree
 # Reutilizamos del radar: la cabecera de navegador (obligatoria), el namespace
 # ATOM para localizar las <entry> y el EXTRACTOR de campos CODICE (único punto de
 # extracción del proyecto). Nada de esto se duplica aquí.
-from feeds import CABECERAS, ATOM_NS, FEEDS, descarga_entradas, extrae_entrada
+from feeds import CABECERAS, ATOM_NS, FEEDS, descarga_entradas, extrae_entrada, normaliza_cif
 
 # Acentos y "ñ" correctos en la consola de Windows.
 sys.stdout.reconfigure(encoding="utf-8")
@@ -74,6 +74,19 @@ TABLA_ADJ = "adjudicaciones"                # competencia por CIF (una fila por 
 # Clave de idempotencia del upsert de adjudicaciones: las columnas PLANAS del UNIQUE
 # de adjudicaciones_schema.sql (lote/cif son NOT NULL DEFAULT '' justo para esto).
 ADJ_ON_CONFLICT = "licitacion_id,lote,cif_adjudicatario"
+
+# --- FASE D2 · AUTO-MARCAR GANADAS por CIF ----------------------------------
+# ÚNICO SITIO documentado con los CIF de LODEPA. Preparado para crecer (otras razones
+# sociales o UTEs con CIF propio): añade más strings a la lista y listo. Se normalizan
+# con el MISMO normaliza_cif del extractor (mayúsculas, sin espacios/./-/) para que
+# casen con los cif_adjudicatario ya normalizados de public.adjudicaciones.
+#   · B86833753 = Logística y Desarrollo para la Protección Ambiental SL (LODEPA).
+CIFS_LODEPA = [c for c in (normaliza_cif(x) for x in [
+    "B86833753",
+]) if c]
+# RPC SECURITY DEFINER que hace el cruce en Supabase (automarcar_ganadas.sql). El
+# pipeline solo la INVOCA: la regla del cruce y la escritura en decisiones viven ahí.
+RPC_AUTOMARCAR = "automarcar_ganadas_lodepa"
 LIMITE_GRATIS_MB = 500          # plan gratuito de Supabase (~500 MB de base de datos)
 BASE = "https://contrataciondelsectorpublico.gob.es/sindicacion"
 
@@ -547,6 +560,99 @@ def _resumen_adjudicaciones(sesion, url_base, headers):
     print("      from public.adjudicaciones;")
 
 
+def _informe_automarcar(res):
+    """Imprime, legible, el jsonb que devuelve la RPC automarcar_ganadas_lodepa."""
+    modo = "SIMULACIÓN (no escribe)" if res.get("simular") else "APLICADO"
+    print("-" * 78)
+    print(f"AUTO-MARCAR GANADAS (LODEPA) · {modo}")
+    marcadas = res.get("marcadas") or []
+    print(f"  marcadas como 'ganada': {res.get('n_marcadas', 0)}"
+          f"   ·   ya estaban ganadas: {res.get('ya_ganadas', 0)}")
+    for m in marcadas:
+        imp = m.get("importe_sin_iva")
+        imp_txt = f"{float(imp):,.0f} €" if imp is not None else "—"
+        print(f"    [{m.get('accion')}] {m.get('adjudicatario') or '—'}  ·  {imp_txt}"
+              f"  ·  (antes: {m.get('estado_anterior') if m.get('estado_anterior') is not None else 'sin fila'})")
+        print(f"        {m.get('licitacion_id')}")
+    disc = res.get("discrepancias") or []
+    if disc:
+        print(f"  DISCREPANCIAS (estado manual distinto; NO se tocan, revísalas): {len(disc)}")
+        for d in disc:
+            print(f"    · estado actual '{d.get('estado_actual')}'  ·  {d.get('adjudicatario') or '—'}")
+            print(f"        {d.get('licitacion_id')}")
+    else:
+        print("  discrepancias: 0")
+
+
+def automarcar_ganadas(sesion, url_base, headers, simular=False, reintentos=4):
+    """Fase D2: cruza public.adjudicaciones (CIF de LODEPA) → public.decisiones vía la
+    RPC SECURITY DEFINER automarcar_ganadas_lodepa. NO escribe decisiones desde aquí:
+    la regla y la escritura viven en la función SQL (idempotente). Devuelve el dict del
+    informe, o None si se salta (sin CIF configurados, RPC no desplegada o fallo).
+
+    NO es fatal: corre al FINAL de la ingesta, así que un blip suyo no debe tirar un
+    día entero ya ingerido. Distingue RPC-ausente (404/PGRST202 -> avisa y salta) de un
+    5xx/red transitorio (reintenta con backoff)."""
+    if not CIFS_LODEPA:
+        print("  AUTO-MARCAR: sin CIF de LODEPA configurados (CIFS_LODEPA vacío); salto.")
+        return None
+    url = f"{url_base}/rest/v1/rpc/{RPC_AUTOMARCAR}"
+    # Prefer sin merge-duplicates: es una llamada a función, no un upsert de tabla.
+    h = {k: v for k, v in headers.items() if k != "Prefer"}
+    cuerpo = {"cifs": CIFS_LODEPA, "simular": bool(simular)}
+    ultimo = None
+    for intento in range(1, reintentos + 1):
+        try:
+            r = sesion.post(url, headers=h, json=cuerpo, timeout=120)
+        except requests.RequestException as e:
+            ultimo = e
+        else:
+            if r.status_code == 200:
+                try:
+                    res = r.json()
+                except ValueError:
+                    print(f"  AVISO: respuesta inesperada de {RPC_AUTOMARCAR}: {r.text[:200]!r}; salto.")
+                    return None
+                _informe_automarcar(res)
+                return res
+            # RPC no desplegada todavía: caso esperado (orden de despliegue). Salta.
+            if r.status_code == 404 or "PGRST202" in r.text or "Could not find the function" in r.text:
+                print(f"  AVISO: la RPC public.{RPC_AUTOMARCAR} no existe todavía (HTTP {r.status_code}). "
+                      f"¿Ejecutaste automarcar_ganadas.sql? SALTO el auto-marcado "
+                      f"(la ingesta de licitaciones/adjudicaciones ya se hizo con normalidad).")
+                return None
+            # 4xx de datos (≠404): no reintentar, pero NO tumbar la ingesta ya hecha.
+            if 400 <= r.status_code < 500 and r.status_code != 429:
+                print(f"  AVISO: {RPC_AUTOMARCAR} devolvió HTTP {r.status_code}: {r.text[:300]}; salto.")
+                return None
+            ultimo = RuntimeError(f"HTTP {r.status_code}: {r.text[:200]}")
+        if intento < reintentos:
+            espera = 2 ** intento
+            print(f"    auto-marcar: reintento {intento}/{reintentos} en {espera}s ({ultimo})")
+            time.sleep(espera)
+    print(f"  AVISO: no pude ejecutar {RPC_AUTOMARCAR} ({ultimo}); salto el auto-marcado "
+          f"(se reintentará en la próxima ingesta; el cruce es idempotente).")
+    return None
+
+
+def automarcar_oneshot(simular=False):
+    """Fase D2 · pasada ÚNICA de auto-marcado sobre TODO lo ya backfilleado, SIN
+    reingerir nada (segundos, no horas). Para la primera pasada y para previsualizar:
+      python backfill_catalogo.py --automarcar --simular   # dime cuántas marcaría
+      python backfill_catalogo.py --automarcar             # aplícalo
+    El cruce diario ya corre solo dentro de --diario; esto es el disparo manual."""
+    sesion, headers, _endpoint, url_base = _preparar_upsert()
+    print("=" * 78)
+    print("AUTO-MARCAR GANADAS (Fase D2) — pasada única (no reingiere el catálogo)")
+    print(f"CIF de LODEPA: {CIFS_LODEPA}  ·  {'SIMULAR (no escribe)' if simular else 'APLICAR'}")
+    print("=" * 78)
+    res = automarcar_ganadas(sesion, url_base, headers, simular=simular)
+    if res is None:
+        # RPC no desplegada o fallo (ya avisado): sal con código ≠0 para que se note en
+        # un disparo manual/CI (a diferencia de la ingesta, aquí ES el objetivo).
+        sys.exit("Auto-marcado no ejecutado (ver AVISO arriba).")
+
+
 def carga(unidades, limpiar=True):
     """Procesa las unidades (fuente, periodo) en STREAMING: descarga un ZIP →
     parsea sus .atom → upsert → libera el ZIP antes del siguiente, para no llenar
@@ -643,6 +749,10 @@ def carga(unidades, limpiar=True):
     _resumen_post_carga(sesion, url_base, headers)
     if escribir_adj:
         _resumen_adjudicaciones(sesion, url_base, headers)
+        # Fase D2: tras poblar adjudicaciones, cruza los CIF de LODEPA -> decisiones.
+        # Idempotente y O(un puñado) por el índice del CIF; re-lanzar el backfill no
+        # duplica marcas. Aditivo: no toca lo ya ingerido si la RPC no está desplegada.
+        automarcar_ganadas(sesion, url_base, headers)
 
 
 def _cuenta(sesion, base_tabla, headers, filtro="?select=licitacion_id"):
@@ -743,6 +853,10 @@ def diario(fuentes):
     _resumen_post_carga(sesion, url_base, headers)
     if escribir_adj:
         _resumen_adjudicaciones(sesion, url_base, headers)
+        # Fase D2: mismo cruce idempotente que en la carga. Corre la pasada COMPLETA
+        # (no solo lo nuevo): es O(un puñado) por el índice del CIF y así se auto-cura
+        # si un día se saltó. Marca en decisiones cualquier nueva GANADA de LODEPA.
+        automarcar_ganadas(sesion, url_base, headers)
 
 
 # --- PURGA de la ventana (vía RPC en Supabase) ------------------------------
@@ -931,8 +1045,11 @@ def main():
                     help="Ingesta incremental: upsert de TODO el feed EN VIVO (estatal+agregadas). Para el cron.")
     ap.add_argument("--purgar", action="store_true",
                     help="Purga la ventana (RPC purga_catalogo): borra lo viejo salvo abierto/en contratos.")
+    ap.add_argument("--automarcar", action="store_true",
+                    help="Fase D2: pasada única de auto-marcado GANADAS (CIF de LODEPA) sin reingerir. "
+                         "Con --simular solo dice cuántas marcaría.")
     ap.add_argument("--simular", action="store_true",
-                    help="Con --purgar: solo CUENTA lo que se borraría, sin borrar.")
+                    help="Con --purgar: solo CUENTA lo que se borraría. Con --automarcar: previsualiza (no escribe).")
     ap.add_argument("--ventana-anios", type=int, default=3,
                     help="Años de la ventana para --purgar (por defecto 3).")
     ap.add_argument("--lote", type=int, default=5000,
@@ -969,6 +1086,8 @@ def main():
         muestra(args.meses, fuentes)
     elif args.diario:
         diario(fuentes)
+    elif args.automarcar:
+        automarcar_oneshot(args.simular)
     elif args.purgar:
         purgar(args.ventana_anios, args.simular, args.lote)
     elif args.cargar:

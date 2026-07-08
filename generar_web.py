@@ -1242,13 +1242,18 @@ JS_SUPABASE = """
     catalogoInyectado.clear();
   }
 
-  // Trae del catálogo las marcadas (favorita) que NO están en el JSON del Radar y las
-  // inyecta en 'En observación'. Un solo select(...).in(...) por PK (sin RPC). Las que
-  // el catálogo no devuelva (purgadas) salen como tarjeta mínima. Termina con refrescarTodo.
+  // Trae del catálogo las decisiones PRIVADAS que NO están en el JSON del Radar y las
+  // inyecta en el grid. Un solo select(...).in(...) por PK (sin RPC). Las que el catálogo
+  // no devuelva (purgadas) salen como tarjeta mínima. Termina con refrescarTodo.
+  // Se hidrata tanto lo favorito (estrella, «En observación») COMO lo que tenga estado
+  // manual (ganada/perdida/presentada/descartada) — en particular las GANADAS
+  // auto-marcadas por CIF (Fase D2), que van con favorita=false y, sin esto, no
+  // aparecerían en su pestaña porque su expediente no está en el destilado del Radar.
   async function hidratarObservacion() {
     const faltantes = [];
     decisionesPorId.forEach(function (d, id) {
-      if (d && d.favorita === true && !idsRadarJSON.has(id)) faltantes.push(id);
+      const tieneEstadoManual = !!(d && d.estado && d.estado !== 'activa');
+      if (d && (d.favorita === true || tieneEstadoManual) && !idsRadarJSON.has(id)) faltantes.push(id);
     });
     // Quita hidratadas obsoletas (ya no marcadas).
     const objetivo = new Set(faltantes);
@@ -1302,8 +1307,9 @@ JS_SUPABASE = """
       pintaFavorita(card, dec.favorita);
     });
     refrescarTodo();   // ya con data-estado/favorita reales: filtra, ordena y cuenta
-    // BG-5: hidrata en 'En observación' las marcadas del buscador que NO están en el
-    // JSON (trae del catálogo por PK). Async, sin bloquear: las nativas ya se ven.
+    // BG-5 + D2: hidrata desde el catálogo las decisiones (favoritas y/o con estado
+    // manual, p.ej. GANADAS auto-marcadas por CIF) que NO están en el JSON del Radar,
+    // por PK. Async, sin bloquear: las nativas ya se ven.
     hidratarObservacion();
   }
 
