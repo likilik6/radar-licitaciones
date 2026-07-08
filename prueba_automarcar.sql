@@ -32,8 +32,12 @@ begin
 
   -- Estado de partida en decisiones (a 'sinfila' NO le ponemos fila, a propósito).
   -- updated_at explícito por si la columna fuese NOT NULL sin default (el front lo escribe).
+  -- OJO: el CHECK de decisiones (decisiones_estado_check) SOLO admite
+  -- ganada/perdida/presentada/descartada o NULL. Un expediente "activo" con fila NO
+  -- lleva 'activa' (cadena prohibida) sino estado=NULL (lo que guarda el front cuando
+  -- hay estrella pero sin estado manual). Por eso 'ZZTEST-activa' se siembra con NULL.
   insert into public.decisiones (licitacion_id, estado, favorita, updated_at) values
-    ('ZZTEST-activa',     'activa',     true,  now()),   -- favorita true: debe conservarse
+    ('ZZTEST-activa',     null,         true,  now()),   -- "activa" = estado NULL; favorita true debe conservarse
     ('ZZTEST-presentada', 'presentada', false, now()),
     ('ZZTEST-perdida',    'perdida',    false, now()),   -- manual: NO se toca -> discrepancia
     ('ZZTEST-yaganada',   'ganada',     true,  now());   -- ya ganada: no-op

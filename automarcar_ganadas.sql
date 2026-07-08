@@ -6,10 +6,12 @@
 -- expediente (licitacion_id) con ALGUNA adjudicación a un CIF de LODEPA, marca su
 -- decisión como estado='ganada' según esta regla (cerrada con Alejandro 07/07/2026):
 --   · sin fila en decisiones            -> INSERT con estado='ganada' (favorita=false)
---   · estado null / '' / 'activa'       -> UPDATE a 'ganada'
+--   · estado NULL (activo con estrella) -> UPDATE a 'ganada'
 --   · estado 'presentada'               -> UPDATE a 'ganada'  (transición natural)
 --   · estado 'ganada'                   -> no-op
---   · 'perdida' / 'descartada' / otro   -> NO se toca; se reporta como DISCREPANCIA
+--   · 'perdida' / 'descartada'          -> NO se toca; se reporta como DISCREPANCIA
+-- (El CHECK decisiones_estado_check solo admite ganada/perdida/presentada/descartada o
+--  NULL: no existen '' ni 'activa'; "activo" = estado NULL.)
 -- NO toca favorita ni ningún otro campo de decisiones, ni la tabla contratos.
 --
 -- IDEMPOTENTE: en la 2ª pasada el UPDATE ya no casa (excluye 'ganada') y el INSERT
@@ -73,10 +75,10 @@ begin
     select c.licitacion_id, c.adjudicatario, c.importe_sin_iva,
            d.estado as estado_actual,
            case
-             when d.licitacion_id is null                                     then 'insert'
-             when d.estado is null or d.estado in ('', 'activa', 'presentada') then 'update'
-             when d.estado = 'ganada'                                         then 'ya_ganada'
-             else 'discrepancia'
+             when d.licitacion_id is null                        then 'insert'
+             when d.estado is null or d.estado = 'presentada'     then 'update'
+             when d.estado = 'ganada'                             then 'ya_ganada'
+             else 'discrepancia'                                  -- perdida / descartada
            end as accion
     from cand c
     left join public.decisiones d on d.licitacion_id = c.licitacion_id
