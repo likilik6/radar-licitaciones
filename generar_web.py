@@ -737,6 +737,21 @@ CSS = """
   .adj-baja.comp-baja-alto{ color:#b91c1c; font-weight:600; } .adj-baja-na{ color:#94a3b8; font-style:italic; }
   .comp-flash{ animation:compFlash 1s ease; border-radius:8px; }
   @keyframes compFlash { 0%{ background:#fef9c3; } 100%{ background:transparent; } }
+  /* E.5 · AM, cruces navegables, ver expediente */
+  .comp-am{ color:#b45309; font-size:.82em; white-space:nowrap; }
+  .comp-tabla-rivales .comp-rival-fila{ cursor:pointer; }
+  .comp-tabla-rivales .comp-rival-fila:hover td{ background:#eef2ff; }
+  .comp-rival-sel td{ background:#e0e7ff !important; }
+  .comp-ver-exp{ font:inherit; font-size:.78rem; cursor:pointer; background:none; border:none; padding:2px 0; color:var(--acento-2); font-weight:600; text-decoration:underline; }
+  .comp-ver-exp:hover{ color:var(--acento); }
+  .comp-filtro-rival{ display:flex; align-items:center; gap:10px; margin:0 2px 10px; font-size:.9rem; }
+  .comp-ver-todos{ font:inherit; font-size:.82rem; cursor:pointer; background:var(--panel); border:1px solid var(--borde); border-radius:8px; padding:4px 10px; color:var(--acento-2); }
+  .comp-cruces-bloque{ background:#fff7ed; border:1px solid #fed7aa; border-radius:12px; padding:12px 14px; margin:14px 0; }
+  .comp-cruces-bloque .comp-sub-h{ margin-top:0; }
+  .comp-cruce-et{ font-weight:700; font-size:.8rem; padding:2px 8px; border-radius:999px; white-space:nowrap; }
+  .comp-cruce-perdida .comp-cruce-et{ background:#fee2e2; color:#b91c1c; }
+  .comp-cruce-ganada .comp-cruce-et{ background:#dcfce7; color:#15803d; }
+  .comp-cruce-presentada .comp-cruce-et{ background:#dbeafe; color:#1e40af; }
   @media (max-width:680px){ .comp-kpis{ grid-template-columns:repeat(2,1fr); } }
 
   /* ---- E.2 · bloque Adjudicación en Detalles ---- */
@@ -1769,7 +1784,7 @@ JS_SUPABASE = """
       + '<div class="adj-fila-top"><span class="adj-lote">' + lote + '</span>' + sig
       + '<button type="button" class="adj-ganador" data-cif="' + catEsc(a.cif_adjudicatario) + '" title="Ver ficha de competencia">'
       + catEsc(a.adjudicatario || a.cif_adjudicatario) + ' <span class="adj-cif">' + catEsc(a.cif_adjudicatario) + '</span> ›</button></div>'
-      + '<div class="adj-kpis"><span>' + compEur(a.importe_sin_iva) + ' <small>s/IVA</small></span>' + conIva
+      + '<div class="adj-kpis"><span>' + compImporteHtml(a.importe_sin_iva) + ' <small>s/IVA</small></span>' + conIva
       + '<span>' + compFecha(a.fecha_adjudicacion) + '</span>'
       + '<span>' + (a.n_ofertas == null ? '— ofertas' : a.n_ofertas + (a.n_ofertas === 1 ? ' oferta' : ' ofertas')) + '</span>'
       + (a.resultado ? '<span>' + catEsc(a.resultado) + '</span>' : '') + '</div>' + baja + '</div>';
@@ -2322,6 +2337,7 @@ JS_SUPABASE = """
   let compFichaEstado = null;                 // {cif, cab, adj, titulos, mostradas, orden}
   let compSeleccion = [];                     // E.2 M2: [{cif, nombre}] para el comparador
   let _compCruces = null;                     // E.2 M2: cache de cruces con mis decisiones
+  let compDirectaFiltroRival = null;          // E.5 P1: CIF del rival cuyos cruces se filtran
 
   // Normaliza IGUAL que el pipeline guardó nombre_busqueda: MAYÚSCULAS y sin acentos.
   function compNorm(s){ return String(s||'').toUpperCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g,''); }
@@ -2359,6 +2375,19 @@ JS_SUPABASE = """
     if(a.lote) return '<div class="comp-baja comp-baja-na" title="Presupuesto por lote no disponible (multi-lote)">—</div>';
     const b = compPctBaja(a.importe_sin_iva, (l||{}).presupuesto_sin_iva);
     return b ? '<div class="comp-baja'+(b.alto?' comp-baja-alto':'')+'">'+catEsc(b.txt)+'</div>' : '';
+  }
+  // E.5 · IMPORTES DE ACUERDO MARCO sin engaño. La D1 NO capturó el tipo de contrato,
+  // así que NO hay bandera de AM en los datos. Heurística fiable para ESTE catálogo (de
+  // NO menores, contratos ≥ ~15.000 €): un importe adjudicado < 1.000 € no puede ser el
+  // valor de un contrato -> es un PRECIO UNITARIO / puntuación (típico de acuerdos marco).
+  // Constante ajustable. (Bandera real de AM = backlog D1.1: capturar el TypeCode.)
+  const COMP_UMBRAL_AM = 1000;
+  function compEsUnitarioAM(importe){ const n = Number(importe); return isFinite(n) && n > 0 && n < COMP_UMBRAL_AM; }
+  // Importe rotulado: nunca el número suelto si es un precio unitario de AM.
+  function compImporteHtml(importe){
+    if(importe == null) return '—';
+    if(compEsUnitarioAM(importe)) return compEur(importe) + ' <span class="comp-am" title="Importe muy bajo para un contrato de NO menores: es un precio unitario / puntuación, típico de acuerdos marco. No es el valor del contrato.">(precio unitario AM)</span>';
+    return compEur(importe);
   }
 
   // Entrada a la vista (desde mostrarVista): sin búsqueda -> top-20 por importe.
@@ -2433,7 +2462,11 @@ JS_SUPABASE = """
       if(e2) throw e2;
       const ids = Array.from(new Set((adj||[]).map(function(a){return a.licitacion_id;})));
       const titulos = await compHidratarTitulos(ids);
-      compFichaEstado = { cif:cif, cab:cab, adj:adj||[], titulos:titulos, mostradas:COMP_PAGINA, orden:'fecha' };
+      // E.5 P4: cruces de ESTE competidor con mis decisiones (cacheado; cae con []).
+      let cruces = [];
+      try{ const cc = await compCargarCruces(); cruces = cc.porExpediente.filter(function(x){ return x.a.cif_adjudicatario===cif; }); }
+      catch(e){ console.error('Ficha: cruces no disponibles:', e && (e.message||e)); }
+      compFichaEstado = { cif:cif, cab:cab, adj:adj||[], titulos:titulos, mostradas:COMP_PAGINA, orden:'fecha', cruces:cruces };
       compPintarFicha();
       compScrollFicha();   // E.3: viajar a la ficha (ya pintada) con highlight breve
     }catch(err){
@@ -2508,7 +2541,7 @@ JS_SUPABASE = """
       filas += '<tr><td class="comp-num">'+compFecha(a.fecha_adjudicacion)+'</td>'
         + '<td><div class="comp-tit">'+tit+enlace+'</div><div class="comp-org">'+org+'</div></td>'
         + '<td>'+catEsc(a.lote||'—')+'</td><td>'+catEsc(a.resultado||'—')+'</td>'
-        + '<td class="comp-num">'+compEur(a.importe_sin_iva)+compBajaHtml(a, l)+'</td>'
+        + '<td class="comp-num">'+compImporteHtml(a.importe_sin_iva)+compBajaHtml(a, l)+'</td>'
         + '<td class="comp-num">'+(a.n_ofertas==null?'—':a.n_ofertas)+'</td></tr>';
     }
     const mas = (adj.length>st.mostradas)
@@ -2525,10 +2558,30 @@ JS_SUPABASE = """
       '<div class="comp-ficha-cab"><button type="button" class="comp-volver">‹ Volver</button>'+cmpBtn
       + '<h2>'+catEsc(nombre)+(esLodepa?' <span class="comp-lodepa">es LODEPA</span>':'')+'</h2>'
       + '<div class="comp-item-cif">'+catEsc(st.cif)+'</div></div>'
-      + kpis + tope + ordenCtrl
+      + kpis + tope + compBloqueCruces(st) + ordenCtrl
+      + '<h3 class="comp-sub-h">Todas sus adjudicaciones</h3>'
       + '<div class="comp-tabla-wrap"><table class="comp-tabla"><thead><tr>'
       + '<th>Fecha</th><th>Licitación / órgano</th><th>Lote</th><th>Resultado</th><th>Importe s/IVA</th><th>Ofertas</th>'
       + '</tr></thead><tbody>'+filas+'</tbody></table></div>'+mas;
+  }
+  // E.5 P4 — bloque destacado "Cruces contigo (N)" ARRIBA del listado, con mi estado por
+  // cruce y "ver expediente". Sin cruces -> cadena vacía (no pinta bloque).
+  function compBloqueCruces(st){
+    const cruces = st.cruces || [];
+    if(!cruces.length) return '';
+    const filas = cruces.map(function(x){
+      const a = x.a;
+      const et = x.miEstado==='perdida' ? 'me la ganó' : (x.miEstado==='ganada' ? 'la gané yo' : 'presentada (sin resolver)');
+      const cls = 'comp-cruce-' + (x.miEstado||'');
+      const tit = x.titulo ? catEsc(x.titulo) : '<span class="comp-min">(fuera del catálogo)</span>';
+      const verExp = '<button type="button" class="comp-ver-exp" data-exp-id="'+catEsc(a.licitacion_id)+'">ver expediente ›</button>';
+      return '<tr class="'+cls+'"><td><span class="comp-cruce-et">'+et+'</span></td>'
+        +'<td><div class="comp-tit">'+tit+'</div><div class="comp-org">'+(x.organo?catEsc(x.organo):'—')+'</div>'+verExp+'</td>'
+        +'<td>'+catEsc(a.lote||'—')+'</td><td class="comp-num">'+compImporteHtml(a.importe_sin_iva)+'</td>'
+        +'<td class="comp-num">'+compFecha(a.fecha_adjudicacion)+'</td></tr>';
+    }).join('');
+    return '<div class="comp-cruces-bloque"><h3 class="comp-sub-h">⚔️ Cruces contigo ('+cruces.length+')</h3>'
+      +'<div class="comp-tabla-wrap"><table class="comp-tabla"><thead><tr><th>Resultado</th><th>Licitación / órgano</th><th>Lote</th><th>Importe</th><th>Fecha</th></tr></thead><tbody>'+filas+'</tbody></table></div></div>';
   }
 
   // Debounce del input (300-400 ms) + delegación de clicks (resultado -> ficha; volver; más).
@@ -2554,6 +2607,8 @@ JS_SUPABASE = """
   }
   if(compFicha){
     compFicha.addEventListener('click', function(e){
+      const vexp = e.target.closest('.comp-ver-exp');   // E.5 P2: ver expediente (bloque cruces)
+      if(vexp){ if(window.__irAExpedienteBuscador) window.__irAExpedienteBuscador(vexp.getAttribute('data-exp-id')); return; }
       if(e.target.closest('.comp-volver')){
         compFicha.hidden = true;
         if(compResultados) compResultados.hidden = false;
@@ -2581,7 +2636,7 @@ JS_SUPABASE = """
   }
   // Limpieza al cerrar sesión: no dejar datos privados en el DOM.
   function limpiarCompetencia(){
-    compFichaEstado = null; compYaEntro = false; compSeleccion = []; _compCruces = null;
+    compFichaEstado = null; compYaEntro = false; compSeleccion = []; _compCruces = null; compDirectaFiltroRival = null;
     if(compResultados){ compResultados.innerHTML=''; compResultados.hidden=false; }
     if(compFicha){ compFicha.innerHTML=''; compFicha.hidden=true; }
     if(compEstado){ compEstado.textContent=''; compEstado.hidden=true; }
@@ -2643,9 +2698,12 @@ JS_SUPABASE = """
   // sección mostrada, y el menú siempre recupera.
   window.addEventListener('hashchange', function(){
     if(_compHashNav){ _compHashNav = false; return; }   // fue un cambio nuestro: ya navegamos
-    const m = /(?:^|#)competencia=(.+)$/.exec(location.hash || '');
-    if(m){ _compAbrirDesdeHash(decodeURIComponent(m[1])); }             // adelante / enlace directo
-    else if(compVistaAnterior){ const v = compVistaAnterior; compVistaAnterior = null; mostrarVista(v); }  // atrás
+    const h = location.hash || '';
+    let m = /(?:^|#)competencia=(.+)$/.exec(h);
+    if(m){ _compAbrirDesdeHash(decodeURIComponent(m[1])); return; }        // ficha de competidor
+    m = /(?:^|#)expediente=(.+)$/.exec(h);
+    if(m){ if(window.__irAExpedienteBuscador) window.__irAExpedienteBuscador(decodeURIComponent(m[1]), true); return; }  // E.5 P2
+    if(compVistaAnterior){ const v = compVistaAnterior; compVistaAnterior = null; mostrarVista(v); }   // atrás
   });
 
   // Cruces con MIS decisiones (presentada/ganada/perdida). Cacheado. El front ya tiene
@@ -2672,10 +2730,12 @@ JS_SUPABASE = """
         porExpediente.push({ a:a, miEstado:mi, titulo:l.titulo||null, organo:l.organo_contratacion||null, presupuesto:(l.presupuesto_sin_iva==null?null:l.presupuesto_sin_iva) });
         if(a.cif_adjudicatario && CIFS_LODEPA_FRONT.indexOf(a.cif_adjudicatario)<0){
           let r = porRival.get(a.cif_adjudicatario);
-          if(!r){ r={ cif:a.cif_adjudicatario, nombre:a.adjudicatario||a.cif_adjudicatario, exp:new Set(), meGano:new Set(), importe:0 }; porRival.set(a.cif_adjudicatario,r); }
+          if(!r){ r={ cif:a.cif_adjudicatario, nombre:a.adjudicatario||a.cif_adjudicatario, exp:new Set(), meGano:new Set(), importe:0, lotesAM:0 }; porRival.set(a.cif_adjudicatario,r); }
           r.exp.add(a.licitacion_id);
           if(mi==='perdida') r.meGano.add(a.licitacion_id);
-          r.importe += Number(a.importe_sin_iva)||0;
+          // P3: no sumar precios unitarios de AM al "importe" (peras con manzanas): se cuentan aparte.
+          if(compEsUnitarioAM(a.importe_sin_iva)) r.lotesAM += 1;
+          else r.importe += Number(a.importe_sin_iva)||0;
           if(a.adjudicatario) r.nombre = a.adjudicatario;
         }
       });
@@ -2704,32 +2764,43 @@ JS_SUPABASE = """
       const rivales = Array.from(c.porRival.values()).sort(function(a,b){ return (b.meGano.size-a.meGano.size) || (b.exp.size-a.exp.size) || (b.importe-a.importe); });
       const filasR = rivales.map(function(r){
         const gano = r.meGano.size;
-        return '<tr'+(gano>0?' class="comp-rival-gana"':'')+'><td><button type="button" class="adj-ganador" data-cif="'+catEsc(r.cif)+'">'
-          +catEsc(r.nombre)+' <span class="adj-cif">'+catEsc(r.cif)+'</span> ›</button></td>'
+        const sel = (compDirectaFiltroRival===r.cif) ? ' comp-rival-sel' : '';
+        const am = r.lotesAM ? ' <span class="comp-am">(+'+r.lotesAM+' lote'+(r.lotesAM>1?'s':'')+' AM)</span>' : '';
+        // P1: la fila entera (menos el botón del nombre) filtra sus cruces abajo.
+        return '<tr class="comp-rival-fila'+(gano>0?' comp-rival-gana':'')+sel+'" data-rival-cif="'+catEsc(r.cif)+'" title="Ver sus cruces contigo">'
+          +'<td><button type="button" class="adj-ganador" data-cif="'+catEsc(r.cif)+'">'+catEsc(r.nombre)+' <span class="adj-cif">'+catEsc(r.cif)+'</span> ›</button></td>'
           +'<td class="comp-num">'+r.exp.size+'</td><td class="comp-num">'+(gano>0?'<b>'+gano+'</b>':'0')+'</td>'
-          +'<td class="comp-num">'+compEur(r.importe)+'</td></tr>';
+          +'<td class="comp-num">'+compEur(r.importe)+am+'</td></tr>';
       }).join('');
       const resumen = rivales.length
-        ? '<div class="comp-tabla-wrap"><table class="comp-tabla"><thead><tr><th>Rival</th><th>Cruces</th><th>Me ganó</th><th>Importe</th></tr></thead><tbody>'+filasR+'</tbody></table></div>'
+        ? '<div class="comp-tabla-wrap"><table class="comp-tabla comp-tabla-rivales"><thead><tr><th>Rival <small>(clic → sus cruces)</small></th><th>Cruces</th><th>Me ganó</th><th>Importe contratos</th></tr></thead><tbody>'+filasR+'</tbody></table></div>'
         : '<p class="comp-neutro">Tus expedientes marcados aún no tienen adjudicación publicada con un rival distinto de LODEPA.</p>';
-      const filasE = c.porExpediente.map(function(x){
+      // P1: si hay filtro de rival, el detalle solo muestra sus cruces.
+      const expes = compDirectaFiltroRival
+        ? c.porExpediente.filter(function(x){ return x.a.cif_adjudicatario===compDirectaFiltroRival; })
+        : c.porExpediente;
+      const filasE = expes.map(function(x){
         const a=x.a;
-        const tit = x.titulo ? catEsc(x.titulo) : '<span class="comp-min">(fuera del catálogo) '+catEsc(a.licitacion_id)+'</span>';
+        const tit = x.titulo ? catEsc(x.titulo) : '<span class="comp-min">(fuera del catálogo)</span>';
         const esLodepa = CIFS_LODEPA_FRONT.indexOf(a.cif_adjudicatario)>=0;
         const gan = !a.cif_adjudicatario ? '<span class="comp-min">desierto</span>'
           : '<button type="button" class="adj-ganador'+(esLodepa?' comp-yo':'')+'" data-cif="'+catEsc(a.cif_adjudicatario)+'">'+catEsc(a.adjudicatario||a.cif_adjudicatario)+(esLodepa?' (LODEPA)':'')+' ›</button>';
-        return '<tr><td>'+compEstadoTag(x.miEstado)+'</td><td><div class="comp-tit">'+tit+'</div><div class="comp-org">'+(x.organo?catEsc(x.organo):'—')+'</div></td>'
+        const verExp = '<button type="button" class="comp-ver-exp" data-exp-id="'+catEsc(a.licitacion_id)+'">ver expediente ›</button>';   // P2
+        return '<tr><td>'+compEstadoTag(x.miEstado)+'</td><td><div class="comp-tit">'+tit+'</div><div class="comp-org">'+(x.organo?catEsc(x.organo):'—')+'</div>'+verExp+'</td>'
           +'<td>'+gan+'</td><td>'+catEsc(a.lote||'—')+'</td>'
-          +'<td class="comp-num">'+compEur(a.importe_sin_iva)+compBajaHtml(a, {presupuesto_sin_iva:x.presupuesto})+'</td>'
+          +'<td class="comp-num">'+compImporteHtml(a.importe_sin_iva)+compBajaHtml(a, {presupuesto_sin_iva:x.presupuesto})+'</td>'
           +'<td class="comp-num">'+compFecha(a.fecha_adjudicacion)+'</td><td class="comp-num">'+(a.n_ofertas==null?'—':a.n_ofertas)+'</td></tr>';
       }).join('');
-      const detalle = c.porExpediente.length
+      const filtroInfo = compDirectaFiltroRival
+        ? '<div class="comp-filtro-rival">Solo cruces con <b>'+catEsc((c.porRival.get(compDirectaFiltroRival)||{}).nombre||compDirectaFiltroRival)+'</b> <button type="button" class="comp-ver-todos">ver todos</button></div>'
+        : '';
+      const detalle = expes.length
         ? '<div class="comp-tabla-wrap"><table class="comp-tabla"><thead><tr><th>Mi estado</th><th>Licitación / órgano</th><th>Ganador</th><th>Lote</th><th>Importe</th><th>Fecha</th><th>Ofertas</th></tr></thead><tbody>'+filasE+'</tbody></table></div>'
-        : '<p class="comp-neutro">Sin adjudicaciones publicadas todavía en tus expedientes.</p>';
+        : '<p class="comp-neutro">Sin adjudicaciones para este filtro.</p>';
       compDirectaCont.innerHTML =
-        '<p class="comp-hint">Se construye con TUS decisiones (presentada/ganada/perdida). La fuente pública no publica quién licita, solo quién gana: esto refleja tus cruces, no la lista completa de pujadores.</p>'
+        '<p class="comp-hint">Se construye con TUS decisiones (presentada/ganada/perdida). La fuente pública no publica quién licita, solo quién gana: esto refleja tus cruces, no la lista completa de pujadores. Importes < 1.000 € = precio unitario/puntuación de acuerdo marco (no valor de contrato).</p>'
         +'<h3 class="comp-sub-h">Rivales · quién más te gana primero</h3>'+resumen
-        +'<h3 class="comp-sub-h">Detalle por expediente</h3>'+detalle;
+        +'<h3 class="comp-sub-h" id="comp-directa-detalle">Detalle por expediente</h3>'+filtroInfo+detalle;
     }catch(err){
       console.error('Competencia directa: error:', err && (err.message||err));
       compDirectaCont.innerHTML = '<p class="comp-error">No se pudo cargar la competencia directa.</p>';
@@ -2799,7 +2870,16 @@ JS_SUPABASE = """
   }
   if(compDirectaCont){
     compDirectaCont.addEventListener('click', function(e){
-      const g=e.target.closest('.adj-ganador'); if(g) compIrAFicha(g.getAttribute('data-cif'));
+      const exp = e.target.closest('.comp-ver-exp');   // P2: ver expediente en el buscador
+      if(exp){ if(window.__irAExpedienteBuscador) window.__irAExpedienteBuscador(exp.getAttribute('data-exp-id')); return; }
+      const g = e.target.closest('.adj-ganador');       // nombre del rival/ganador -> su ficha
+      if(g){ compIrAFicha(g.getAttribute('data-cif')); return; }
+      if(e.target.closest('.comp-ver-todos')){ compDirectaFiltroRival = null; compVerDirecta(); return; }
+      const fila = e.target.closest('.comp-rival-fila'); // P1: fila de rival -> filtra sus cruces + scroll
+      if(fila){
+        compDirectaFiltroRival = fila.getAttribute('data-rival-cif');
+        compVerDirecta().then(function(){ const el = document.getElementById('comp-directa-detalle'); if(el) try{ el.scrollIntoView({behavior:'smooth',block:'start'}); }catch(_){} });
+      }
     });
   }
 
@@ -3376,6 +3456,43 @@ JS_BUSCADOR_UI = """
     if(typeof irAFichaCompetidor === 'function') irAFichaCompetidor(g.getAttribute('data-cif'));
     else if(window.__irAFichaCompetidor) window.__irAFichaCompetidor(g.getAttribute('data-cif'));
   });
+
+  // E.5 P2 — abrir UN expediente por su licitacion_id (PK indexada; consulta directa,
+  // no búsqueda de texto). Reutiliza bgTarjeta + la hidratación de adjudicaciones (E.4).
+  // Twin de irAFichaCompetidor: mismo scroll+destello y hash (#expediente=ID) para que
+  // el botón atrás vuelva a donde estabas (p. ej. la Competencia directa).
+  async function irAExpedienteBuscador(id, fromHash){
+    if(!id || !bgRes) return;
+    if(!fromHash){
+      if(typeof vistaActiva !== 'undefined' && vistaActiva !== 'buscador') compVistaAnterior = vistaActiva;
+      const nuevo = 'expediente=' + encodeURIComponent(id);
+      if(('#' + nuevo) !== location.hash){ _compHashNav = true; try{ location.hash = nuevo; }catch(e){ _compHashNav = false; } }
+    }
+    bgYaBuscado = true;   // evita que __bgEntrar dispare una búsqueda por defecto encima
+    mostrarVista('buscador');
+    if(bgPag) bgPag.hidden = true;
+    if(bgCont) bgCont.textContent = '';
+    if(bgMsg){ bgMsg.hidden = false; bgMsg.textContent = 'Cargando expediente…'; }
+    bgRes.innerHTML = '';
+    try{
+      const { data, error } = await supabase.from('licitaciones').select(COLUMNAS).eq('licitacion_id', id).maybeSingle();
+      if(error) throw error;
+      if(!data){ if(bgMsg){ bgMsg.hidden = false; bgMsg.textContent = 'Este expediente ya no está en el catálogo (pudo purgarse).'; } return; }
+      bgFilasPorId.clear(); bgFilasPorId.set(id, data);
+      if(bgMsg) bgMsg.hidden = true;
+      bgRes.innerHTML = bgTarjeta(data);
+      bgHidratarAdjudicaciones([data], ++bgAdjGen);   // bloque Adjudicación (todos los lotes)
+      const card = bgRes.querySelector('.bg-card');
+      if(card){
+        try{ card.scrollIntoView({ behavior:'smooth', block:'start' }); }catch(e){ card.scrollIntoView(); }
+        card.classList.add('comp-flash'); setTimeout(function(){ card.classList.remove('comp-flash'); }, 1000);
+      }
+    }catch(err){
+      console.error('Ver expediente: error:', err && (err.message || err));
+      if(bgMsg){ bgMsg.hidden = false; bgMsg.textContent = 'No se pudo cargar el expediente.'; }
+    }
+  }
+  window.__irAExpedienteBuscador = irAExpedienteBuscador;
 
   function bgParams(){
     const f = bgFiltros;
