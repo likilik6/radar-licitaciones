@@ -2619,13 +2619,34 @@ JS_SUPABASE = """
   // puntos donde aparece un ganador: resultados del buscador, bloque Adjudicación de
   // Detalles, competencia directa y comparador. Cambia a Competencia, abre la ficha
   // (que hace fetch + pinta + scroll/flash de E.3) y activa la sub-pestaña Buscador.
-  function irAFichaCompetidor(cif){
-    if(!cif) return;
-    mostrarVista('competencia');
-    compTab('buscar'); if(compComparador) compComparador.hidden = true;
+  // Escribe un hash #competencia=CIF para que el BOTÓN ATRÁS del navegador vuelva a
+  // donde estabas (buscador, radar…) sin perder tu búsqueda.
+  let compVistaAnterior = null;   // sección desde la que saltamos a una ficha
+  let _compHashNav = false;       // el siguiente hashchange es NUESTRO (programático): ignorarlo
+  function _compAbrirDesdeHash(cif){
+    mostrarVista('competencia'); compTab('buscar'); if(compComparador) compComparador.hidden = true;
     compAbrirFicha(cif);
   }
+  function irAFichaCompetidor(cif){
+    if(!cif) return;
+    if(vistaActiva !== 'competencia') compVistaAnterior = vistaActiva;
+    const nuevo = 'competencia=' + encodeURIComponent(cif);
+    if(('#' + nuevo) !== location.hash){   // solo si cambia (evita dejar el flag colgado)
+      _compHashNav = true;
+      try{ location.hash = nuevo; }catch(e){ _compHashNav = false; }
+    }
+    _compAbrirDesdeHash(cif);
+  }
   window.__irAFichaCompetidor = irAFichaCompetidor;   // puente para otros módulos (buscador)
+  // Botón atrás/adelante del navegador: reacciona al hash SOLO cuando lo cambia el
+  // usuario (no nosotros). Ante cualquier cosa rara no rompe nada: como mucho cambia la
+  // sección mostrada, y el menú siempre recupera.
+  window.addEventListener('hashchange', function(){
+    if(_compHashNav){ _compHashNav = false; return; }   // fue un cambio nuestro: ya navegamos
+    const m = /(?:^|#)competencia=(.+)$/.exec(location.hash || '');
+    if(m){ _compAbrirDesdeHash(decodeURIComponent(m[1])); }             // adelante / enlace directo
+    else if(compVistaAnterior){ const v = compVistaAnterior; compVistaAnterior = null; mostrarVista(v); }  // atrás
+  });
 
   // Cruces con MIS decisiones (presentada/ganada/perdida). Cacheado. El front ya tiene
   // mis decisiones en decisionesPorId; pedimos adjudicaciones por esos ids (troceado) y
