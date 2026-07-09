@@ -720,6 +720,12 @@ CSS = """
   .comp-cmp tbody th{ text-align:left; color:var(--suave); font-weight:600; white-space:nowrap; }
   .comp-yo{ border-color:#86efac !important; color:#15803d !important; }
   .comp-vacio-directa{ padding:24px; text-align:center; color:var(--suave); background:var(--panel); border:1px dashed var(--borde); border-radius:12px; }
+  .comp-baja{ font-size:.72rem; color:var(--suave); margin-top:2px; font-weight:400; white-space:normal; }
+  .comp-baja.comp-baja-alto{ color:#b91c1c; font-weight:600; } .comp-baja-na{ color:#cbd5e1; }
+  .adj-baja{ font-size:.8rem; color:var(--suave); margin-top:6px; }
+  .adj-baja.comp-baja-alto{ color:#b91c1c; font-weight:600; } .adj-baja-na{ color:#94a3b8; font-style:italic; }
+  .comp-flash{ animation:compFlash 1s ease; border-radius:8px; }
+  @keyframes compFlash { 0%{ background:#fef9c3; } 100%{ background:transparent; } }
   @media (max-width:680px){ .comp-kpis{ grid-template-columns:repeat(2,1fr); } }
 
   /* ---- E.2 · bloque Adjudicación en Detalles ---- */
@@ -1706,23 +1712,32 @@ JS_SUPABASE = """
     if (!adjContenido) return;
     adjContenido.innerHTML = '<p class="adj-cargando">Cargando adjudicación…</p>';
     try {
-      const { data, error } = await supabase.from('adjudicaciones')
-        .select('lote,resultado,cif_adjudicatario,adjudicatario,importe_sin_iva,importe_con_iva,n_ofertas,fecha_adjudicacion')
-        .eq('licitacion_id', id)
-        .order('lote', { ascending: true });
-      if (error) throw error;
+      // Adjudicaciones + presupuesto del catálogo (para el % de baja), en paralelo.
+      const [rA, rL] = await Promise.all([
+        supabase.from('adjudicaciones')
+          .select('lote,resultado,cif_adjudicatario,adjudicatario,importe_sin_iva,importe_con_iva,n_ofertas,fecha_adjudicacion')
+          .eq('licitacion_id', id).order('lote', { ascending: true }),
+        supabase.from('licitaciones').select('presupuesto_sin_iva').eq('licitacion_id', id).maybeSingle(),
+      ]);
+      if (rA.error) throw rA.error;
       if (contratoId !== id || (modal && modal.hidden)) return;   // se cambió/cerró entre tanto
-      if (!(data || []).length) {
+      const filas = rA.data || [];
+      if (!filas.length) {
         adjContenido.innerHTML = '<p class="adj-neutro">Sin adjudicación publicada todavía.</p>';
         return;
       }
-      adjContenido.innerHTML = data.map(adjFilaHtml).join('');
+      const presupuesto = (rL && !rL.error && rL.data) ? rL.data.presupuesto_sin_iva : null;
+      // % de baja SOLO si el expediente tiene UNA sola adjudicación (sin lotes o lote
+      // único): entonces el presupuesto del catálogo es comparable con ese importe.
+      // Multi-lote -> '—' (no hay presupuesto por lote). Un AM tiene varias filas -> '—'.
+      const ctx = { presupuesto: presupuesto, unico: filas.length === 1 };
+      adjContenido.innerHTML = filas.map(function (a) { return adjFilaHtml(a, ctx); }).join('');
     } catch (err) {
       console.error('Detalles: error leyendo la adjudicación:', err && (err.message || err));
       adjContenido.innerHTML = '<p class="adj-error">No se pudo cargar la adjudicación.</p>';
     }
   }
-  function adjFilaHtml(a) {
+  function adjFilaHtml(a, ctx) {
     const lote = a.lote ? ('Lote ' + catEsc(a.lote)) : 'Contrato';
     if (!a.cif_adjudicatario) {   // '' = lote DESIERTO (TenderResult sin ganador)
       return '<div class="adj-fila adj-desierto"><span class="adj-lote">' + lote + '</span>'
@@ -1731,6 +1746,14 @@ JS_SUPABASE = """
     const esLodepa = CIFS_LODEPA_FRONT.indexOf(a.cif_adjudicatario) >= 0;
     const sig = esLodepa ? ' <span class="comp-lodepa">adjudicada a LODEPA</span>' : '';
     const conIva = (a.importe_con_iva != null) ? '<span>' + compEur(a.importe_con_iva) + ' <small>c/IVA</small></span>' : '';
+    // % de baja (E.3): solo cuando el expediente es de UNA sola adjudicación (ctx.unico).
+    let baja = '';
+    if (ctx && ctx.unico) {
+      const b = compPctBaja(a.importe_sin_iva, ctx.presupuesto);
+      if (b) baja = '<div class="adj-baja' + (b.alto ? ' comp-baja-alto' : '') + '">' + catEsc(b.txt) + '</div>';
+    } else if (ctx) {
+      baja = '<div class="adj-baja adj-baja-na" title="Presupuesto por lote no disponible">% sobre presupuesto: no disponible (multi-lote)</div>';
+    }
     return '<div class="adj-fila">'
       + '<div class="adj-fila-top"><span class="adj-lote">' + lote + '</span>' + sig
       + '<button type="button" class="adj-ganador" data-cif="' + catEsc(a.cif_adjudicatario) + '" title="Ver ficha de competencia">'
@@ -1738,7 +1761,7 @@ JS_SUPABASE = """
       + '<div class="adj-kpis"><span>' + compEur(a.importe_sin_iva) + ' <small>s/IVA</small></span>' + conIva
       + '<span>' + compFecha(a.fecha_adjudicacion) + '</span>'
       + '<span>' + (a.n_ofertas == null ? '— ofertas' : a.n_ofertas + (a.n_ofertas === 1 ? ' oferta' : ' ofertas')) + '</span>'
-      + (a.resultado ? '<span>' + catEsc(a.resultado) + '</span>' : '') + '</div></div>';
+      + (a.resultado ? '<span>' + catEsc(a.resultado) + '</span>' : '') + '</div>' + baja + '</div>';
   }
   // Clic en el ganador -> cerrar el modal y abrir su ficha en la sección Competencia.
   if (adjContenido) {
@@ -1748,7 +1771,8 @@ JS_SUPABASE = """
       const cif = b.getAttribute('data-cif');
       if (modal) modal.hidden = true;
       mostrarVista('competencia');
-      if (typeof compAbrirFicha === 'function') compAbrirFicha(cif);
+      if (typeof compIrAFicha === 'function') compIrAFicha(cif);       // sub-pestaña Buscador + ficha
+      else if (typeof compAbrirFicha === 'function') compAbrirFicha(cif);
     });
   }
 
@@ -2308,6 +2332,25 @@ JS_SUPABASE = """
     const s = String(iso||''); if(s.length<10) return '—';
     return s.slice(8,10)+'/'+s.slice(5,7)+'/'+s.slice(0,4);
   }
+  // E.3 — % del importe adjudicado sobre el presupuesto de licitación (SIN IVA vs SIN
+  // IVA). Devuelve null si no es comparable (sin presupuesto). Si pct>100 avisa. La
+  // COMPARABILIDAD (sin lotes / lote único vs multi-lote / AM) la decide QUIEN LLAMA.
+  function compPctBaja(importe, presupuesto){
+    const imp = Number(importe), pre = Number(presupuesto);
+    if(!isFinite(imp) || !isFinite(pre) || pre<=0) return null;
+    const pct = 100*imp/pre;
+    const f = function(n){ return n.toLocaleString('es-ES',{minimumFractionDigits:1,maximumFractionDigits:1}); };
+    if(pct>100.5) return { pct:pct, alto:true, txt:f(pct)+'% del presupuesto ⚠ (por encima)' };
+    return { pct:pct, alto:false, txt:f(pct)+'% del presupuesto (baja '+f(Math.max(0,100-pct))+'%)' };
+  }
+  // % de baja para una fila de adjudicación en ficha/competencia directa: SOLO si el
+  // lote está vacío (contrato sin lotes → el presupuesto del catálogo es comparable).
+  // Con lote (multi-lote) no hay presupuesto por lote -> '—' con tooltip.
+  function compBajaHtml(a, l){
+    if(a.lote) return '<div class="comp-baja comp-baja-na" title="Presupuesto por lote no disponible (multi-lote)">—</div>';
+    const b = compPctBaja(a.importe_sin_iva, (l||{}).presupuesto_sin_iva);
+    return b ? '<div class="comp-baja'+(b.alto?' comp-baja-alto':'')+'">'+catEsc(b.txt)+'</div>' : '';
+  }
 
   // Entrada a la vista (desde mostrarVista): sin búsqueda -> top-20 por importe.
   window.__compEntrar = function(){
@@ -2383,6 +2426,7 @@ JS_SUPABASE = """
       const titulos = await compHidratarTitulos(ids);
       compFichaEstado = { cif:cif, cab:cab, adj:adj||[], titulos:titulos, mostradas:COMP_PAGINA, orden:'fecha' };
       compPintarFicha();
+      compScrollFicha();   // E.3: viajar a la ficha (ya pintada) con highlight breve
     }catch(err){
       console.error('Competencia: error abriendo ficha', cif, err && (err.message||err));
       if(compFicha) compFicha.innerHTML =
@@ -2399,7 +2443,7 @@ JS_SUPABASE = """
       const trozo = ids.slice(i,i+100);
       try{
         const { data, error } = await supabase.from('licitaciones')
-          .select('licitacion_id,titulo,organo_contratacion,enlace').in('licitacion_id', trozo);
+          .select('licitacion_id,titulo,organo_contratacion,enlace,presupuesto_sin_iva').in('licitacion_id', trozo);
         if(error) throw error;
         (data||[]).forEach(function(f){ mapa.set(f.licitacion_id, f); });
       }catch(err){
@@ -2411,6 +2455,16 @@ JS_SUPABASE = """
   }
 
   function compKpi(v, et){ return '<div class="comp-kpi"><div class="comp-kpi-v">'+v+'</div><div class="comp-kpi-e">'+catEsc(et)+'</div></div>'; }
+
+  // E.3 — tras abrir/pintar la ficha, viajar hasta ella (scroll suave) con un highlight
+  // breve del encabezado, para que se vea que el clic funcionó (la ficha se pinta abajo).
+  function compScrollFicha(){
+    if(!compFicha) return;
+    try{ compFicha.scrollIntoView({ behavior:'smooth', block:'start' }); }
+    catch(e){ compFicha.scrollIntoView(); }   // navegadores sin opciones de scroll
+    const cab = compFicha.querySelector('.comp-ficha-cab');
+    if(cab){ cab.classList.add('comp-flash'); setTimeout(function(){ cab.classList.remove('comp-flash'); }, 1000); }
+  }
 
   // MEJORA 1 — ordena las adjudicaciones de la ficha por fecha o por importe (desc,
   // NULLs al final en ambos). Ordena in-place el array ya cargado (sin re-consultar).
@@ -2445,7 +2499,7 @@ JS_SUPABASE = """
       filas += '<tr><td class="comp-num">'+compFecha(a.fecha_adjudicacion)+'</td>'
         + '<td><div class="comp-tit">'+tit+enlace+'</div><div class="comp-org">'+org+'</div></td>'
         + '<td>'+catEsc(a.lote||'—')+'</td><td>'+catEsc(a.resultado||'—')+'</td>'
-        + '<td class="comp-num">'+compEur(a.importe_sin_iva)+'</td>'
+        + '<td class="comp-num">'+compEur(a.importe_sin_iva)+compBajaHtml(a, l)+'</td>'
         + '<td class="comp-num">'+(a.n_ofertas==null?'—':a.n_ofertas)+'</td></tr>';
     }
     const mas = (adj.length>st.mostradas)
@@ -2574,7 +2628,7 @@ JS_SUPABASE = """
       adj.forEach(function(a){
         const mi = (decisionesPorId.get(a.licitacion_id)||{}).estado || null;
         const l = titulos.get(a.licitacion_id) || {};
-        porExpediente.push({ a:a, miEstado:mi, titulo:l.titulo||null, organo:l.organo_contratacion||null });
+        porExpediente.push({ a:a, miEstado:mi, titulo:l.titulo||null, organo:l.organo_contratacion||null, presupuesto:(l.presupuesto_sin_iva==null?null:l.presupuesto_sin_iva) });
         if(a.cif_adjudicatario && CIFS_LODEPA_FRONT.indexOf(a.cif_adjudicatario)<0){
           let r = porRival.get(a.cif_adjudicatario);
           if(!r){ r={ cif:a.cif_adjudicatario, nombre:a.adjudicatario||a.cif_adjudicatario, exp:new Set(), meGano:new Set(), importe:0 }; porRival.set(a.cif_adjudicatario,r); }
@@ -2624,7 +2678,8 @@ JS_SUPABASE = """
         const gan = !a.cif_adjudicatario ? '<span class="comp-min">desierto</span>'
           : '<button type="button" class="adj-ganador'+(esLodepa?' comp-yo':'')+'" data-cif="'+catEsc(a.cif_adjudicatario)+'">'+catEsc(a.adjudicatario||a.cif_adjudicatario)+(esLodepa?' (LODEPA)':'')+' ›</button>';
         return '<tr><td>'+compEstadoTag(x.miEstado)+'</td><td><div class="comp-tit">'+tit+'</div><div class="comp-org">'+(x.organo?catEsc(x.organo):'—')+'</div></td>'
-          +'<td>'+gan+'</td><td>'+catEsc(a.lote||'—')+'</td><td class="comp-num">'+compEur(a.importe_sin_iva)+'</td>'
+          +'<td>'+gan+'</td><td>'+catEsc(a.lote||'—')+'</td>'
+          +'<td class="comp-num">'+compEur(a.importe_sin_iva)+compBajaHtml(a, {presupuesto_sin_iva:x.presupuesto})+'</td>'
           +'<td class="comp-num">'+compFecha(a.fecha_adjudicacion)+'</td><td class="comp-num">'+(a.n_ofertas==null?'—':a.n_ofertas)+'</td></tr>';
       }).join('');
       const detalle = c.porExpediente.length
