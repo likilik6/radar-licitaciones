@@ -549,6 +549,17 @@ CSS = """
   #bg-resultados .card.urg-roja  { border-color:#fca5a5; background:rgba(185,28,28,.06); }
   #bg-resultados .card.urg-ambar { border-color:#fcd34d; background:rgba(180,83,9,.06); }
   #bg-resultados .card.urg-verde { border-color:#86efac; background:rgba(21,128,61,.05); }
+  /* E.4: línea "quién ganó" en cada resultado del buscador. */
+  .bg-adj{ margin-top:10px; padding-top:10px; border-top:1px dashed var(--borde); font-size:.86rem; line-height:1.6; }
+  .bg-adj-cargando{ color:var(--suave); font-style:italic; }
+  .bg-adj-neutro{ color:var(--suave); }
+  .bg-adj-et{ font-weight:700; }
+  .bg-adj-ganador{ font:inherit; font-size:.86rem; cursor:pointer; background:var(--panel); border:1px solid var(--borde); border-radius:8px; padding:2px 8px; color:var(--acento-2); font-weight:600; }
+  .bg-adj-ganador:hover{ border-color:var(--acento); }
+  .bg-adj-baja{ color:var(--suave); } .bg-adj-baja.comp-baja-alto{ color:#b91c1c; font-weight:600; }
+  .bg-adj-multi > summary{ cursor:pointer; font-weight:600; }
+  .bg-adj-lotes{ margin-top:8px; display:grid; gap:6px; padding-left:6px; }
+  .bg-adj-lote{ font-size:.84rem; }
   /* BG-5: estrella «En observación» en los resultados del buscador (arriba a la derecha). */
   .bg-card .bg-card-ctrl { justify-content:flex-end; margin-bottom:2px; }
   /* BG-5: tarjeta de CATÁLOGO hidratada en 'En observación' (origen buscador). */
@@ -1770,9 +1781,7 @@ JS_SUPABASE = """
       if (!b) return;
       const cif = b.getAttribute('data-cif');
       if (modal) modal.hidden = true;
-      mostrarVista('competencia');
-      if (typeof compIrAFicha === 'function') compIrAFicha(cif);       // sub-pestaña Buscador + ficha
-      else if (typeof compAbrirFicha === 'function') compAbrirFicha(cif);
+      irAFichaCompetidor(cif);       // E.4: navegación única (sección + ficha + scroll)
     });
   }
 
@@ -2605,7 +2614,39 @@ JS_SUPABASE = """
                                  : '<span class="comp-tray-hint">añade otro para comparar</span>')
       + '<button type="button" class="comp-tray-clear">limpiar</button>';
   }
-  function compIrAFicha(cif){ compTab('buscar'); if(compComparador) compComparador.hidden=true; compAbrirFicha(cif); }
+  function compIrAFicha(cif){ irAFichaCompetidor(cif); }
+  // E.4 · ÚNICA función de navegación a la ficha de un competidor. La usan TODOS los
+  // puntos donde aparece un ganador: resultados del buscador, bloque Adjudicación de
+  // Detalles, competencia directa y comparador. Cambia a Competencia, abre la ficha
+  // (que hace fetch + pinta + scroll/flash de E.3) y activa la sub-pestaña Buscador.
+  // Escribe un hash #competencia=CIF para que el BOTÓN ATRÁS del navegador vuelva a
+  // donde estabas (buscador, radar…) sin perder tu búsqueda.
+  let compVistaAnterior = null;   // sección desde la que saltamos a una ficha
+  let _compHashNav = false;       // el siguiente hashchange es NUESTRO (programático): ignorarlo
+  function _compAbrirDesdeHash(cif){
+    mostrarVista('competencia'); compTab('buscar'); if(compComparador) compComparador.hidden = true;
+    compAbrirFicha(cif);
+  }
+  function irAFichaCompetidor(cif){
+    if(!cif) return;
+    if(vistaActiva !== 'competencia') compVistaAnterior = vistaActiva;
+    const nuevo = 'competencia=' + encodeURIComponent(cif);
+    if(('#' + nuevo) !== location.hash){   // solo si cambia (evita dejar el flag colgado)
+      _compHashNav = true;
+      try{ location.hash = nuevo; }catch(e){ _compHashNav = false; }
+    }
+    _compAbrirDesdeHash(cif);
+  }
+  window.__irAFichaCompetidor = irAFichaCompetidor;   // puente para otros módulos (buscador)
+  // Botón atrás/adelante del navegador: reacciona al hash SOLO cuando lo cambia el
+  // usuario (no nosotros). Ante cualquier cosa rara no rompe nada: como mucho cambia la
+  // sección mostrada, y el menú siempre recupera.
+  window.addEventListener('hashchange', function(){
+    if(_compHashNav){ _compHashNav = false; return; }   // fue un cambio nuestro: ya navegamos
+    const m = /(?:^|#)competencia=(.+)$/.exec(location.hash || '');
+    if(m){ _compAbrirDesdeHash(decodeURIComponent(m[1])); }             // adelante / enlace directo
+    else if(compVistaAnterior){ const v = compVistaAnterior; compVistaAnterior = null; mostrarVista(v); }  // atrás
+  });
 
   // Cruces con MIS decisiones (presentada/ganada/perdida). Cacheado. El front ya tiene
   // mis decisiones en decisionesPorId; pedimos adjudicaciones por esos ids (troceado) y
@@ -3191,6 +3232,7 @@ JS_BUSCADOR_UI = """
   let bgPagina = 1;
   let bgYaBuscado = false;
   let bgCargando = false;
+  let bgAdjGen = 0;   // E.4: generación de página, para descartar hidrataciones tardías
   // BG-5: filas de la página actual por licitacion_id, para que el toggle de la
   // estrella tenga a mano la fila del catálogo (evita re-consultar al hidratar).
   const bgFilasPorId = new Map();
@@ -3264,8 +3306,76 @@ JS_BUSCADOR_UI = """
       + exp
       + '<div class="cpv"><span class="et">CPV</span> ' + bgChipsCpv(f.cpv) + '</div>'
       + '<div class="bg-plazo"><span class="et">Fin de plazo</span> ' + bgFecha(f.fecha_fin_plazo) + coletilla + '</div>'
+      + '<div class="bg-adj" data-adj-id="' + bgEscape(id) + '"><span class="bg-adj-cargando">Adjudicación…</span></div>'
       + '</article>';
   }
+
+  // E.4 — hidrata "quién ganó" de la página visible con UNA llamada in.(ids). Rellena
+  // los contenedores .bg-adj ya pintados. La 'gen' descarta respuestas de páginas que
+  // ya no están. console.error si falla (no rompe los resultados).
+  function bgEsLodepa(cif){ return CIFS_LODEPA_FRONT.indexOf(cif) >= 0; }
+  function bgGanadorBtn(a){
+    return '<button type="button" class="bg-adj-ganador" data-cif="' + bgEscape(a.cif_adjudicatario)
+      + '" title="Ver ficha de competencia">' + bgEscape(a.adjudicatario || a.cif_adjudicatario)
+      + ' <span class="adj-cif">' + bgEscape(a.cif_adjudicatario) + '</span> ›</button>';
+  }
+  function bgAdjResumen(filas, presup){
+    if(!filas.length) return '<span class="bg-adj-neutro">Sin adjudicación publicada</span>';
+    const conGanador = filas.filter(function(a){ return a.cif_adjudicatario; });
+    if(!conGanador.length) return '<span class="bg-adj-neutro">Desierta</span>';
+    if(filas.length === 1){
+      const a = filas[0];
+      const lodepa = bgEsLodepa(a.cif_adjudicatario) ? ' <span class="comp-lodepa">LODEPA</span>' : '';
+      let pct = '';
+      const b = compPctBaja(a.importe_sin_iva, presup);   // 1 sola adjudicación -> comparable
+      if(b) pct = ' <span class="bg-adj-baja' + (b.alto ? ' comp-baja-alto' : '') + '">(' + bgEscape(b.txt) + ')</span>';
+      return '<span class="bg-adj-et">Adjudicada:</span> ' + bgGanadorBtn(a) + lodepa
+        + ' — ' + fmtEur(a.importe_sin_iva) + ' <small>s/IVA</small> — ' + bgFecha(a.fecha_adjudicacion) + pct;
+    }
+    const desiertos = filas.length - conGanador.length;
+    const lodepa = conGanador.some(function(a){ return bgEsLodepa(a.cif_adjudicatario); }) ? ' <span class="comp-lodepa">LODEPA</span>' : '';
+    const detalle = filas.map(function(a){
+      const lote = '<span class="adj-lote">Lote ' + bgEscape(a.lote || '—') + '</span>';
+      if(!a.cif_adjudicatario) return '<div class="bg-adj-lote">' + lote + ' <span class="bg-adj-neutro">desierto</span></div>';
+      return '<div class="bg-adj-lote">' + lote + ' ' + bgGanadorBtn(a) + ' — ' + fmtEur(a.importe_sin_iva) + '</div>';
+    }).join('');
+    return '<details class="bg-adj-multi"><summary><span class="bg-adj-et">' + filas.length + ' lotes adjudicados</span>'
+      + (desiertos ? (' <span class="bg-adj-neutro">(' + desiertos + ' desierto' + (desiertos > 1 ? 's' : '') + ')</span>') : '') + lodepa + '</summary>'
+      + '<div class="bg-adj-lotes">' + detalle + '</div></details>';
+  }
+  async function bgHidratarAdjudicaciones(filas, gen){
+    const ids = filas.map(function(f){ return f && f.licitacion_id; }).filter(Boolean);
+    if(!ids.length || !bgRes) return;
+    let adj = [];
+    try{
+      for(let i = 0; i < ids.length; i += 100){
+        const { data, error } = await supabase.from('adjudicaciones')
+          .select('licitacion_id,lote,resultado,cif_adjudicatario,adjudicatario,importe_sin_iva,importe_con_iva,n_ofertas,fecha_adjudicacion')
+          .in('licitacion_id', ids.slice(i, i + 100));
+        if(error) throw error;
+        adj = adj.concat(data || []);
+      }
+    }catch(err){
+      console.error('Buscador: error hidratando adjudicaciones:', err && (err.message || err));
+      return;
+    }
+    if(gen !== bgAdjGen || !bgRes) return;   // llegó otra búsqueda/página: descartamos
+    const porId = new Map();
+    adj.forEach(function(a){ const k = a.licitacion_id; if(!porId.has(k)) porId.set(k, []); porId.get(k).push(a); });
+    bgRes.querySelectorAll('.bg-adj').forEach(function(cont){
+      const id = cont.getAttribute('data-adj-id');
+      const presup = (bgFilasPorId.get(id) || {}).presupuesto_sin_iva;
+      cont.innerHTML = bgAdjResumen(porId.get(id) || [], presup);
+    });
+  }
+  // Clic en un ganador de los resultados -> su ficha en Competencia (nav única de E.4).
+  if(bgRes) bgRes.addEventListener('click', function(e){
+    const g = e.target.closest('.bg-adj-ganador');
+    if(!g) return;
+    e.preventDefault();
+    if(typeof irAFichaCompetidor === 'function') irAFichaCompetidor(g.getAttribute('data-cif'));
+    else if(window.__irAFichaCompetidor) window.__irAFichaCompetidor(g.getAttribute('data-cif'));
+  });
 
   function bgParams(){
     const f = bgFiltros;
@@ -3418,6 +3528,9 @@ JS_BUSCADOR_UI = """
     filas.forEach(function(f){ if(f && f.licitacion_id) bgFilasPorId.set(f.licitacion_id, f); });
     if(bgMsg) bgMsg.hidden = true;
     if(bgRes) bgRes.innerHTML = filas.map(bgTarjeta).join('');
+    // E.4: "quién ganó" por resultado, hidratado EN SEGUNDO PLANO (no bloquea la
+    // búsqueda ni la paginación; la generación descarta respuestas de páginas viejas).
+    bgHidratarAdjudicaciones(filas, ++bgAdjGen);
     const ini = (r.pagina - 1) * r.porPagina + 1;
     const fin = ini + filas.length - 1;
     // Contador: 'topado' = el total es un TOPE ("más de N"); 'aproximado' = "≈ N".
