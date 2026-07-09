@@ -87,6 +87,12 @@ CIFS_LODEPA = [c for c in (normaliza_cif(x) for x in [
 # RPC SECURITY DEFINER que hace el cruce en Supabase (automarcar_ganadas.sql). El
 # pipeline solo la INVOCA: la regla del cruce y la escritura en decisiones viven ahí.
 RPC_AUTOMARCAR = "automarcar_ganadas_lodepa"
+
+# --- FASE E · COMPETENCIA ---------------------------------------------------
+# RPC SECURITY DEFINER que reconstruye public.competidores (agregado por CIF) desde
+# public.adjudicaciones (competidores_schema.sql). El pipeline solo la INVOCA tras
+# upsertar adjudicaciones; el rebuild completo se midió en ~3.5 s.
+RPC_REFRESCAR_COMPETIDORES = "refrescar_competidores"
 LIMITE_GRATIS_MB = 500          # plan gratuito de Supabase (~500 MB de base de datos)
 BASE = "https://contrataciondelsectorpublico.gob.es/sindicacion"
 
@@ -653,6 +659,59 @@ def automarcar_oneshot(simular=False):
         sys.exit("Auto-marcado no ejecutado (ver AVISO arriba).")
 
 
+def refrescar_competidores(sesion, url_base, headers, reintentos=4):
+    """Fase E: reconstruye public.competidores (agregado por CIF) invocando la RPC
+    refrescar_competidores (competidores_schema.sql). Se llama tras upsertar
+    adjudicaciones. NO es fatal (corre al final): distingue RPC-ausente (404/PGRST202
+    -> avisa y salta) de un 5xx/red transitorio (reintenta). Devuelve el nº de CIF, o
+    None si se salta."""
+    url = f"{url_base}/rest/v1/rpc/{RPC_REFRESCAR_COMPETIDORES}"
+    h = {k: v for k, v in headers.items() if k != "Prefer"}
+    ultimo = None
+    for intento in range(1, reintentos + 1):
+        try:
+            r = sesion.post(url, headers=h, json={}, timeout=120)
+        except requests.RequestException as e:
+            ultimo = e
+        else:
+            if r.status_code == 200:
+                try:
+                    n = int(r.text.strip())
+                except (ValueError, AttributeError):
+                    n = None
+                print(f"  Competidores (Fase E) refrescados: "
+                      + (f"{n:,} CIF" if n is not None else "(ok)"))
+                return n
+            if r.status_code == 404 or "PGRST202" in r.text or "Could not find the function" in r.text:
+                print(f"  AVISO: la RPC public.{RPC_REFRESCAR_COMPETIDORES} no existe todavía "
+                      f"(HTTP {r.status_code}). ¿Ejecutaste competidores_schema.sql? SALTO el "
+                      f"refresco de competidores (el resto de la ingesta va con normalidad).")
+                return None
+            if 400 <= r.status_code < 500 and r.status_code != 429:
+                print(f"  AVISO: {RPC_REFRESCAR_COMPETIDORES} devolvió HTTP {r.status_code}: "
+                      f"{r.text[:300]}; salto.")
+                return None
+            ultimo = RuntimeError(f"HTTP {r.status_code}: {r.text[:200]}")
+        if intento < reintentos:
+            espera = 2 ** intento
+            print(f"    refrescar competidores: reintento {intento}/{reintentos} en {espera}s ({ultimo})")
+            time.sleep(espera)
+    print(f"  AVISO: no pude refrescar competidores ({ultimo}); salto (se reintenta en la "
+          f"próxima ingesta; es un rebuild idempotente).")
+    return None
+
+
+def refrescar_competidores_oneshot():
+    """Fase E · refresco manual de public.competidores (sin reingerir). Para la primera
+    carga o forzar un rebuild:  python backfill_catalogo.py --refrescar-competidores"""
+    sesion, headers, _endpoint, url_base = _preparar_upsert()
+    print("=" * 78)
+    print("REFRESCAR COMPETIDORES (Fase E) — rebuild del agregado por CIF")
+    print("=" * 78)
+    if refrescar_competidores(sesion, url_base, headers) is None:
+        sys.exit("Refresco de competidores no ejecutado (ver AVISO arriba).")
+
+
 def carga(unidades, limpiar=True):
     """Procesa las unidades (fuente, periodo) en STREAMING: descarga un ZIP →
     parsea sus .atom → upsert → libera el ZIP antes del siguiente, para no llenar
@@ -753,6 +812,9 @@ def carga(unidades, limpiar=True):
         # Idempotente y O(un puñado) por el índice del CIF; re-lanzar el backfill no
         # duplica marcas. Aditivo: no toca lo ya ingerido si la RPC no está desplegada.
         automarcar_ganadas(sesion, url_base, headers)
+        # Fase E: reconstruye el agregado por CIF (public.competidores) con lo recién
+        # backfilleado. Rebuild completo (~3.5 s); salta con aviso si la RPC no existe.
+        refrescar_competidores(sesion, url_base, headers)
 
 
 def _cuenta(sesion, base_tabla, headers, filtro="?select=licitacion_id"):
@@ -857,6 +919,9 @@ def diario(fuentes):
         # (no solo lo nuevo): es O(un puñado) por el índice del CIF y así se auto-cura
         # si un día se saltó. Marca en decisiones cualquier nueva GANADA de LODEPA.
         automarcar_ganadas(sesion, url_base, headers)
+        # Fase E: reconstruye el agregado por CIF (public.competidores) con las
+        # adjudicaciones nuevas del día. Rebuild completo (~3.5 s); salta si no existe.
+        refrescar_competidores(sesion, url_base, headers)
 
 
 # --- PURGA de la ventana (vía RPC en Supabase) ------------------------------
@@ -1048,6 +1113,8 @@ def main():
     ap.add_argument("--automarcar", action="store_true",
                     help="Fase D2: pasada única de auto-marcado GANADAS (CIF de LODEPA) sin reingerir. "
                          "Con --simular solo dice cuántas marcaría.")
+    ap.add_argument("--refrescar-competidores", action="store_true",
+                    help="Fase E: reconstruye public.competidores (agregado por CIF) sin reingerir.")
     ap.add_argument("--simular", action="store_true",
                     help="Con --purgar: solo CUENTA lo que se borraría. Con --automarcar: previsualiza (no escribe).")
     ap.add_argument("--ventana-anios", type=int, default=3,
@@ -1088,6 +1155,8 @@ def main():
         diario(fuentes)
     elif args.automarcar:
         automarcar_oneshot(args.simular)
+    elif args.refrescar_competidores:
+        refrescar_competidores_oneshot()
     elif args.purgar:
         purgar(args.ventana_anios, args.simular, args.lote)
     elif args.cargar:
