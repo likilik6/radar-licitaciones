@@ -660,9 +660,13 @@ CSS = """
   .comp-estado.comp-error{ color:#b91c1c; } .comp-estado.comp-cargando{ color:var(--acento-2); }
   .comp-lista-cab{ font-size:.85rem; color:var(--suave); text-transform:uppercase; letter-spacing:.04em; margin:6px 2px 10px; }
   .comp-resultados{ display:grid; gap:10px; }
-  .comp-item{ display:block; width:100%; text-align:left; cursor:pointer; font:inherit;
+  .comp-item{ position:relative; display:block; width:100%; text-align:left; cursor:pointer; font:inherit;
     background:var(--panel); border:1px solid var(--borde); border-radius:12px; padding:14px 16px; transition:border-color .15s, box-shadow .15s; }
   .comp-item:hover{ border-color:var(--acento); box-shadow:0 6px 16px rgba(15,23,42,.08); }
+  .comp-item-cmp{ position:absolute; top:12px; right:12px; width:30px; height:30px; border-radius:8px; cursor:pointer;
+    font:inherit; font-weight:700; line-height:1; background:var(--panel); border:1px solid var(--borde); color:var(--acento-2); }
+  .comp-item-cmp:hover{ border-color:var(--acento); }
+  .comp-item-cmp.activo{ background:#dcfce7; border-color:#86efac; color:#15803d; }
   .comp-item-top{ display:flex; align-items:center; gap:8px; }
   .comp-item-nom{ font-weight:700; color:var(--texto); }
   .comp-item-cif{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.82rem; color:var(--suave); margin-top:2px; }
@@ -692,7 +696,47 @@ CSS = """
   .comp-mas:hover{ border-color:var(--acento); }
   .comp-cargando, .comp-error{ padding:20px 4px; color:var(--suave); } .comp-error{ color:#b91c1c; }
   .comp-hint{ font-size:.82rem; color:var(--suave); margin:6px 2px; }
+  .comp-orden{ display:flex; align-items:center; gap:8px; margin:0 2px 10px; font-size:.84rem; color:var(--suave); }
+  .comp-orden-btn{ font:inherit; font-size:.84rem; cursor:pointer; padding:4px 12px; border-radius:999px; border:1px solid var(--borde); background:var(--panel); color:var(--texto); }
+  .comp-orden-btn.activo{ background:var(--acento); color:#fff; border-color:var(--acento); }
+  .comp-tabs{ display:flex; gap:8px; margin-bottom:16px; border-bottom:1px solid var(--borde); }
+  .comp-tab{ font:inherit; font-weight:600; cursor:pointer; background:none; border:none; padding:10px 14px; color:var(--suave); border-bottom:2px solid transparent; margin-bottom:-1px; }
+  .comp-tab.activo{ color:var(--acento-2); border-bottom-color:var(--acento); }
+  .comp-tray{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:12px; padding:10px 12px; background:#eef2ff; border:1px solid #c7d2fe; border-radius:12px; }
+  .comp-tray-et{ font-weight:700; font-size:.84rem; color:var(--acento-2); }
+  .comp-chip{ display:inline-flex; align-items:center; gap:6px; background:var(--panel); border:1px solid var(--borde); border-radius:999px; padding:4px 6px 4px 12px; font-size:.84rem; }
+  .comp-chip-x{ cursor:pointer; background:none; border:none; color:var(--suave); font-size:.9rem; line-height:1; }
+  .comp-chip-x:hover{ color:#b91c1c; }
+  .comp-tray-go{ font:inherit; font-weight:700; cursor:pointer; background:var(--acento); color:#fff; border:none; border-radius:8px; padding:6px 14px; }
+  .comp-tray-hint{ font-size:.82rem; color:var(--suave); }
+  .comp-tray-clear{ font:inherit; font-size:.82rem; cursor:pointer; background:none; border:none; color:var(--suave); text-decoration:underline; }
+  .comp-add-comparar{ font:inherit; font-size:.84rem; font-weight:600; cursor:pointer; background:var(--panel); border:1px solid var(--borde); border-radius:8px; padding:6px 12px; color:var(--acento-2); }
+  .comp-add-comparar.activo{ background:#dcfce7; border-color:#86efac; color:#15803d; }
+  .comp-sub-h{ margin:20px 2px 10px; font-size:1rem; }
+  .comp-est{ font-size:.7rem; font-weight:700; padding:2px 8px; border-radius:999px; white-space:nowrap; }
+  .comp-est-presentada{ background:#dbeafe; color:#1e40af; } .comp-est-ganada{ background:#dcfce7; color:#15803d; }
+  .comp-est-perdida{ background:#fee2e2; color:#b91c1c; } .comp-est-x{ background:#f1f5f9; color:var(--suave); }
+  .comp-rival-gana td{ background:#fff7ed; }
+  .comp-cmp tbody th{ text-align:left; color:var(--suave); font-weight:600; white-space:nowrap; }
+  .comp-yo{ border-color:#86efac !important; color:#15803d !important; }
+  .comp-vacio-directa{ padding:24px; text-align:center; color:var(--suave); background:var(--panel); border:1px dashed var(--borde); border-radius:12px; }
   @media (max-width:680px){ .comp-kpis{ grid-template-columns:repeat(2,1fr); } }
+
+  /* ---- E.2 · bloque Adjudicación en Detalles ---- */
+  .adj-sec{ margin-top:18px; border-top:1px solid var(--borde); padding-top:14px; }
+  .adj-titulo{ margin:0 0 10px; font-size:1rem; }
+  .adj-fuente{ font-weight:400; font-size:.78rem; color:var(--suave); }
+  .adj-contenido{ display:grid; gap:10px; }
+  .adj-fila{ border:1px solid var(--borde); border-radius:10px; padding:10px 12px; background:#f8fafc; }
+  .adj-fila-top{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:6px; }
+  .adj-lote{ font-weight:700; font-size:.78rem; color:var(--suave); text-transform:uppercase; letter-spacing:.03em; }
+  .adj-ganador{ font:inherit; cursor:pointer; background:var(--panel); border:1px solid var(--borde); border-radius:8px; padding:5px 10px; color:var(--acento-2); font-weight:600; }
+  .adj-ganador:hover{ border-color:var(--acento); }
+  .adj-cif{ font-family:ui-monospace,Menlo,monospace; font-size:.78rem; color:var(--suave); font-weight:400; }
+  .adj-kpis{ display:flex; flex-wrap:wrap; gap:14px; font-size:.86rem; font-variant-numeric:tabular-nums; }
+  .adj-kpis small{ color:var(--suave); }
+  .adj-desierto{ display:flex; gap:10px; align-items:center; }
+  .adj-neutro{ color:var(--suave); } .adj-cargando{ color:var(--acento-2); } .adj-error{ color:#b91c1c; }
 
   /* ---- Móvil: el menú se oculta y se abre con el botón ☰ ---- */
   @media (max-width:860px) {
@@ -1537,6 +1581,7 @@ JS_SUPABASE = """
   const COLS_NUM_CONTRATO = ['importe_sin_iva', 'importe_con_iva'];
 
   const modal       = document.getElementById('contrato-modal');
+  const adjContenido = document.getElementById('adj-contenido');   // E.2: bloque "Adjudicación"
   const modalForm   = document.getElementById('contrato-form');
   const modalSub    = document.getElementById('contrato-licitacion');
   const modalAviso  = document.getElementById('contrato-aviso');
@@ -1620,6 +1665,7 @@ JS_SUPABASE = """
     actualizarBotonCartera();              // arranca deshabilitado hasta saber si hay contrato
     modal.hidden = false;                  // mostramos ya (vacío) y rellenamos al llegar
     pintarDocumentos(id);                  // lista de documentos de esta licitación
+    pintarAdjudicacion(id);                // E.2: "quién ganó" (aditivo; datos públicos)
     try {
       // Contrato + estado de enlace a cartera, en paralelo (mismo licitacion_id).
       const [rC, rK] = await Promise.all([
@@ -1651,6 +1697,59 @@ JS_SUPABASE = """
   // cartera, así que el botón será "Actualizar" (solo campos del contrato). Sin licMeta.
   function abrirContratoPorId(id, subtitulo) {
     abrirContratoCore(id, subtitulo || '', null);
+  }
+
+  // E.2 · MEJORA 3 — bloque "Adjudicación" (quién ganó) en Detalles. ADITIVO: consulta
+  // public.adjudicaciones por licitacion_id (indexado por el UNIQUE de D1) al abrir el
+  // modal, sin tocar el contrato ni precargar nada en las tarjetas. console.error si falla.
+  async function pintarAdjudicacion(id) {
+    if (!adjContenido) return;
+    adjContenido.innerHTML = '<p class="adj-cargando">Cargando adjudicación…</p>';
+    try {
+      const { data, error } = await supabase.from('adjudicaciones')
+        .select('lote,resultado,cif_adjudicatario,adjudicatario,importe_sin_iva,importe_con_iva,n_ofertas,fecha_adjudicacion')
+        .eq('licitacion_id', id)
+        .order('lote', { ascending: true });
+      if (error) throw error;
+      if (contratoId !== id || (modal && modal.hidden)) return;   // se cambió/cerró entre tanto
+      if (!(data || []).length) {
+        adjContenido.innerHTML = '<p class="adj-neutro">Sin adjudicación publicada todavía.</p>';
+        return;
+      }
+      adjContenido.innerHTML = data.map(adjFilaHtml).join('');
+    } catch (err) {
+      console.error('Detalles: error leyendo la adjudicación:', err && (err.message || err));
+      adjContenido.innerHTML = '<p class="adj-error">No se pudo cargar la adjudicación.</p>';
+    }
+  }
+  function adjFilaHtml(a) {
+    const lote = a.lote ? ('Lote ' + catEsc(a.lote)) : 'Contrato';
+    if (!a.cif_adjudicatario) {   // '' = lote DESIERTO (TenderResult sin ganador)
+      return '<div class="adj-fila adj-desierto"><span class="adj-lote">' + lote + '</span>'
+        + '<span class="adj-neutro">Desierto' + (a.resultado ? ' · ' + catEsc(a.resultado) : '') + '</span></div>';
+    }
+    const esLodepa = CIFS_LODEPA_FRONT.indexOf(a.cif_adjudicatario) >= 0;
+    const sig = esLodepa ? ' <span class="comp-lodepa">adjudicada a LODEPA</span>' : '';
+    const conIva = (a.importe_con_iva != null) ? '<span>' + compEur(a.importe_con_iva) + ' <small>c/IVA</small></span>' : '';
+    return '<div class="adj-fila">'
+      + '<div class="adj-fila-top"><span class="adj-lote">' + lote + '</span>' + sig
+      + '<button type="button" class="adj-ganador" data-cif="' + catEsc(a.cif_adjudicatario) + '" title="Ver ficha de competencia">'
+      + catEsc(a.adjudicatario || a.cif_adjudicatario) + ' <span class="adj-cif">' + catEsc(a.cif_adjudicatario) + '</span> ›</button></div>'
+      + '<div class="adj-kpis"><span>' + compEur(a.importe_sin_iva) + ' <small>s/IVA</small></span>' + conIva
+      + '<span>' + compFecha(a.fecha_adjudicacion) + '</span>'
+      + '<span>' + (a.n_ofertas == null ? '— ofertas' : a.n_ofertas + (a.n_ofertas === 1 ? ' oferta' : ' ofertas')) + '</span>'
+      + (a.resultado ? '<span>' + catEsc(a.resultado) + '</span>' : '') + '</div></div>';
+  }
+  // Clic en el ganador -> cerrar el modal y abrir su ficha en la sección Competencia.
+  if (adjContenido) {
+    adjContenido.addEventListener('click', function (e) {
+      const b = e.target.closest('.adj-ganador');
+      if (!b) return;
+      const cif = b.getAttribute('data-cif');
+      if (modal) modal.hidden = true;
+      mostrarVista('competencia');
+      if (typeof compAbrirFicha === 'function') compAbrirFicha(cif);
+    });
   }
 
   // Guardar: upsert con licitacion_id + updated_at (igual que en decisiones).
@@ -2180,10 +2279,16 @@ JS_SUPABASE = """
   const compResultados = document.getElementById('comp-resultados');
   const compFicha      = document.getElementById('comp-ficha');
   const compEstado     = document.getElementById('comp-estado');
+  const compComparador = document.getElementById('comp-comparador');   // E.2 M2
+  const compTray       = document.getElementById('comp-tray');          // E.2 M2
+  const compDirectaCont = document.getElementById('comp-directa-contenido');  // E.2 M2
   const COMP_PAGINA    = 50;                  // filas por página en la ficha
+  const COMP_MAX_CMP   = 3;                   // máximo a comparar a la vez
   let compDebounce = null;
   let compYaEntro  = false;                   // ¿ya cargamos el top-20 al menos una vez?
-  let compFichaEstado = null;                 // {cif, cab, adj, titulos, mostradas}
+  let compFichaEstado = null;                 // {cif, cab, adj, titulos, mostradas, orden}
+  let compSeleccion = [];                     // E.2 M2: [{cif, nombre}] para el comparador
+  let _compCruces = null;                     // E.2 M2: cache de cruces con mis decisiones
 
   // Normaliza IGUAL que el pipeline guardó nombre_busqueda: MAYÚSCULAS y sin acentos.
   function compNorm(s){ return String(s||'').toUpperCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g,''); }
@@ -2249,12 +2354,15 @@ JS_SUPABASE = """
   function compFilaHtml(c){
     const lodepa = CIFS_LODEPA_FRONT.indexOf(c.cif)>=0 ? '<span class="comp-lodepa">LODEPA</span>' : '';
     const pct = (c.pct_una_oferta!=null) ? ('<span title="% de lotes con 1 sola oferta">'+c.pct_una_oferta+'% 1-oferta</span>') : '';
-    return '<button type="button" class="comp-item" data-cif="'+catEsc(c.cif)+'">'
+    const sel = compEnSeleccion(c.cif);
+    const cmp = '<button type="button" class="comp-item-cmp'+(sel?' activo':'')+'" data-cif="'+catEsc(c.cif)
+      +'" data-nom="'+catEsc(c.nombre_canonico||c.cif)+'" title="Añadir al comparador">'+(sel?'✓':'＋')+'</button>';
+    return '<div class="comp-item" role="button" tabindex="0" data-cif="'+catEsc(c.cif)+'">' + cmp
       + '<div class="comp-item-top"><span class="comp-item-nom">'+catEsc(c.nombre_canonico||c.cif)+'</span>'+lodepa+'</div>'
       + '<div class="comp-item-cif">'+catEsc(c.cif)+'</div>'
       + '<div class="comp-item-kpis"><span>'+(c.n_expedientes||0)+' expedientes</span>'
       + '<span>'+(c.n_lotes||0)+' lotes</span><span>'+compEur(c.importe_total_sin_iva)+'</span>'+pct+'</div>'
-      + '</button>';
+      + '</div>';
   }
 
   async function compAbrirFicha(cif){
@@ -2273,7 +2381,7 @@ JS_SUPABASE = """
       if(e2) throw e2;
       const ids = Array.from(new Set((adj||[]).map(function(a){return a.licitacion_id;})));
       const titulos = await compHidratarTitulos(ids);
-      compFichaEstado = { cif:cif, cab:cab, adj:adj||[], titulos:titulos, mostradas:COMP_PAGINA };
+      compFichaEstado = { cif:cif, cab:cab, adj:adj||[], titulos:titulos, mostradas:COMP_PAGINA, orden:'fecha' };
       compPintarFicha();
     }catch(err){
       console.error('Competencia: error abriendo ficha', cif, err && (err.message||err));
@@ -2304,6 +2412,17 @@ JS_SUPABASE = """
 
   function compKpi(v, et){ return '<div class="comp-kpi"><div class="comp-kpi-v">'+v+'</div><div class="comp-kpi-e">'+catEsc(et)+'</div></div>'; }
 
+  // MEJORA 1 — ordena las adjudicaciones de la ficha por fecha o por importe (desc,
+  // NULLs al final en ambos). Ordena in-place el array ya cargado (sin re-consultar).
+  function compOrdenarFicha(){
+    const st = compFichaEstado; if(!st) return;
+    if(st.orden==='importe'){
+      st.adj.sort(function(a,b){ return (Number(b.importe_sin_iva)|| -Infinity) - (Number(a.importe_sin_iva)|| -Infinity); });
+    }else{
+      st.adj.sort(function(a,b){ return String(b.fecha_adjudicacion||'').localeCompare(String(a.fecha_adjudicacion||'')); });
+    }
+  }
+
   function compPintarFicha(){
     if(!compFicha || !compFichaEstado) return;
     const st = compFichaEstado, cab = st.cab, adj = st.adj;
@@ -2333,11 +2452,17 @@ JS_SUPABASE = """
       ? '<div class="comp-mas-wrap"><button type="button" class="comp-mas">Mostrar '+Math.min(COMP_PAGINA,adj.length-st.mostradas)+' más ('+st.mostradas+'/'+adj.length+')</button></div>'
       : '';
     const tope = (adj.length>=1000) ? '<p class="comp-hint">Mostrando las 1.000 adjudicaciones más recientes.</p>' : '';
+    const orden = st.orden || 'fecha';
+    const ordenCtrl = '<div class="comp-orden"><span>Ordenar por</span>'
+      + '<button type="button" class="comp-orden-btn'+(orden==='fecha'?' activo':'')+'" data-orden="fecha">Fecha</button>'
+      + '<button type="button" class="comp-orden-btn'+(orden==='importe'?' activo':'')+'" data-orden="importe">Importe</button></div>';
+    const cmpBtn = '<button type="button" class="comp-add-comparar'+(compEnSeleccion(st.cif)?' activo':'')+'" data-cif="'+catEsc(st.cif)+'" data-nom="'+catEsc(nombre)+'">'
+      + (compEnSeleccion(st.cif)?'✓ En comparador':'＋ Comparar')+'</button>';
     compFicha.innerHTML =
-      '<div class="comp-ficha-cab"><button type="button" class="comp-volver">‹ Volver</button>'
+      '<div class="comp-ficha-cab"><button type="button" class="comp-volver">‹ Volver</button>'+cmpBtn
       + '<h2>'+catEsc(nombre)+(esLodepa?' <span class="comp-lodepa">es LODEPA</span>':'')+'</h2>'
       + '<div class="comp-item-cif">'+catEsc(st.cif)+'</div></div>'
-      + kpis + tope
+      + kpis + tope + ordenCtrl
       + '<div class="comp-tabla-wrap"><table class="comp-tabla"><thead><tr>'
       + '<th>Fecha</th><th>Licitación / órgano</th><th>Lote</th><th>Resultado</th><th>Importe s/IVA</th><th>Ofertas</th>'
       + '</tr></thead><tbody>'+filas+'</tbody></table></div>'+mas;
@@ -2353,6 +2478,13 @@ JS_SUPABASE = """
   }
   if(compResultados){
     compResultados.addEventListener('click', function(e){
+      const cmp = e.target.closest('.comp-item-cmp');
+      if(cmp){
+        compAddComparar(cmp.getAttribute('data-cif'), cmp.getAttribute('data-nom'));
+        const on = compEnSeleccion(cmp.getAttribute('data-cif'));
+        cmp.classList.toggle('activo', on); cmp.textContent = on ? '✓' : '＋';
+        return;   // no abrir la ficha al pulsar el botón de comparar
+      }
       const it = e.target.closest('.comp-item');
       if(it) compAbrirFicha(it.getAttribute('data-cif'));
     });
@@ -2366,16 +2498,213 @@ JS_SUPABASE = """
       } else if(e.target.closest('.comp-mas') && compFichaEstado){
         compFichaEstado.mostradas += COMP_PAGINA;
         compPintarFicha();
+      } else if(e.target.closest('.comp-add-comparar')){
+        const b = e.target.closest('.comp-add-comparar');
+        compAddComparar(b.getAttribute('data-cif'), b.getAttribute('data-nom'));
+        compPintarFicha();   // refresca la etiqueta del botón (En comparador / Comparar)
+      } else {
+        const ob = e.target.closest('.comp-orden-btn');
+        if(ob && compFichaEstado){
+          const o = ob.getAttribute('data-orden');
+          if(o && o !== compFichaEstado.orden){
+            compFichaEstado.orden = o;
+            compOrdenarFicha();
+            compFichaEstado.mostradas = COMP_PAGINA;
+            compPintarFicha();
+          }
+        }
       }
     });
   }
   // Limpieza al cerrar sesión: no dejar datos privados en el DOM.
   function limpiarCompetencia(){
-    compFichaEstado = null; compYaEntro = false;
+    compFichaEstado = null; compYaEntro = false; compSeleccion = []; _compCruces = null;
     if(compResultados){ compResultados.innerHTML=''; compResultados.hidden=false; }
     if(compFicha){ compFicha.innerHTML=''; compFicha.hidden=true; }
     if(compEstado){ compEstado.textContent=''; compEstado.hidden=true; }
+    if(compComparador){ compComparador.innerHTML=''; compComparador.hidden=true; }
+    if(compDirectaCont) compDirectaCont.innerHTML='';
+    if(compTray){ compTray.innerHTML=''; compTray.hidden=true; }
     if(compInput) compInput.value='';
+    compTab('buscar');
+  }
+
+  // ---- E.2 · MEJORA 2 — Competencia directa + comparador --------------------
+  function compEnSeleccion(cif){ return compSeleccion.some(function(s){ return s.cif===cif; }); }
+  function compAddComparar(cif, nombre){
+    if(!cif) return;
+    if(compEnSeleccion(cif)){ compSeleccion = compSeleccion.filter(function(s){ return s.cif!==cif; }); }
+    else{
+      if(compSeleccion.length>=COMP_MAX_CMP){ compMsg('Máximo '+COMP_MAX_CMP+' competidores para comparar.','vacio'); return; }
+      compSeleccion.push({ cif:cif, nombre:nombre||cif });
+    }
+    compPintarTray();
+  }
+  function compPintarTray(){
+    if(!compTray) return;
+    if(!compSeleccion.length){ compTray.hidden=true; compTray.innerHTML=''; return; }
+    compTray.hidden=false;
+    compTray.innerHTML = '<span class="comp-tray-et">Comparar:</span>'
+      + compSeleccion.map(function(s){ return '<span class="comp-chip">'+catEsc(s.nombre)
+          +' <button type="button" class="comp-chip-x" data-cif="'+catEsc(s.cif)+'" aria-label="Quitar">✕</button></span>'; }).join('')
+      + (compSeleccion.length>=2 ? '<button type="button" class="comp-tray-go">Comparar ('+compSeleccion.length+')</button>'
+                                 : '<span class="comp-tray-hint">añade otro para comparar</span>')
+      + '<button type="button" class="comp-tray-clear">limpiar</button>';
+  }
+  function compIrAFicha(cif){ compTab('buscar'); if(compComparador) compComparador.hidden=true; compAbrirFicha(cif); }
+
+  // Cruces con MIS decisiones (presentada/ganada/perdida). Cacheado. El front ya tiene
+  // mis decisiones en decisionesPorId; pedimos adjudicaciones por esos ids (troceado) y
+  // agregamos por rival (excluyendo LODEPA). La fuente NO publica quién licita, solo
+  // quién gana: esto refleja mis cruces, no la lista de pujadores (limitación conocida).
+  async function compCargarCruces(){
+    if(_compCruces) return _compCruces;
+    const ids = [];
+    decisionesPorId.forEach(function(d,id){ if(d && (d.estado==='presentada'||d.estado==='ganada'||d.estado==='perdida')) ids.push(id); });
+    const porExpediente = []; const porRival = new Map();
+    if(ids.length){
+      let adj = [];
+      for(let i=0;i<ids.length;i+=100){
+        const { data, error } = await supabase.from('adjudicaciones')
+          .select('licitacion_id,lote,resultado,cif_adjudicatario,adjudicatario,importe_sin_iva,n_ofertas,fecha_adjudicacion')
+          .in('licitacion_id', ids.slice(i,i+100));
+        if(error) throw error; adj = adj.concat(data||[]);
+      }
+      const titulos = await compHidratarTitulos(ids);
+      adj.forEach(function(a){
+        const mi = (decisionesPorId.get(a.licitacion_id)||{}).estado || null;
+        const l = titulos.get(a.licitacion_id) || {};
+        porExpediente.push({ a:a, miEstado:mi, titulo:l.titulo||null, organo:l.organo_contratacion||null });
+        if(a.cif_adjudicatario && CIFS_LODEPA_FRONT.indexOf(a.cif_adjudicatario)<0){
+          let r = porRival.get(a.cif_adjudicatario);
+          if(!r){ r={ cif:a.cif_adjudicatario, nombre:a.adjudicatario||a.cif_adjudicatario, exp:new Set(), meGano:new Set(), importe:0 }; porRival.set(a.cif_adjudicatario,r); }
+          r.exp.add(a.licitacion_id);
+          if(mi==='perdida') r.meGano.add(a.licitacion_id);
+          r.importe += Number(a.importe_sin_iva)||0;
+          if(a.adjudicatario) r.nombre = a.adjudicatario;
+        }
+      });
+      porExpediente.sort(function(x,y){ return String(y.a.fecha_adjudicacion||'').localeCompare(String(x.a.fecha_adjudicacion||'')); });
+    }
+    const res = { porExpediente:porExpediente, porRival:porRival, misIds:ids };
+    // Solo cacheamos si las decisiones YA cargaron (evita fijar un resultado vacío si se
+    // entra a la pestaña antes de que cargarDecisiones haya rellenado decisionesPorId).
+    if(decisionesPorId.size > 0) _compCruces = res;
+    return res;
+  }
+  function compEstadoTag(e){
+    const m = { presentada:'PRESENTADA', ganada:'GANADA', perdida:'PERDIDA' };
+    return '<span class="comp-est comp-est-'+(e||'x')+'">'+(m[e]||'—')+'</span>';
+  }
+
+  async function compVerDirecta(){
+    if(!compDirectaCont) return;
+    compDirectaCont.innerHTML = '<p class="comp-cargando">Cargando tus cruces…</p>';
+    try{
+      const c = await compCargarCruces();
+      if(!c.misIds.length){
+        compDirectaCont.innerHTML = '<p class="comp-vacio-directa">Aún no has marcado licitaciones como <b>presentada</b>, <b>ganada</b> o <b>perdida</b> en el Radar. En cuanto lo hagas, aquí verás quién compite contigo (y quién te gana).</p>';
+        return;
+      }
+      const rivales = Array.from(c.porRival.values()).sort(function(a,b){ return (b.meGano.size-a.meGano.size) || (b.exp.size-a.exp.size) || (b.importe-a.importe); });
+      const filasR = rivales.map(function(r){
+        const gano = r.meGano.size;
+        return '<tr'+(gano>0?' class="comp-rival-gana"':'')+'><td><button type="button" class="adj-ganador" data-cif="'+catEsc(r.cif)+'">'
+          +catEsc(r.nombre)+' <span class="adj-cif">'+catEsc(r.cif)+'</span> ›</button></td>'
+          +'<td class="comp-num">'+r.exp.size+'</td><td class="comp-num">'+(gano>0?'<b>'+gano+'</b>':'0')+'</td>'
+          +'<td class="comp-num">'+compEur(r.importe)+'</td></tr>';
+      }).join('');
+      const resumen = rivales.length
+        ? '<div class="comp-tabla-wrap"><table class="comp-tabla"><thead><tr><th>Rival</th><th>Cruces</th><th>Me ganó</th><th>Importe</th></tr></thead><tbody>'+filasR+'</tbody></table></div>'
+        : '<p class="comp-neutro">Tus expedientes marcados aún no tienen adjudicación publicada con un rival distinto de LODEPA.</p>';
+      const filasE = c.porExpediente.map(function(x){
+        const a=x.a;
+        const tit = x.titulo ? catEsc(x.titulo) : '<span class="comp-min">(fuera del catálogo) '+catEsc(a.licitacion_id)+'</span>';
+        const esLodepa = CIFS_LODEPA_FRONT.indexOf(a.cif_adjudicatario)>=0;
+        const gan = !a.cif_adjudicatario ? '<span class="comp-min">desierto</span>'
+          : '<button type="button" class="adj-ganador'+(esLodepa?' comp-yo':'')+'" data-cif="'+catEsc(a.cif_adjudicatario)+'">'+catEsc(a.adjudicatario||a.cif_adjudicatario)+(esLodepa?' (LODEPA)':'')+' ›</button>';
+        return '<tr><td>'+compEstadoTag(x.miEstado)+'</td><td><div class="comp-tit">'+tit+'</div><div class="comp-org">'+(x.organo?catEsc(x.organo):'—')+'</div></td>'
+          +'<td>'+gan+'</td><td>'+catEsc(a.lote||'—')+'</td><td class="comp-num">'+compEur(a.importe_sin_iva)+'</td>'
+          +'<td class="comp-num">'+compFecha(a.fecha_adjudicacion)+'</td><td class="comp-num">'+(a.n_ofertas==null?'—':a.n_ofertas)+'</td></tr>';
+      }).join('');
+      const detalle = c.porExpediente.length
+        ? '<div class="comp-tabla-wrap"><table class="comp-tabla"><thead><tr><th>Mi estado</th><th>Licitación / órgano</th><th>Ganador</th><th>Lote</th><th>Importe</th><th>Fecha</th><th>Ofertas</th></tr></thead><tbody>'+filasE+'</tbody></table></div>'
+        : '<p class="comp-neutro">Sin adjudicaciones publicadas todavía en tus expedientes.</p>';
+      compDirectaCont.innerHTML =
+        '<p class="comp-hint">Se construye con TUS decisiones (presentada/ganada/perdida). La fuente pública no publica quién licita, solo quién gana: esto refleja tus cruces, no la lista completa de pujadores.</p>'
+        +'<h3 class="comp-sub-h">Rivales · quién más te gana primero</h3>'+resumen
+        +'<h3 class="comp-sub-h">Detalle por expediente</h3>'+detalle;
+    }catch(err){
+      console.error('Competencia directa: error:', err && (err.message||err));
+      compDirectaCont.innerHTML = '<p class="comp-error">No se pudo cargar la competencia directa.</p>';
+    }
+  }
+
+  async function compVerComparador(){
+    if(!compComparador || compSeleccion.length<2) return;
+    if(compResultados) compResultados.hidden=true;
+    if(compFicha) compFicha.hidden=true;
+    compComparador.hidden=false;
+    compComparador.innerHTML = '<p class="comp-cargando">Comparando…</p>';
+    try{
+      const cifs = compSeleccion.map(function(s){ return s.cif; });
+      const { data, error } = await supabase.from('competidores').select('*').in('cif', cifs);
+      if(error) throw error;
+      const porCif = new Map((data||[]).map(function(r){ return [r.cif, r]; }));
+      let cruces = new Map();
+      try{ cruces = (await compCargarCruces()).porRival; }catch(e){ console.error('Comparador: cruces no disponibles:', e && (e.message||e)); }
+      const cols = cifs.map(function(cif){ return porCif.get(cif) || { cif:cif, nombre_canonico:cif }; });
+      function fila(et, fn){ return '<tr><th>'+catEsc(et)+'</th>'+cols.map(function(c){ return '<td>'+fn(c)+'</td>'; }).join('')+'</tr>'; }
+      compComparador.innerHTML =
+        '<div class="comp-ficha-cab"><button type="button" class="comp-volver">‹ Volver</button><h2>Comparador</h2></div>'
+        +'<div class="comp-tabla-wrap"><table class="comp-tabla comp-cmp"><thead><tr><th></th>'
+        + cols.map(function(c){ const lod=CIFS_LODEPA_FRONT.indexOf(c.cif)>=0?' <span class="comp-lodepa">LODEPA</span>':'';
+            return '<th><button type="button" class="adj-ganador" data-cif="'+catEsc(c.cif)+'">'+catEsc(c.nombre_canonico||c.cif)+'</button>'+lod+'<div class="adj-cif">'+catEsc(c.cif)+'</div></th>'; }).join('')
+        +'</tr></thead><tbody>'
+        + fila('Expedientes', function(c){ return c.n_expedientes!=null?c.n_expedientes:'—'; })
+        + fila('Lotes ganados', function(c){ return c.n_lotes!=null?c.n_lotes:'—'; })
+        + fila('Importe total s/IVA', function(c){ return compEur(c.importe_total_sin_iva); })
+        + fila('% con 1 sola oferta', function(c){ return c.pct_una_oferta!=null?c.pct_una_oferta+'%':'—'; })
+        + fila('Primera adjudicación', function(c){ return compFecha(c.primera_adjudicacion); })
+        + fila('Última adjudicación', function(c){ return compFecha(c.ultima_adjudicacion); })
+        + fila('Cruces contigo', function(c){ const r=cruces.get(c.cif); return r?r.exp.size:0; })
+        + fila('Te ganó (tus perdidas)', function(c){ const r=cruces.get(c.cif); return r?r.meGano.size:0; })
+        +'</tbody></table></div>';
+    }catch(err){
+      console.error('Comparador: error:', err && (err.message||err));
+      compComparador.innerHTML = '<div class="comp-ficha-cab"><button type="button" class="comp-volver">‹ Volver</button></div><p class="comp-error">No se pudo comparar.</p>';
+    }
+  }
+
+  // Sub-pestañas Buscador / Competencia directa.
+  function compTab(nombre){
+    const vb = document.getElementById('comp-vista-buscar');
+    const vd = document.getElementById('comp-vista-directa');
+    if(vb) vb.hidden = (nombre!=='buscar');
+    if(vd) vd.hidden = (nombre!=='directa');
+    document.querySelectorAll('#vista-competencia .comp-tab').forEach(function(t){ t.classList.toggle('activo', t.getAttribute('data-comp-tab')===nombre); });
+    if(nombre==='directa') compVerDirecta();
+  }
+  document.querySelectorAll('#vista-competencia .comp-tab').forEach(function(t){
+    t.addEventListener('click', function(){ compTab(t.getAttribute('data-comp-tab')); });
+  });
+  if(compTray){
+    compTray.addEventListener('click', function(e){
+      if(e.target.closest('.comp-chip-x')){ compAddComparar(e.target.closest('.comp-chip-x').getAttribute('data-cif')); if(compFicha && !compFicha.hidden) compPintarFicha(); }
+      else if(e.target.closest('.comp-tray-go')){ compVerComparador(); }
+      else if(e.target.closest('.comp-tray-clear')){ compSeleccion=[]; compPintarTray(); if(compComparador) compComparador.hidden=true; if(compResultados) compResultados.hidden=false; if(compFicha && !compFicha.hidden) compPintarFicha(); }
+    });
+  }
+  if(compComparador){
+    compComparador.addEventListener('click', function(e){
+      if(e.target.closest('.comp-volver')){ compComparador.hidden=true; if(compResultados) compResultados.hidden=false; }
+      else{ const g=e.target.closest('.adj-ganador'); if(g) compIrAFicha(g.getAttribute('data-cif')); }
+    });
+  }
+  if(compDirectaCont){
+    compDirectaCont.addEventListener('click', function(e){
+      const g=e.target.closest('.adj-ganador'); if(g) compIrAFicha(g.getAttribute('data-cif'));
+    });
   }
 
   // ====== Documentos de una adjudicación de la cartera (cartera_documentos) =====
@@ -3324,6 +3653,10 @@ CONTRATO_MODAL = """  <div class="modal-fondo" id="contrato-modal" hidden>
           <button type="submit" class="btn-pri" id="contrato-guardar">Guardar</button>
         </div>
       </form>
+      <section class="adj-sec" id="adj-sec">
+        <h3 class="adj-titulo">Adjudicación <span class="adj-fuente">(datos públicos del expediente)</span></h3>
+        <div id="adj-contenido" class="adj-contenido"></div>
+      </section>
       <section class="docs-sec">
         <h3 class="docs-titulo">Documentos</h3>
         <ul class="docs-lista" id="docs-lista"></ul>
@@ -3964,13 +4297,24 @@ pagina = f"""<!DOCTYPE html>
       </div>
     </div>
     <div id="vista-competencia" hidden>
-      <div class="comp-barra">
-        <input id="comp-input" class="comp-input" type="search" autocomplete="off"
-               placeholder="Buscar adjudicatario por nombre o CIF…  (p. ej. crioges, B85578573)">
+      <div class="comp-tabs">
+        <button type="button" class="comp-tab activo" data-comp-tab="buscar">🔎 Buscador</button>
+        <button type="button" class="comp-tab" data-comp-tab="directa">⚔️ Competencia directa</button>
       </div>
-      <div id="comp-estado" class="comp-estado" hidden></div>
-      <div id="comp-resultados" class="comp-resultados"></div>
-      <div id="comp-ficha" class="comp-ficha" hidden></div>
+      <div id="comp-vista-buscar">
+        <div class="comp-barra">
+          <input id="comp-input" class="comp-input" type="search" autocomplete="off"
+                 placeholder="Buscar adjudicatario por nombre o CIF…  (p. ej. crioges, B85578573)">
+        </div>
+        <div id="comp-tray" class="comp-tray" hidden></div>
+        <div id="comp-estado" class="comp-estado" hidden></div>
+        <div id="comp-resultados" class="comp-resultados"></div>
+        <div id="comp-ficha" class="comp-ficha" hidden></div>
+        <div id="comp-comparador" class="comp-comparador" hidden></div>
+      </div>
+      <div id="comp-vista-directa" hidden>
+        <div id="comp-directa-contenido"></div>
+      </div>
     </div>
   </div>
 </div>
