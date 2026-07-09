@@ -16,7 +16,7 @@
     "fecha_publicacion": "2026-07-07",
     "fecha_actualizacion": "2026-07-07T12:03:01.848+02:00",
     "primera_vez": "2026-06-24T09:23:14.737353",
-    "ultima_vez": "2026-07-08T15:38:12.539161",
+    "ultima_vez": "2026-07-09T06:57:36.289614",
     "organismo": "Dirección General de Mercados Centrales de Abastecimiento de Madrid S.A. (MERCAMADRID S.A.)",
     "plataforma": null,
     "region": "Madrid",
@@ -539,7 +539,7 @@
     "fecha_publicacion": "2026-04-16",
     "fecha_actualizacion": "2026-07-07T11:49:33.213+02:00",
     "primera_vez": "2026-06-25T09:04:28.410821",
-    "ultima_vez": "2026-07-08T15:38:12.539161",
+    "ultima_vez": "2026-07-09T06:57:36.289614",
     "num_expediente": "30/2026/CMA"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19798573": {
@@ -696,7 +696,7 @@
     "fecha_publicacion": "2026-06-01",
     "fecha_actualizacion": "2026-07-03T13:11:50.427+02:00",
     "primera_vez": "2026-06-25T09:04:28.410821",
-    "ultima_vez": "2026-07-08T15:38:12.539161",
+    "ultima_vez": "2026-07-09T06:57:36.289614",
     "num_expediente": "DITES/017SV/2026"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19876107": {
@@ -794,10 +794,10 @@
     "valor_estimado": 21022.83,
     "fecha_fin_plazo": "2026-04-06",
     "fecha_publicacion": "2026-06-25",
-    "fecha_actualizacion": "2026-06-25T17:35:56.168+02:00",
+    "fecha_actualizacion": "2026-07-08T14:50:42.330+02:00",
     "primera_vez": "2026-06-26T09:05:39.995142",
-    "ultima_vez": "2026-07-01T12:38:46.468304",
-    "num_expediente": null
+    "ultima_vez": "2026-07-09T06:57:36.289614",
+    "num_expediente": "ZA-FOR-02/2026"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19746803": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19746803",
@@ -935,11 +935,11 @@
     "presupuesto_sin_iva": 47258.0,
     "valor_estimado": 70887.0,
     "fecha_fin_plazo": "2026-06-24",
-    "fecha_publicacion": "2026-06-09",
-    "fecha_actualizacion": "2026-06-26T12:16:06.063+02:00",
+    "fecha_publicacion": "2026-07-08",
+    "fecha_actualizacion": "2026-07-08T14:57:36.610+02:00",
     "primera_vez": "2026-06-29T06:58:02.115925",
-    "ultima_vez": "2026-07-01T12:38:46.468304",
-    "num_expediente": null
+    "ultima_vez": "2026-07-09T06:57:36.289614",
+    "num_expediente": "219/2026"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19217649": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19217649",
@@ -1043,7 +1043,7 @@
     "fecha_publicacion": "2026-06-16",
     "fecha_actualizacion": "2026-07-06T15:04:08.836+02:00",
     "primera_vez": "2026-07-01T07:46:59.271918",
-    "ultima_vez": "2026-07-08T15:38:12.539161",
+    "ultima_vez": "2026-07-09T06:57:36.289614",
     "num_expediente": "TSA0083568"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19957320": {
@@ -1149,7 +1149,7 @@
     "fecha_publicacion": "2026-05-07",
     "fecha_actualizacion": "2026-06-30T10:04:09.016+02:00",
     "primera_vez": "2026-07-01T07:46:59.271918",
-    "ultima_vez": "2026-07-08T15:38:12.539161",
+    "ultima_vez": "2026-07-09T06:57:36.289614",
     "num_expediente": "2025/3725"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19145286": {
@@ -1173,7 +1173,7 @@
     "fecha_publicacion": "2026-02-27",
     "fecha_actualizacion": "2026-07-01T09:40:51.990+02:00",
     "primera_vez": "2026-07-02T08:56:40.359185",
-    "ultima_vez": "2026-07-08T15:38:12.539161",
+    "ultima_vez": "2026-07-09T06:57:36.289614",
     "num_expediente": "ST2025-0-37"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19872408": {
@@ -1197,7 +1197,7 @@
     "fecha_publicacion": "2026-06-15",
     "fecha_actualizacion": "2026-07-07T15:29:05.023+02:00",
     "primera_vez": "2026-07-03T09:09:58.024691",
-    "ultima_vez": "2026-07-08T15:38:12.539161",
+    "ultima_vez": "2026-07-09T06:57:36.289614",
     "num_expediente": "PASA 004_2026"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/16208499": {
@@ -1561,7 +1561,7 @@
     "fecha_publicacion": "2025-10-07",
     "fecha_actualizacion": "2026-07-06T08:05:18.379+02:00",
     "primera_vez": "2026-07-03T09:09:58.024691",
-    "ultima_vez": "2026-07-08T15:38:12.539161",
+    "ultima_vez": "2026-07-09T06:57:36.289614",
     "num_expediente": "25PCSV002"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19187988": {
@@ -1610,7 +1610,7 @@
     "fecha_publicacion": "2026-07-05",
     "fecha_actualizacion": "2026-07-05T08:11:27.663+02:00",
     "primera_vez": "2026-07-06T10:30:31.860266",
-    "ultima_vez": "2026-07-08T15:38:12.539161",
+    "ultima_vez": "2026-07-09T06:57:36.289614",
     "num_expediente": "LICT/99/024/2025/0180"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/17916056": {
@@ -1730,7 +1730,7 @@
     "fecha_publicacion": "2026-04-16",
     "fecha_actualizacion": "2026-07-06T09:58:35.117+02:00",
     "primera_vez": "2026-07-08T06:22:49.043751",
-    "ultima_vez": "2026-07-08T15:38:12.539161"
+    "ultima_vez": "2026-07-09T06:57:36.289614"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19663957": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19663957",
@@ -1754,7 +1754,7 @@
     "fecha_publicacion": "2026-07-06",
     "fecha_actualizacion": "2026-07-06T09:13:15.237+02:00",
     "primera_vez": "2026-07-08T06:22:49.043751",
-    "ultima_vez": "2026-07-08T15:38:12.539161"
+    "ultima_vez": "2026-07-09T06:57:36.289614"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19846771": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19846771",
@@ -1781,7 +1781,7 @@
     "fecha_publicacion": "2026-07-07",
     "fecha_actualizacion": "2026-07-07T12:30:27.418+02:00",
     "primera_vez": "2026-07-08T06:22:49.043751",
-    "ultima_vez": "2026-07-08T15:38:12.539161"
+    "ultima_vez": "2026-07-09T06:57:36.289614"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19162907": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19162907",
@@ -1806,6 +1806,86 @@
     "fecha_publicacion": "2026-05-07",
     "fecha_actualizacion": "2026-07-06T13:54:34.435+02:00",
     "primera_vez": "2026-07-08T06:22:49.043751",
-    "ultima_vez": "2026-07-08T15:38:12.539161"
+    "ultima_vez": "2026-07-09T06:57:36.289614"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19122792": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19122792",
+    "titulo": "Servicio de prevención y control de la Legionelosis en los centros e instalaciones municipales de san Sebastián de los Reyes",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=kCyVQoMNHOzLIx6q1oPaMg%3D%3D",
+    "cpv": [
+      "90733000",
+      "90921000"
+    ],
+    "fuente": "estatal",
+    "num_expediente": "02.07.01.01 2025/113-SS_REYES",
+    "organismo": "Junta de Gobierno del Ayuntamiento de San Sebastián de los Reyes",
+    "plataforma": null,
+    "region": "Madrid",
+    "region_codigo": "ES300",
+    "categoria": "a_revisar",
+    "coincidencia": "CPV 90733000 (coincide con 9073)",
+    "presupuesto_con_iva": 181500.0,
+    "presupuesto_sin_iva": 150000.0,
+    "valor_estimado": 330000.0,
+    "fecha_fin_plazo": "2026-03-31",
+    "fecha_publicacion": "2026-02-25",
+    "fecha_actualizacion": "2026-07-08T15:47:21.855+02:00",
+    "primera_vez": "2026-07-09T06:57:36.289614",
+    "ultima_vez": "2026-07-09T06:57:36.289614"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19879820": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19879820",
+    "titulo": "Servicio de medición de la calidad del aire del Puerto de Tarragona mediante métodos pasivos.",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=1cdhvrvxPkQaF6cS8TCh%2FA%3D%3D",
+    "cpv": [
+      "90731400",
+      "38300000",
+      "38341500"
+    ],
+    "fuente": "estatal",
+    "num_expediente": "2026_039SE",
+    "organismo": "Presidencia de la Autoridad Portuaria de Tarragona",
+    "plataforma": null,
+    "region": "Tarragona",
+    "region_codigo": "ES514",
+    "categoria": "a_revisar",
+    "coincidencia": "CPV 90731400 (coincide con 9073)",
+    "presupuesto_con_iva": 33880.0,
+    "presupuesto_sin_iva": 28000.0,
+    "valor_estimado": 56000.0,
+    "fecha_fin_plazo": "2026-07-01",
+    "fecha_publicacion": "2026-06-16",
+    "fecha_actualizacion": "2026-07-08T15:04:13.103+02:00",
+    "primera_vez": "2026-07-09T06:57:36.289614",
+    "ultima_vez": "2026-07-09T06:57:36.289614"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18964355": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18964355",
+    "titulo": "Servicios de cálculo de huella de carbono y auditorías externas de verificación, según Norma ISO 14064.",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=CWx%2Fp%2FbG3yotm4eBPtV6eQ%3D%3D",
+    "cpv": [
+      "90720000",
+      "90731700",
+      "79411000",
+      "90714000",
+      "90731700",
+      "90714000"
+    ],
+    "fuente": "estatal",
+    "num_expediente": "SE026/2025",
+    "organismo": "Comité de Contratación de Aguas Municipalizadas de Alicante, Empresa Mixta",
+    "plataforma": null,
+    "region": "Alicante/Alacant",
+    "region_codigo": "ES521",
+    "categoria": "a_revisar",
+    "coincidencia": "CPV 90731700 (coincide con 9073)",
+    "presupuesto_con_iva": 9438.0,
+    "presupuesto_sin_iva": 7800.0,
+    "valor_estimado": 39000.0,
+    "fecha_fin_plazo": "2026-02-18",
+    "fecha_publicacion": "2026-06-19",
+    "fecha_actualizacion": "2026-07-08T13:40:49.699+02:00",
+    "primera_vez": "2026-07-09T06:57:36.289614",
+    "ultima_vez": "2026-07-09T06:57:36.289614"
   }
 }
