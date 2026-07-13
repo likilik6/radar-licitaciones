@@ -131,6 +131,78 @@ SIN_ADJUDICAR = _entry(  # expediente todavía sin TenderResult
     '<pce:ContractFolderStatusCode>PUB</pce:ContractFolderStatusCode>'
 )
 
+# --- D1.1: multi-lote CON presupuesto por lote + sistema de contratación + tipo ---
+# Estructura calcada del CODICE real (feed en vivo, expediente 19744889 / 20026474).
+# TRAMPA A PROPÓSITO: dentro de un LOTE hay otro cac:ProcurementProject con su propio
+# cbc:TypeCode ('3'). El extractor debe coger el del EXPEDIENTE ('2'), no el del lote.
+D11_MULTILOTE = _entry(
+    '<cbc:ContractFolderID>D11/2026</cbc:ContractFolderID>'
+    '<pce:ContractFolderStatusCode>RES</pce:ContractFolderStatusCode>'
+    '<cac:ProcurementProject>'
+    '  <cbc:TypeCode listURI="http://contrataciondelestado.es/codice/cl/2.08/ContractCode-2.08.gc">2</cbc:TypeCode>'
+    '</cac:ProcurementProject>'
+    '<cac:TenderingProcess>'
+    '  <cbc:ContractingSystemCode listURI="http://contrataciondelestado.es/codice/cl/2.08/ContractingSystemTypeCode-2.08.gc">1</cbc:ContractingSystemCode>'
+    '</cac:TenderingProcess>'
+    '<cac:ProcurementProjectLot>'
+    '  <cbc:ID schemeName="ID_LOTE">1</cbc:ID>'
+    '  <cac:ProcurementProject>'
+    '    <cbc:Name>LOTE 1 Instalaciones Térmicas</cbc:Name>'
+    '    <cbc:TypeCode>3</cbc:TypeCode>'          # trampa: NO debe usarse
+    '    <cac:BudgetAmount>'
+    '      <cbc:TotalAmount currencyID="EUR">1193138.02</cbc:TotalAmount>'
+    '      <cbc:TaxExclusiveAmount currencyID="EUR">986064.48</cbc:TaxExclusiveAmount>'
+    '    </cac:BudgetAmount>'
+    '  </cac:ProcurementProject>'
+    '</cac:ProcurementProjectLot>'
+    '<cac:ProcurementProjectLot>'
+    '  <cbc:ID schemeName="ID_LOTE">2</cbc:ID>'
+    '  <cac:ProcurementProject>'
+    '    <cac:BudgetAmount>'
+    '      <cbc:TaxExclusiveAmount currencyID="EUR">557209.63</cbc:TaxExclusiveAmount>'
+    '    </cac:BudgetAmount>'
+    '  </cac:ProcurementProject>'
+    '</cac:ProcurementProjectLot>'
+    '<cac:TenderResult>'
+    '  <cbc:ResultCode>9</cbc:ResultCode>'
+    '  <cac:WinningParty>'
+    '    <cac:PartyIdentification><cbc:ID schemeName="NIF">A11111111</cbc:ID></cac:PartyIdentification>'
+    '    <cac:PartyName><cbc:Name>Uno SA</cbc:Name></cac:PartyName>'
+    '  </cac:WinningParty>'
+    '  <cac:AwardedTenderedProject><cbc:ProcurementProjectLotID>1</cbc:ProcurementProjectLotID>'
+    '    <cac:LegalMonetaryTotal><cbc:TaxExclusiveAmount currencyID="EUR">900000</cbc:TaxExclusiveAmount></cac:LegalMonetaryTotal>'
+    '  </cac:AwardedTenderedProject>'
+    '</cac:TenderResult>'
+    '<cac:TenderResult>'
+    '  <cbc:ResultCode>9</cbc:ResultCode>'
+    '  <cac:WinningParty>'
+    '    <cac:PartyIdentification><cbc:ID schemeName="NIF">B22222222</cbc:ID></cac:PartyIdentification>'
+    '    <cac:PartyName><cbc:Name>Dos SL</cbc:Name></cac:PartyName>'
+    '  </cac:WinningParty>'
+    '  <cac:AwardedTenderedProject><cbc:ProcurementProjectLotID>2</cbc:ProcurementProjectLotID>'
+    '    <cac:LegalMonetaryTotal><cbc:TaxExclusiveAmount currencyID="EUR">500000</cbc:TaxExclusiveAmount></cac:LegalMonetaryTotal>'
+    '  </cac:AwardedTenderedProject>'
+    '</cac:TenderResult>'
+)
+
+# D1.1: contrato BASADO en un acuerdo marco (code 3) -> importe REAL, sin lotes.
+D11_BASADO_AM = _entry(
+    '<cbc:ContractFolderID>D11/basado</cbc:ContractFolderID>'
+    '<pce:ContractFolderStatusCode>RES</pce:ContractFolderStatusCode>'
+    '<cac:ProcurementProject><cbc:TypeCode>1</cbc:TypeCode></cac:ProcurementProject>'
+    '<cac:TenderingProcess><cbc:ContractingSystemCode>3</cbc:ContractingSystemCode></cac:TenderingProcess>'
+    '<cac:TenderResult>'
+    '  <cbc:ResultCode>9</cbc:ResultCode>'
+    '  <cac:WinningParty>'
+    '    <cac:PartyIdentification><cbc:ID schemeName="NIF">B99999999</cbc:ID></cac:PartyIdentification>'
+    '    <cac:PartyName><cbc:Name>SUMINISTROS MAYOR S.L.</cbc:Name></cac:PartyName>'
+    '  </cac:WinningParty>'
+    '  <cac:AwardedTenderedProject>'   # sin ProcurementProjectLotID -> lote None
+    '    <cac:LegalMonetaryTotal><cbc:TaxExclusiveAmount currencyID="EUR">24979.3</cbc:TaxExclusiveAmount></cac:LegalMonetaryTotal>'
+    '  </cac:AwardedTenderedProject>'
+    '</cac:TenderResult>'
+)
+
 
 def check(cond, msg):
     if not cond:
@@ -244,6 +316,67 @@ def test_dedup_adj():
     r3 = dict(r2); r3["lote"] = "9"
     check(len(_dedup_adj([r1, r3])) == 2, "dedup: distinto lote no colapsa")
     print("  OK test_dedup_adj")
+
+
+# --- D1.1 · presupuesto por lote + sistema de contratación + tipo de contrato ---
+def test_d11_presupuesto_por_lote():
+    filas = extrae_adjudicaciones(D11_MULTILOTE)
+    check(len(filas) == 2, f"d11: esperaba 2 filas, hay {len(filas)}")
+    por_lote = {f["lote"]: f for f in filas}
+    check(set(por_lote) == {"1", "2"}, f"d11: lotes 1/2, había {set(por_lote)}")
+    # el presupuesto de CADA lote se asigna a SU adjudicación (cruce por ProcurementProjectLotID)
+    check(abs(por_lote["1"]["presupuesto_lote_sin_iva"] - 986064.48) < 1e-6,
+          f"d11: presupuesto lote 1, era {por_lote['1']['presupuesto_lote_sin_iva']!r}")
+    check(abs(por_lote["2"]["presupuesto_lote_sin_iva"] - 557209.63) < 1e-6,
+          f"d11: presupuesto lote 2, era {por_lote['2']['presupuesto_lote_sin_iva']!r}")
+    # y el importe adjudicado de cada lote sigue siendo el suyo (no se pisan)
+    check(por_lote["1"]["importe_sin_iva"] == 900000.0, "d11: importe lote 1")
+    check(por_lote["2"]["importe_sin_iva"] == 500000.0, "d11: importe lote 2")
+    print("  OK test_d11_presupuesto_por_lote")
+
+
+def test_d11_sistema_y_tipo_son_del_expediente():
+    filas = extrae_adjudicaciones(D11_MULTILOTE)
+    for f in filas:   # datos de EXPEDIENTE: replicados en TODAS sus filas
+        check(f["sistema_contratacion"] == "1",
+              f"d11: sistema_contratacion '1' (AM), era {f['sistema_contratacion']!r}")
+        # TRAMPA: dentro del lote 1 hay un cbc:TypeCode='3'. Debe ganar el del EXPEDIENTE ('2').
+        check(f["tipo_contrato"] == "2",
+              f"d11: tipo_contrato del EXPEDIENTE ('2'=Servicios), no el del lote; era {f['tipo_contrato']!r}")
+    print("  OK test_d11_sistema_y_tipo_son_del_expediente")
+
+
+def test_d11_basado_en_am():
+    filas = extrae_adjudicaciones(D11_BASADO_AM)
+    check(len(filas) == 1, "d11 basado: 1 fila")
+    f = filas[0]
+    # code 3 = contrato BASADO en un AM -> importe REAL (no precio unitario)
+    check(f["sistema_contratacion"] == "3", f"d11 basado: code 3, era {f['sistema_contratacion']!r}")
+    check(f["tipo_contrato"] == "1", "d11 basado: tipo 1 (Suministros)")
+    check(f["lote"] is None, "d11 basado: sin lote")
+    check(f["presupuesto_lote_sin_iva"] is None, "d11 basado: sin presupuesto de lote")
+    check(f["importe_sin_iva"] == 24979.3, "d11 basado: importe real")
+    print("  OK test_d11_basado_en_am")
+
+
+def test_d11_no_regresion_sin_los_campos():
+    # Los expedientes que NO traen los bloques nuevos siguen extrayéndose igual, con None.
+    for fx, nom in ((MULTILOTE, "multilote"), (SIN_LOTES, "sin_lotes"), (DESIERTO, "desierto")):
+        for f in extrae_adjudicaciones(fx):
+            check(f["presupuesto_lote_sin_iva"] is None, f"d11 no-regresión {nom}: presupuesto None")
+            check(f["sistema_contratacion"] is None, f"d11 no-regresión {nom}: sistema None")
+            check(f["tipo_contrato"] is None, f"d11 no-regresión {nom}: tipo None")
+    print("  OK test_d11_no_regresion_sin_los_campos")
+
+
+def test_d11_fila_adjudicacion_mapea():
+    f = extrae_adjudicaciones(D11_MULTILOTE)[0]
+    row = fila_adjudicacion("id-d11", f)
+    for k in ("presupuesto_lote_sin_iva", "sistema_contratacion", "tipo_contrato"):
+        check(k in row, f"d11: fila_adjudicacion debe incluir '{k}'")
+    check(row["sistema_contratacion"] == "1", "d11: fila_adjudicacion propaga el sistema")
+    check(row["presupuesto_lote_sin_iva"] is not None, "d11: fila_adjudicacion propaga el presupuesto")
+    print("  OK test_d11_fila_adjudicacion_mapea")
 
 
 # --- Fase D2 · glue Python de automarcar_ganadas (sin red, con sesión falsa) ---
@@ -404,6 +537,11 @@ def main():
     test_no_regresion_extrae_entrada()
     test_a_fecha()
     test_dedup_adj()
+    test_d11_presupuesto_por_lote()
+    test_d11_sistema_y_tipo_son_del_expediente()
+    test_d11_basado_en_am()
+    test_d11_no_regresion_sin_los_campos()
+    test_d11_fila_adjudicacion_mapea()
     test_automarcar_cif_normalizado()
     test_automarcar_peticion_ok()
     test_automarcar_simular_flag()

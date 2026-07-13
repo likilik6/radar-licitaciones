@@ -247,6 +247,50 @@ def _id_adjudicatario(winning):
     return a_texto(elegido.text), a_texto(elegido.get("schemeName"))
 
 
+# --- D1.1 · code lists VERIFICADAS contra el CODICE real (08/07/2026) ---------
+# Se guardan los CÓDIGOS CRUDOS en la tabla (no un booleano): el código distingue el
+# AM en sí (1: importes = precios unitarios) del contrato basado en un AM (3: importe
+# real). Un booleano "es_acuerdo_marco" perdería ese matiz. Aquí solo para documentar.
+#   cbc:ContractingSystemCode  (ContractingSystemTypeCode-2.08):
+#     0 = No aplica (contrato normal)          3 = Contrato basado en un Acuerdo Marco
+#     1 = Establecimiento del Acuerdo Marco    4 = Contrato basado en un Sistema Dinámico
+#     2 = Establecimiento del Sistema Dinámico de Adquisición (SDA)
+SISTEMA_CONTRATACION_LABELS = {
+    "0": "Contrato normal", "1": "Acuerdo Marco (establecimiento)",
+    "2": "Sistema Dinámico (establecimiento)", "3": "Contrato basado en Acuerdo Marco",
+    "4": "Contrato basado en Sistema Dinámico",
+}
+#   cbc:TypeCode de ProcurementProject (ContractCode-2.08):
+CONTRATO_TIPO_LABELS = {
+    "1": "Suministros", "2": "Servicios", "3": "Obras", "8": "Privado",
+    "21": "Gestión de Servicios Públicos", "22": "Concesión de Servicios",
+    "31": "Concesión de Obras Públicas", "50": "Patrimonial",
+}
+
+
+def presupuestos_por_lote(entrada):
+    """D1.1 — Mapa {id_lote -> presupuesto SIN IVA} de los lotes del expediente.
+
+    Ruta VERIFICADA contra el feed real (PASO 0):
+      place:ContractFolderStatus/cac:ProcurementProjectLot/
+        cbc:ID  (schemeName='ID_LOTE')                       -> '1', '2', ...
+        cac:ProcurementProject/cac:BudgetAmount/
+          cbc:TaxExclusiveAmount                             -> presupuesto del LOTE (sin IVA)
+    La clave casa EXACTAMENTE con el cbc:ProcurementProjectLotID que ya extrae D1 de
+    cada adjudicación: ese es el join por lote. Mapa vacío si el expediente no trae lotes
+    (contrato sin lotes: su presupuesto ya está en public.licitaciones)."""
+    mapa = {}
+    for lot in entrada.findall(".//place:ContractFolderStatus/cac:ProcurementProjectLot", NS):
+        lid = a_texto(lot.findtext("cbc:ID", namespaces=NS))
+        if lid is None:
+            continue
+        pre = a_numero(lot.findtext(
+            "cac:ProcurementProject/cac:BudgetAmount/cbc:TaxExclusiveAmount", namespaces=NS))
+        if pre is not None:
+            mapa[lid] = pre
+    return mapa
+
+
 def extrae_adjudicaciones(entrada):
     """Extrae los bloques cac:TenderResult (uno por LOTE) del CODICE de una <entry>.
 
@@ -267,6 +311,19 @@ def extrae_adjudicaciones(entrada):
     # Estado del expediente (ADJ/RES/EV/...): SOLO contexto; no decide si extraer.
     estado_exp = a_texto(entrada.findtext(
         ".//place:ContractFolderStatus/pce:ContractFolderStatusCode", namespaces=NS))
+
+    # --- D1.1 (aditivo) --------------------------------------------------------
+    # Datos a nivel de EXPEDIENTE: se replican en TODAS sus filas de adjudicación.
+    # Rutas verificadas contra el CODICE real; ambos son hijos DIRECTOS de
+    # ContractFolderStatus (no confundir con los ProcurementProject de dentro de un LOTE).
+    sistema_contratacion = a_texto(entrada.findtext(
+        ".//place:ContractFolderStatus/cac:TenderingProcess/cbc:ContractingSystemCode",
+        namespaces=NS))          # '0'..'4' crudo (ver SISTEMA_CONTRATACION_LABELS)
+    tipo_contrato = a_texto(entrada.findtext(
+        ".//place:ContractFolderStatus/cac:ProcurementProject/cbc:TypeCode",
+        namespaces=NS))          # '1'/'2'/'3'... crudo (ver CONTRATO_TIPO_LABELS)
+    # Presupuesto POR LOTE: se cruza con la adjudicación por el id del lote.
+    presu_por_lote = presupuestos_por_lote(entrada)
 
     filas = []
     for tr in entrada.findall(".//place:ContractFolderStatus/cac:TenderResult", NS):
@@ -290,6 +347,11 @@ def extrae_adjudicaciones(entrada):
             "n_ofertas": a_entero(tr.findtext("cbc:ReceivedTenderQuantity", namespaces=NS)),
             "fecha_adjudicacion": a_fecha(tr.findtext("cbc:AwardDate", namespaces=NS)),
             "estado_expediente": estado_exp,
+            # D1.1: presupuesto de SU lote (None si el contrato no tiene lotes o el
+            # CODICE no lo trae) + datos de expediente replicados en cada fila.
+            "presupuesto_lote_sin_iva": presu_por_lote.get(lote) if lote else None,
+            "sistema_contratacion": sistema_contratacion,
+            "tipo_contrato": tipo_contrato,
         }
 
         ganadores = tr.findall("cac:WinningParty", NS)

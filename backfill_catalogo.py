@@ -456,6 +456,11 @@ def fila_adjudicacion(licitacion_id, adj):
         "n_ofertas": adj["n_ofertas"],
         "fecha_adjudicacion": adj["fecha_adjudicacion"],
         "estado_expediente": adj["estado_expediente"],
+        # D1.1 (aditivo, todas nullable): presupuesto de SU lote + sistema de
+        # contratación (0..4 crudo: distingue AM de contrato basado en AM) + tipo.
+        "presupuesto_lote_sin_iva": adj.get("presupuesto_lote_sin_iva"),
+        "sistema_contratacion": adj.get("sistema_contratacion"),
+        "tipo_contrato": adj.get("tipo_contrato"),
         "updated_at": AHORA_ISO,
     }
 
