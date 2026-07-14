@@ -739,6 +739,10 @@ CSS = """
   @keyframes compFlash { 0%{ background:#fef9c3; } 100%{ background:transparent; } }
   /* E.5 · AM, cruces navegables, ver expediente */
   .comp-am{ color:#b45309; font-size:.82em; white-space:nowrap; }
+  /* D1.1: rótulo del sistema de contratación (dato del CODICE) y marca de "estimado". */
+  .comp-sist{ color:var(--suave); font-size:.82em; white-space:nowrap; }
+  .comp-am-est{ opacity:.8; font-style:italic; }     /* sin dato: heurística de fallback */
+  .adj-fila .comp-baja{ font-size:.82rem; margin-top:6px; }   /* el % dentro del modal Detalles */
   .comp-tabla-rivales .comp-rival-fila{ cursor:pointer; }
   .comp-tabla-rivales .comp-rival-fila:hover td{ background:#eef2ff; }
   .comp-rival-sel td{ background:#e0e7ff !important; }
@@ -1741,7 +1745,7 @@ JS_SUPABASE = """
       // Adjudicaciones + presupuesto del catálogo (para el % de baja), en paralelo.
       const [rA, rL] = await Promise.all([
         supabase.from('adjudicaciones')
-          .select('lote,resultado,cif_adjudicatario,adjudicatario,importe_sin_iva,importe_con_iva,n_ofertas,fecha_adjudicacion')
+          .select('lote,resultado,cif_adjudicatario,adjudicatario,importe_sin_iva,importe_con_iva,n_ofertas,fecha_adjudicacion,presupuesto_lote_sin_iva,sistema_contratacion,tipo_contrato')
           .eq('licitacion_id', id).order('lote', { ascending: true }),
         supabase.from('licitaciones').select('presupuesto_sin_iva').eq('licitacion_id', id).maybeSingle(),
       ]);
@@ -1772,19 +1776,15 @@ JS_SUPABASE = """
     const esLodepa = CIFS_LODEPA_FRONT.indexOf(a.cif_adjudicatario) >= 0;
     const sig = esLodepa ? ' <span class="comp-lodepa">adjudicada a LODEPA</span>' : '';
     const conIva = (a.importe_con_iva != null) ? '<span>' + compEur(a.importe_con_iva) + ' <small>c/IVA</small></span>' : '';
-    // % de baja (E.3): solo cuando el expediente es de UNA sola adjudicación (ctx.unico).
-    let baja = '';
-    if (ctx && ctx.unico) {
-      const b = compPctBaja(a.importe_sin_iva, ctx.presupuesto);
-      if (b) baja = '<div class="adj-baja' + (b.alto ? ' comp-baja-alto' : '') + '">' + catEsc(b.txt) + '</div>';
-    } else if (ctx) {
-      baja = '<div class="adj-baja adj-baja-na" title="Presupuesto por lote no disponible">% sobre presupuesto: no disponible (multi-lote)</div>';
-    }
+    // D1.1: % de baja con el presupuesto REAL del LOTE (exacto) y ramificado por el
+    // sistema de contratación (AM/SDA -> suprimido). ctx.unico permite además usar el
+    // presupuesto del expediente cuando este tiene UNA sola adjudicación (E.3).
+    const baja = ctx ? compBajaAdjHtml(a, ctx.presupuesto, ctx.unico) : '';
     return '<div class="adj-fila">'
       + '<div class="adj-fila-top"><span class="adj-lote">' + lote + '</span>' + sig
       + '<button type="button" class="adj-ganador" data-cif="' + catEsc(a.cif_adjudicatario) + '" title="Ver ficha de competencia">'
       + catEsc(a.adjudicatario || a.cif_adjudicatario) + ' <span class="adj-cif">' + catEsc(a.cif_adjudicatario) + '</span> ›</button></div>'
-      + '<div class="adj-kpis"><span>' + compImporteHtml(a.importe_sin_iva) + ' <small>s/IVA</small></span>' + conIva
+      + '<div class="adj-kpis"><span>' + compImporteAdjHtml(a) + ' <small>s/IVA</small></span>' + conIva
       + '<span>' + compFecha(a.fecha_adjudicacion) + '</span>'
       + '<span>' + (a.n_ofertas == null ? '— ofertas' : a.n_ofertas + (a.n_ofertas === 1 ? ' oferta' : ' ofertas')) + '</span>'
       + (a.resultado ? '<span>' + catEsc(a.resultado) + '</span>' : '') + '</div>' + baja + '</div>';
@@ -2371,23 +2371,69 @@ JS_SUPABASE = """
   // % de baja para una fila de adjudicación en ficha/competencia directa: SOLO si el
   // lote está vacío (contrato sin lotes → el presupuesto del catálogo es comparable).
   // Con lote (multi-lote) no hay presupuesto por lote -> '—' con tooltip.
-  function compBajaHtml(a, l){
-    if(a.lote) return '<div class="comp-baja comp-baja-na" title="Presupuesto por lote no disponible (multi-lote)">—</div>';
-    const b = compPctBaja(a.importe_sin_iva, (l||{}).presupuesto_sin_iva);
-    return b ? '<div class="comp-baja'+(b.alto?' comp-baja-alto':'')+'">'+catEsc(b.txt)+'</div>' : '';
-  }
-  // E.5 · IMPORTES DE ACUERDO MARCO sin engaño. La D1 NO capturó el tipo de contrato,
-  // así que NO hay bandera de AM en los datos. Heurística fiable para ESTE catálogo (de
-  // NO menores, contratos ≥ ~15.000 €): un importe adjudicado < 1.000 € no puede ser el
-  // valor de un contrato -> es un PRECIO UNITARIO / puntuación (típico de acuerdos marco).
-  // Constante ajustable. (Bandera real de AM = backlog D1.1: capturar el TypeCode.)
+  // ===== D1.1 · LA VERDAD DEL CODICE (sustituye la heurística de E.5) ==============
+  // adjudicaciones.sistema_contratacion = ContractingSystemCode CRUDO (code list
+  // ContractingSystemTypeCode-2.08), poblado por el re-backfill (99,3% de cobertura):
+  //   0 = contrato normal                3 = contrato BASADO en un Acuerdo Marco
+  //   1 = ACUERDO MARCO (establecimiento) 4 = contrato basado en Sistema Dinámico
+  //   2 = Sistema Dinámico (establecimiento)
+  // En 1 y 2 (el AM/SDA EN SÍ) los importes adjudicados son PRECIOS UNITARIOS / tarifas:
+  // NO son el valor del contrato -> NO se calcula % de baja. En 0/3/4 el importe es REAL
+  // -> % de baja EXACTO contra presupuesto_lote_sin_iva (también de D1.1).
+  const SIST_ROTULO = {
+    '1': 'Acuerdo Marco · precios unitarios',
+    '2': 'Sistema Dinámico · precios unitarios',
+    '3': 'Contrato basado en Acuerdo Marco',
+    '4': 'Contrato basado en Sistema Dinámico',
+  };   // '0' (contrato normal) no lleva rótulo
+  // FALLBACK: solo cuando el CODICE no trae el código (0,7% de las filas). Es la vieja
+  // heurística de E.5 (importe < 1.000 € en un catálogo de NO menores = precio unitario);
+  // se marca como "estimado" en el rótulo y en el tooltip.
   const COMP_UMBRAL_AM = 1000;
   function compEsUnitarioAM(importe){ const n = Number(importe); return isFinite(n) && n > 0 && n < COMP_UMBRAL_AM; }
-  // Importe rotulado: nunca el número suelto si es un precio unitario de AM.
-  function compImporteHtml(importe){
-    if(importe == null) return '—';
-    if(compEsUnitarioAM(importe)) return compEur(importe) + ' <span class="comp-am" title="Importe muy bajo para un contrato de NO menores: es un precio unitario / puntuación, típico de acuerdos marco. No es el valor del contrato.">(precio unitario AM)</span>';
-    return compEur(importe);
+  function compSistConocido(a){ const s = a && a.sistema_contratacion; return s==='0'||s==='1'||s==='2'||s==='3'||s==='4'; }
+  // ¿los importes de ESTA adjudicación son precios unitarios (no valor de contrato)?
+  function compEsUnitario(a){
+    if(!a) return false;
+    const s = a.sistema_contratacion;
+    if(s === '1' || s === '2') return true;                 // el AM / SDA en sí -> tarifas
+    if(s === '0' || s === '3' || s === '4') return false;   // importe real de contrato
+    return compEsUnitarioAM(a.importe_sin_iva);             // sin dato -> heurística
+  }
+  // Importe rotulado con la verdad del sistema de contratación.
+  function compImporteAdjHtml(a){
+    const imp = a ? a.importe_sin_iva : null;
+    if(imp == null) return '—';
+    const rot = SIST_ROTULO[a && a.sistema_contratacion];
+    if(!compEsUnitario(a)){
+      // Importe REAL. Si es "basado en AM/SDA" lo rotulamos igual (contexto útil).
+      return compEur(imp) + (rot ? ' <span class="comp-sist">('+rot+')</span>' : '');
+    }
+    const estimado = !compSistConocido(a);
+    const etiqueta = rot || 'precio unitario (estimado)';
+    const tip = estimado
+      ? 'El CODICE no trae el sistema de contratación de este expediente: estimado por heurística (importe menor de 1.000 € en un catálogo de NO menores).'
+      : 'Dato del CODICE: en el establecimiento de un acuerdo marco / sistema dinámico los importes adjudicados son precios unitarios o tarifas, no el valor del contrato.';
+    return compEur(imp) + ' <span class="comp-am'+(estimado?' comp-am-est':'')+'" title="'+catEsc(tip)+'">('+catEsc(etiqueta)+')</span>';
+  }
+  // % de baja. Base de comparación, por orden: presupuesto del LOTE (D1.1, exacto) ->
+  // presupuesto del EXPEDIENTE (solo si el contrato no tiene lotes, o si el expediente
+  // tiene UNA sola adjudicación: 'unico', contexto de Detalles). AM/SDA -> se SUPRIME.
+  function compBajaAdjHtml(a, presupuestoExp, unico){
+    if(compEsUnitario(a)){
+      const p = a.presupuesto_lote_sin_iva;
+      const tip = 'En el establecimiento de un acuerdo marco / sistema dinámico el importe adjudicado es un precio unitario: no es comparable con el presupuesto.';
+      return '<div class="comp-baja comp-baja-na" title="'+catEsc(tip)+'">'
+        + (p != null ? 'Presupuesto del lote: '+compEur(p)+' · ' : '') + '% no aplicable</div>';
+    }
+    const base = (a.presupuesto_lote_sin_iva != null) ? a.presupuesto_lote_sin_iva
+               : ((!a.lote || unico) ? presupuestoExp : null);
+    const b = compPctBaja(a.importe_sin_iva, base);
+    if(!b) return '<div class="comp-baja comp-baja-na" title="Sin presupuesto comparable: el CODICE no publica el de este lote.">—</div>';
+    const exacto = (a.presupuesto_lote_sin_iva != null);
+    return '<div class="comp-baja'+(b.alto?' comp-baja-alto':'')+'" title="'
+      + (exacto ? 'Sobre el presupuesto REAL de este lote (dato del CODICE).' : 'Sobre el presupuesto del expediente.')
+      + '">'+catEsc(b.txt)+(exacto?'':' <small>(del expediente)</small>')+'</div>';
   }
 
   // Entrada a la vista (desde mostrarVista): sin búsqueda -> top-20 por importe.
@@ -2455,7 +2501,7 @@ JS_SUPABASE = """
       const { data: cab, error: e1 } = await supabase.from('competidores').select('*').eq('cif',cif).maybeSingle();
       if(e1) throw e1;
       const { data: adj, error: e2 } = await supabase.from('adjudicaciones')
-        .select('licitacion_id,lote,resultado,importe_sin_iva,importe_con_iva,n_ofertas,es_pyme,fecha_adjudicacion,adjudicatario')
+        .select('licitacion_id,lote,resultado,importe_sin_iva,importe_con_iva,n_ofertas,es_pyme,fecha_adjudicacion,adjudicatario,presupuesto_lote_sin_iva,sistema_contratacion,tipo_contrato')
         .eq('cif_adjudicatario', cif)
         .order('fecha_adjudicacion', { ascending:false, nullsFirst:false })
         .limit(1000);
@@ -2541,7 +2587,7 @@ JS_SUPABASE = """
       filas += '<tr><td class="comp-num">'+compFecha(a.fecha_adjudicacion)+'</td>'
         + '<td><div class="comp-tit">'+tit+enlace+'</div><div class="comp-org">'+org+'</div></td>'
         + '<td>'+catEsc(a.lote||'—')+'</td><td>'+catEsc(a.resultado||'—')+'</td>'
-        + '<td class="comp-num">'+compImporteHtml(a.importe_sin_iva)+compBajaHtml(a, l)+'</td>'
+        + '<td class="comp-num">'+compImporteAdjHtml(a)+compBajaAdjHtml(a, (l||{}).presupuesto_sin_iva, false)+'</td>'
         + '<td class="comp-num">'+(a.n_ofertas==null?'—':a.n_ofertas)+'</td></tr>';
     }
     const mas = (adj.length>st.mostradas)
@@ -2577,7 +2623,7 @@ JS_SUPABASE = """
       const verExp = '<button type="button" class="comp-ver-exp" data-exp-id="'+catEsc(a.licitacion_id)+'">ver expediente ›</button>';
       return '<tr class="'+cls+'"><td><span class="comp-cruce-et">'+et+'</span></td>'
         +'<td><div class="comp-tit">'+tit+'</div><div class="comp-org">'+(x.organo?catEsc(x.organo):'—')+'</div>'+verExp+'</td>'
-        +'<td>'+catEsc(a.lote||'—')+'</td><td class="comp-num">'+compImporteHtml(a.importe_sin_iva)+'</td>'
+        +'<td>'+catEsc(a.lote||'—')+'</td><td class="comp-num">'+compImporteAdjHtml(a)+'</td>'
         +'<td class="comp-num">'+compFecha(a.fecha_adjudicacion)+'</td></tr>';
     }).join('');
     return '<div class="comp-cruces-bloque"><h3 class="comp-sub-h">⚔️ Cruces contigo ('+cruces.length+')</h3>'
@@ -2719,7 +2765,7 @@ JS_SUPABASE = """
       let adj = [];
       for(let i=0;i<ids.length;i+=100){
         const { data, error } = await supabase.from('adjudicaciones')
-          .select('licitacion_id,lote,resultado,cif_adjudicatario,adjudicatario,importe_sin_iva,n_ofertas,fecha_adjudicacion')
+          .select('licitacion_id,lote,resultado,cif_adjudicatario,adjudicatario,importe_sin_iva,n_ofertas,fecha_adjudicacion,presupuesto_lote_sin_iva,sistema_contratacion,tipo_contrato')
           .in('licitacion_id', ids.slice(i,i+100));
         if(error) throw error; adj = adj.concat(data||[]);
       }
@@ -2734,7 +2780,7 @@ JS_SUPABASE = """
           r.exp.add(a.licitacion_id);
           if(mi==='perdida') r.meGano.add(a.licitacion_id);
           // P3: no sumar precios unitarios de AM al "importe" (peras con manzanas): se cuentan aparte.
-          if(compEsUnitarioAM(a.importe_sin_iva)) r.lotesAM += 1;
+          if(compEsUnitario(a)) r.lotesAM += 1;
           else r.importe += Number(a.importe_sin_iva)||0;
           if(a.adjudicatario) r.nombre = a.adjudicatario;
         }
@@ -2788,7 +2834,7 @@ JS_SUPABASE = """
         const verExp = '<button type="button" class="comp-ver-exp" data-exp-id="'+catEsc(a.licitacion_id)+'">ver expediente ›</button>';   // P2
         return '<tr><td>'+compEstadoTag(x.miEstado)+'</td><td><div class="comp-tit">'+tit+'</div><div class="comp-org">'+(x.organo?catEsc(x.organo):'—')+'</div>'+verExp+'</td>'
           +'<td>'+gan+'</td><td>'+catEsc(a.lote||'—')+'</td>'
-          +'<td class="comp-num">'+compImporteHtml(a.importe_sin_iva)+compBajaHtml(a, {presupuesto_sin_iva:x.presupuesto})+'</td>'
+          +'<td class="comp-num">'+compImporteAdjHtml(a)+compBajaAdjHtml(a, x.presupuesto, false)+'</td>'
           +'<td class="comp-num">'+compFecha(a.fecha_adjudicacion)+'</td><td class="comp-num">'+(a.n_ofertas==null?'—':a.n_ofertas)+'</td></tr>';
       }).join('');
       const filtroInfo = compDirectaFiltroRival
@@ -3403,24 +3449,33 @@ JS_BUSCADOR_UI = """
     if(!filas.length) return '<span class="bg-adj-neutro">Sin adjudicación publicada</span>';
     const conGanador = filas.filter(function(a){ return a.cif_adjudicatario; });
     if(!conGanador.length) return '<span class="bg-adj-neutro">Desierta</span>';
+    // D1.1: % solo si el importe es REAL (no AM/SDA); base = presupuesto del LOTE si lo hay.
+    function bgPct(a, baseExp){
+      if(compEsUnitario(a)) return '';
+      const base = (a.presupuesto_lote_sin_iva != null) ? a.presupuesto_lote_sin_iva : baseExp;
+      const b = compPctBaja(a.importe_sin_iva, base);
+      return b ? ' <span class="bg-adj-baja' + (b.alto ? ' comp-baja-alto' : '') + '">(' + bgEscape(b.txt) + ')</span>' : '';
+    }
     if(filas.length === 1){
       const a = filas[0];
       const lodepa = bgEsLodepa(a.cif_adjudicatario) ? ' <span class="comp-lodepa">LODEPA</span>' : '';
-      let pct = '';
-      const b = compPctBaja(a.importe_sin_iva, presup);   // 1 sola adjudicación -> comparable
-      if(b) pct = ' <span class="bg-adj-baja' + (b.alto ? ' comp-baja-alto' : '') + '">(' + bgEscape(b.txt) + ')</span>';
       return '<span class="bg-adj-et">Adjudicada:</span> ' + bgGanadorBtn(a) + lodepa
-        + ' — ' + fmtEur(a.importe_sin_iva) + ' <small>s/IVA</small> — ' + bgFecha(a.fecha_adjudicacion) + pct;
+        + ' — ' + compImporteAdjHtml(a) + ' <small>s/IVA</small> — ' + bgFecha(a.fecha_adjudicacion)
+        + bgPct(a, presup);   // 1 sola adjudicación -> el presupuesto del expediente vale
     }
     const desiertos = filas.length - conGanador.length;
     const lodepa = conGanador.some(function(a){ return bgEsLodepa(a.cif_adjudicatario); }) ? ' <span class="comp-lodepa">LODEPA</span>' : '';
+    // Rótulo del sistema de contratación del expediente (todas sus filas comparten código).
+    const sistExp = SIST_ROTULO[(filas[0] || {}).sistema_contratacion];
+    const sistTxt = sistExp ? ' <span class="comp-sist">· ' + bgEscape(sistExp) + '</span>' : '';
     const detalle = filas.map(function(a){
       const lote = '<span class="adj-lote">Lote ' + bgEscape(a.lote || '—') + '</span>';
       if(!a.cif_adjudicatario) return '<div class="bg-adj-lote">' + lote + ' <span class="bg-adj-neutro">desierto</span></div>';
-      return '<div class="bg-adj-lote">' + lote + ' ' + bgGanadorBtn(a) + ' — ' + fmtEur(a.importe_sin_iva) + '</div>';
+      // multi-lote: el % ahora es EXACTO cuando el CODICE trae el presupuesto del lote (D1.1)
+      return '<div class="bg-adj-lote">' + lote + ' ' + bgGanadorBtn(a) + ' — ' + compImporteAdjHtml(a) + bgPct(a, null) + '</div>';
     }).join('');
     return '<details class="bg-adj-multi"><summary><span class="bg-adj-et">' + filas.length + ' lotes adjudicados</span>'
-      + (desiertos ? (' <span class="bg-adj-neutro">(' + desiertos + ' desierto' + (desiertos > 1 ? 's' : '') + ')</span>') : '') + lodepa + '</summary>'
+      + (desiertos ? (' <span class="bg-adj-neutro">(' + desiertos + ' desierto' + (desiertos > 1 ? 's' : '') + ')</span>') : '') + lodepa + sistTxt + '</summary>'
       + '<div class="bg-adj-lotes">' + detalle + '</div></details>';
   }
   async function bgHidratarAdjudicaciones(filas, gen){
@@ -3430,7 +3485,7 @@ JS_BUSCADOR_UI = """
     try{
       for(let i = 0; i < ids.length; i += 100){
         const { data, error } = await supabase.from('adjudicaciones')
-          .select('licitacion_id,lote,resultado,cif_adjudicatario,adjudicatario,importe_sin_iva,importe_con_iva,n_ofertas,fecha_adjudicacion')
+          .select('licitacion_id,lote,resultado,cif_adjudicatario,adjudicatario,importe_sin_iva,importe_con_iva,n_ofertas,fecha_adjudicacion,presupuesto_lote_sin_iva,sistema_contratacion,tipo_contrato')
           .in('licitacion_id', ids.slice(i, i + 100));
         if(error) throw error;
         adj = adj.concat(data || []);
