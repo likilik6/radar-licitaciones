@@ -49,6 +49,15 @@
 -- índice GIN trigram licitaciones_expediente_trgm (ver expediente_schema.sql, correr
 -- ANTES). Solo dispara con >=3 chars normalizados. Añadir p_expediente cambia la firma
 -- (15 -> 16 args): hay que DROPear la de 15 antes de crear (create or replace no basta).
+--
+-- DESIERTAS (nuevo): p_desiertas filtra por la columna AGREGADA
+-- public.licitaciones.estado_adjudicacion (ver desiertas_schema.sql, correr ANTES).
+-- Valores: 'todas' (total+parcial) | 'total' | 'parcial' | NULL (sin filtro). El valor
+-- NO se interpola: se traduce por LISTA BLANCA a un literal fijo, así que el predicado
+-- es una CONSTANTE y se apoya en los índices PARCIALES de desiertas_schema.sql.
+-- Se descartó el join/EXISTS sobre adjudicaciones: medido, 4,9 s el listado, 7,3 s con
+-- texto (el EXISTS tumbaba el GIN) y 13,0 s el COUNT. Ver la cabecera de ese archivo.
+-- Añadir p_desiertas cambia la firma (16 -> 17 args): hay que DROPear la de 16.
 -- ============================================================================
 
 -- (Idempotente) Asegura el GIN sobre tsv por si se corre en un entorno limpio.
@@ -64,6 +73,11 @@ drop function if exists public.buscar_licitaciones(
 drop function if exists public.buscar_licitaciones(
   text, text[], text[], text, numeric, numeric, text,
   timestamptz, timestamptz, timestamptz, timestamptz, text, boolean, integer, integer
+);
+-- Limpia la firma de 16 args (sin p_desiertas), por el mismo motivo.
+drop function if exists public.buscar_licitaciones(
+  text, text[], text[], text, numeric, numeric, text,
+  timestamptz, timestamptz, timestamptz, timestamptz, text, boolean, integer, integer, text
 );
 
 create or replace function public.buscar_licitaciones(
@@ -82,7 +96,8 @@ create or replace function public.buscar_licitaciones(
   p_orden_asc    boolean     default true,
   p_pagina       integer     default 1,
   p_por_pagina   integer     default 25,
-  p_expediente   text        default null        -- Nº de expediente (contiene, normalizado; >=3 chars)
+  p_expediente   text        default null,       -- Nº de expediente (contiene, normalizado; >=3 chars)
+  p_desiertas    text        default null        -- 'todas' | 'total' | 'parcial' | NULL (sin filtro)
 )
 returns json
 language plpgsql
@@ -117,7 +132,8 @@ declare
   v_cols     constant text :=
     'licitacion_id, titulo, objeto, organo_contratacion, cpv, fuente, '
     'presupuesto_con_iva, presupuesto_sin_iva, valor_estimado, '
-    'fecha_publicacion, fecha_fin_plazo, lugar_ejecucion, ccaa, enlace, num_expediente';
+    'fecha_publicacion, fecha_fin_plazo, lugar_ejecucion, ccaa, enlace, num_expediente, '
+    'estado_adjudicacion, n_lotes_desiertos';   -- desiertas: badge de la tarjeta (sin esperar a hidratar)
   -- TOPE del conteo exacto y frontera selectivo/amplio. 5000 deja el conteo EXACTO
   -- para casi todo (climatización≈3146) y solo lo muy amplio queda aproximado;
   -- la rama SELECTIVA materializa como mucho ~5000 filas (rápido).
@@ -179,6 +195,19 @@ begin
     v_where := v_where || ' and public.norm_expediente(num_expediente) like '
       || quote_literal('%' || replace(replace(replace(v_exp, '\', '\\'), '%', '\%'), '_', '\_') || '%');
   end if;
+  -- DESIERTAS (columna AGREGADA estado_adjudicacion; ver desiertas_schema.sql).
+  -- LISTA BLANCA: el valor del parámetro NO se interpola, se traduce a un literal FIJO
+  -- -> predicado CONSTANTE -> se apoya en los índices PARCIALES (el de orden
+  -- fecha_fin_plazo desc para el listado, el de estado para el resto de combos).
+  -- Cualquier otro valor (o NULL) = sin filtro.
+  if p_desiertas = 'todas' then
+    v_where := v_where || ' and estado_adjudicacion in (''desierta_total'', ''desierta_parcial'')';
+  elsif p_desiertas = 'total' then
+    v_where := v_where || ' and estado_adjudicacion = ''desierta_total''';
+  elsif p_desiertas = 'parcial' then
+    v_where := v_where || ' and estado_adjudicacion = ''desierta_parcial''';
+  end if;
+
   if p_fuente is not null then
     v_where := v_where || ' and fuente = ' || quote_literal(p_fuente);
   end if;
@@ -270,14 +299,14 @@ end;
 $$;
 
 -- PRIVADO: solo authenticated (anon no; y la RLS protege por SECURITY INVOKER).
--- Firma de 16 args (con p_expediente al final).
+-- Firma de 17 args (p_expediente y p_desiertas al final).
 revoke all on function public.buscar_licitaciones(
   text, text[], text[], text, numeric, numeric, text,
-  timestamptz, timestamptz, timestamptz, timestamptz, text, boolean, integer, integer, text
+  timestamptz, timestamptz, timestamptz, timestamptz, text, boolean, integer, integer, text, text
 ) from public;
 grant execute on function public.buscar_licitaciones(
   text, text[], text[], text, numeric, numeric, text,
-  timestamptz, timestamptz, timestamptz, timestamptz, text, boolean, integer, integer, text
+  timestamptz, timestamptz, timestamptz, timestamptz, text, boolean, integer, integer, text, text
 ) to authenticated;
 
 -- Refresca el cache de esquema de PostgREST.

@@ -84,6 +84,9 @@ OPCIONES_MENU = [
     # híbrida de marcadas (JSON + catálogo). 'sub' = sub-item indentado; 'badge' = nº marcadas.
     {"nombre": "En observación", "vista": "observacion", "enlace": "#vista-radar", "icono": "★", "sub": True, "badge": True},
     {"nombre": "Buscador", "vista": "buscador", "enlace": "#vista-buscador", "icono": "🔍"},
+    # Subapartado del Buscador (mismo patrón que 'En observación' bajo Radar): reutiliza
+    # el bloque #vista-buscador con el filtro «Solo desiertas» YA aplicado.
+    {"nombre": "Desiertas", "vista": "desiertas", "enlace": "#vista-buscador", "icono": "🏜️", "sub": True},
     {"nombre": "Competencia", "vista": "competencia", "enlace": "#vista-competencia", "icono": "🏆"},
     {"nombre": "Cartera", "vista": "cartera", "enlace": "#vista-cartera", "icono": "💼"},
     {"nombre": "Calendario", "vista": "calendario", "enlace": "#vista-calendario", "icono": "📅"},
@@ -190,6 +193,12 @@ CSS = """
   .tag.cat-a-revisar { background:#fef3c7; color:#b45309; }
   .tag.cat-pruebas { background:#e0e7ff; color:#4338ca; }
   .tag.nuevo { background:#dcfce7; color:#15803d; }
+  /* DESIERTAS · badge de la tarjeta del Buscador (mismo estilo que NUEVO).
+     Fuerte (rojo) = ningún lote adjudicado; ámbar = solo algunos lotes desiertos;
+     gris = el órgano la retiró (desistimiento/renuncia), que NO es "no se presentó nadie". */
+  .tag.desierta { background:#fee2e2; color:#b91c1c; }
+  .tag.desierta-parcial { background:#fef3c7; color:#b45309; }
+  .tag.retirada { background:#e5e7eb; color:#4b5563; }
   .cpv { font-size:.82rem; color:var(--suave); display:flex; flex-wrap:wrap; gap:5px; align-items:center; }
   .cpv .et { font-weight:600; color:var(--texto); }
   .cpv code { background:#f1f5f9; color:#334155; padding:2px 7px; border-radius:6px; font-size:.78rem; }
@@ -538,6 +547,8 @@ CSS = """
   .bg-limpiar { border:0; background:none; color:var(--acento-2); font:inherit; font-size:.84rem; font-weight:600; cursor:pointer; text-decoration:underline; white-space:nowrap; }
   .bg-limpiar:hover { color:var(--acento); }
   .bg-msg { color:var(--suave); font-size:.92rem; padding:8px 0 14px; }
+  /* DESIERTAS: fila de badges de la tarjeta (va justo encima del título). */
+  .bg-card .bg-tags { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
   .bg-card .bg-org { font-size:.82rem; color:var(--suave); margin:2px 0 8px; }
   .bg-card .bg-meta { font-size:.82rem; color:var(--texto); margin-bottom:8px; }
   .bg-card .bg-fuente { text-transform:capitalize; font-weight:600; }
@@ -2039,8 +2050,10 @@ JS_SUPABASE = """
   // BG-5: 'observacion' es un subapartado que REUTILIZA el bloque del Radar
   // (#vista-radar): mismas tarjetas, controles y modales; solo fuerza la vista de
   // marcadas ('favoritas') y oculta el tablist + el filtro de CPV del Radar.
-  const VISTAS  = ['radar', 'observacion', 'cartera', 'calendario', 'buscador', 'competencia'];
-  const TITULOS = { radar: 'Radar', observacion: 'En observación', cartera: 'Cartera', calendario: 'Calendario', buscador: 'Buscador', competencia: 'Competencia' };
+  // 'desiertas' es un subapartado del Buscador (mismo patrón que 'observacion' bajo Radar):
+  // REUTILIZA el bloque #vista-buscador, solo entra con el filtro «Solo desiertas» puesto.
+  const VISTAS  = ['radar', 'observacion', 'cartera', 'calendario', 'buscador', 'desiertas', 'competencia'];
+  const TITULOS = { radar: 'Radar', observacion: 'En observación', cartera: 'Cartera', calendario: 'Calendario', buscador: 'Buscador', desiertas: 'Desiertas', competencia: 'Competencia' };
   let vistaActiva = 'radar';   // vista por defecto
 
   // Ajusta el modo 'En observación' vs Radar sobre el MISMO grid: fuerza la pestaña
@@ -2056,7 +2069,7 @@ JS_SUPABASE = """
     if (vistaRadar)      vistaRadar.hidden      = !enRadar;                        // Radar y 'En observación' comparten bloque
     if (vistaCartera)    vistaCartera.hidden    = (vistaActiva !== 'cartera');
     if (vistaCalendario) vistaCalendario.hidden = (vistaActiva !== 'calendario');
-    if (vistaBuscador)   vistaBuscador.hidden   = (vistaActiva !== 'buscador');   // BG-4
+    if (vistaBuscador)   vistaBuscador.hidden   = !(vistaActiva === 'buscador' || vistaActiva === 'desiertas');  // BG-4 (+ subapartado Desiertas)
     if (vistaCompetencia) vistaCompetencia.hidden = (vistaActiva !== 'competencia');  // Fase E
     // Marca activa la entrada del lateral y ajusta la cabecera.
     document.querySelectorAll('.sidebar .nav-item[data-vista]').forEach(function (a) {
@@ -2074,6 +2087,7 @@ JS_SUPABASE = """
     if (vistaActiva === 'cartera' && sesionActiva) cargarCartera();
     if (vistaActiva === 'calendario' && sesionActiva) cargarCalendario();
     if (vistaActiva === 'buscador' && window.__bgEntrar) window.__bgEntrar();   // BG-4
+    if (vistaActiva === 'desiertas' && window.__bgDesiertas) window.__bgDesiertas();  // subapartado
     if (vistaActiva === 'competencia' && window.__compEntrar) window.__compEntrar();  // Fase E
   }
 
@@ -3367,6 +3381,7 @@ JS_BUSCADOR_UI = """
   // bgParams() lo traduce a los params de buscar(). '' = sin filtro (Auto/Todas).
   const bgFiltros = {
     fuente: '', estado: '', orden: 'fecha_fin_plazo:asc',
+    desiertas: '',                        // '' | 'todas' (total+parcial) | 'total'
     cpvPrefijo: [],                       // prefijos CPV (OR) -> RPC
     expediente: '',                       // Nº de expediente (contiene, normalizado) -> RPC
     impMin: '', impMax: '',               // valor_estimado (rango)
@@ -3398,6 +3413,27 @@ JS_BUSCADOR_UI = """
     return html;
   }
 
+  // DESIERTAS · badge de la tarjeta. Sale de la columna AGREGADA que ya viene en la fila
+  // (estado_adjudicacion / n_lotes_desiertos, ver desiertas_schema.sql), así que se pinta
+  // de inmediato, sin esperar a la hidratación de adjudicaciones. Es el MISMO cálculo que
+  // hace bgAdjResumen por lote, hecho una vez en la BD: por eso NO se duplica la lógica y
+  // por eso el badge y el filtro no pueden discrepar (ambos leen la misma columna).
+  function bgBadgeDesierta(f){
+    const e = f && f.estado_adjudicacion;
+    if(e === 'desierta_total'){
+      return '<span class="tag desierta" title="Ningún lote adjudicado: no se presentó nadie (o ninguna oferta fue admisible)">DESIERTA</span>';
+    }
+    if(e === 'desierta_parcial'){
+      const n = Number(f.n_lotes_desiertos) || 0;
+      const txt = !n ? 'LOTES DESIERTOS' : (n === 1 ? '1 LOTE DESIERTO' : n + ' LOTES DESIERTOS');
+      return '<span class="tag desierta-parcial" title="Parte de los lotes se adjudicó; el resto quedó desierto">' + txt + '</span>';
+    }
+    if(e === 'retirada'){
+      return '<span class="tag retirada" title="Sin adjudicatario porque el ÓRGANO la retiró (desistimiento o renuncia), no porque no se presentara nadie">RETIRADA</span>';
+    }
+    return '';
+  }
+
   function bgTarjeta(f){
     const dias = bgDias(f.fecha_fin_plazo);
     const urg = bgUrg(dias);
@@ -3424,8 +3460,10 @@ JS_BUSCADOR_UI = """
       + ' aria-pressed="' + (marcada ? 'true' : 'false') + '" aria-label="En observación"'
       + ' title="Poner o quitar de «En observación»">' + (marcada ? '★' : '☆') + '</button></div>';
     const exp = f.num_expediente ? '<div class="bg-exp"><span class="et">Nº exp.</span> ' + bgEscape(f.num_expediente) + '</div>' : '';
+    const badge = bgBadgeDesierta(f);
     return '<article class="card bg-card' + (urg ? ' urg-' + urg : '') + '" data-licitacion-id="' + bgEscape(id) + '">'
       + estrella
+      + (badge ? '<div class="bg-tags">' + badge + '</div>' : '')
       + '<h2 class="card-title">' + tituloHtml + '</h2>'
       + org
       + '<div class="bg-meta">' + fuente + sep + valor + '</div>'
@@ -3445,10 +3483,22 @@ JS_BUSCADOR_UI = """
       + '" title="Ver ficha de competencia">' + bgEscape(a.adjudicatario || a.cif_adjudicatario)
       + ' <span class="adj-cif">' + bgEscape(a.cif_adjudicatario) + '</span> ›</button>';
   }
+  // Un lote SIN adjudicatario (cif='') puede serlo por dos motivos MUY distintos, y el
+  // resultado_code los separa: '3' = Desierto (nadie se presentó / ninguna oferta admisible)
+  // es la señal de NICHO; '4'/'5' = Desistimiento/Renuncia es el ÓRGANO retirando el
+  // expediente. Mismo criterio que la columna agregada (ver desiertas_schema.sql).
+  function bgLoteDesierto(a){ return !a.cif_adjudicatario && a.resultado_code === '3'; }
+  function bgLoteRetirado(a){ return !a.cif_adjudicatario && (a.resultado_code === '4' || a.resultado_code === '5'); }
+
   function bgAdjResumen(filas, presup){
     if(!filas.length) return '<span class="bg-adj-neutro">Sin adjudicación publicada</span>';
     const conGanador = filas.filter(function(a){ return a.cif_adjudicatario; });
-    if(!conGanador.length) return '<span class="bg-adj-neutro">Desierta</span>';
+    if(!conGanador.length){
+      if(filas.some(bgLoteDesierto)) return '<span class="bg-adj-neutro">Desierta</span>';
+      const ret = filas.find(bgLoteRetirado);
+      if(ret) return '<span class="bg-adj-neutro">Retirada' + (ret.resultado ? ' · ' + bgEscape(ret.resultado) : '') + '</span>';
+      return '<span class="bg-adj-neutro">Sin adjudicatario publicado</span>';
+    }
     // D1.1: % solo si el importe es REAL (no AM/SDA); base = presupuesto del LOTE si lo hay.
     function bgPct(a, baseExp){
       if(compEsUnitario(a)) return '';
@@ -3463,19 +3513,28 @@ JS_BUSCADOR_UI = """
         + ' — ' + compImporteAdjHtml(a) + ' <small>s/IVA</small> — ' + bgFecha(a.fecha_adjudicacion)
         + bgPct(a, presup);   // 1 sola adjudicación -> el presupuesto del expediente vale
     }
-    const desiertos = filas.length - conGanador.length;
+    const desiertos = filas.filter(bgLoteDesierto).length;
+    const retirados = filas.filter(bgLoteRetirado).length;
     const lodepa = conGanador.some(function(a){ return bgEsLodepa(a.cif_adjudicatario); }) ? ' <span class="comp-lodepa">LODEPA</span>' : '';
     // Rótulo del sistema de contratación del expediente (todas sus filas comparten código).
     const sistExp = SIST_ROTULO[(filas[0] || {}).sistema_contratacion];
     const sistTxt = sistExp ? ' <span class="comp-sist">· ' + bgEscape(sistExp) + '</span>' : '';
     const detalle = filas.map(function(a){
       const lote = '<span class="adj-lote">Lote ' + bgEscape(a.lote || '—') + '</span>';
-      if(!a.cif_adjudicatario) return '<div class="bg-adj-lote">' + lote + ' <span class="bg-adj-neutro">desierto</span></div>';
+      if(!a.cif_adjudicatario){
+        // Sin ganador: decimos POR QUÉ (desierto vs retirado), no solo "desierto".
+        // minúsculas ANTES de escapar (bajarlas después tocaría las entidades HTML).
+        const motivo = bgLoteDesierto(a) ? 'desierto'
+                     : (a.resultado ? bgEscape(String(a.resultado).toLowerCase()) : 'sin adjudicatario');
+        return '<div class="bg-adj-lote">' + lote + ' <span class="bg-adj-neutro">' + motivo + '</span></div>';
+      }
       // multi-lote: el % ahora es EXACTO cuando el CODICE trae el presupuesto del lote (D1.1)
       return '<div class="bg-adj-lote">' + lote + ' ' + bgGanadorBtn(a) + ' — ' + compImporteAdjHtml(a) + bgPct(a, null) + '</div>';
     }).join('');
     return '<details class="bg-adj-multi"><summary><span class="bg-adj-et">' + filas.length + ' lotes adjudicados</span>'
-      + (desiertos ? (' <span class="bg-adj-neutro">(' + desiertos + ' desierto' + (desiertos > 1 ? 's' : '') + ')</span>') : '') + lodepa + sistTxt + '</summary>'
+      + (desiertos ? (' <span class="bg-adj-neutro">(' + desiertos + ' desierto' + (desiertos > 1 ? 's' : '') + ')</span>') : '')
+      + (retirados ? (' <span class="bg-adj-neutro">(' + retirados + ' retirado' + (retirados > 1 ? 's' : '') + ')</span>') : '')
+      + lodepa + sistTxt + '</summary>'
       + '<div class="bg-adj-lotes">' + detalle + '</div></details>';
   }
   async function bgHidratarAdjudicaciones(filas, gen){
@@ -3485,7 +3544,7 @@ JS_BUSCADOR_UI = """
     try{
       for(let i = 0; i < ids.length; i += 100){
         const { data, error } = await supabase.from('adjudicaciones')
-          .select('licitacion_id,lote,resultado,cif_adjudicatario,adjudicatario,importe_sin_iva,importe_con_iva,n_ofertas,fecha_adjudicacion,presupuesto_lote_sin_iva,sistema_contratacion,tipo_contrato')
+          .select('licitacion_id,lote,resultado,resultado_code,cif_adjudicatario,adjudicatario,importe_sin_iva,importe_con_iva,n_ofertas,fecha_adjudicacion,presupuesto_lote_sin_iva,sistema_contratacion,tipo_contrato')
           .in('licitacion_id', ids.slice(i, i + 100));
         if(error) throw error;
         adj = adj.concat(data || []);
@@ -3556,6 +3615,7 @@ JS_BUSCADOR_UI = """
       texto: bgTexto ? bgTexto.value : '',
       fuente: f.fuente || undefined,
       estado: f.estado || undefined,
+      desiertas: f.desiertas || undefined,
       cpvPrefijo: f.cpvPrefijo.length ? f.cpvPrefijo.slice() : undefined,
       expediente: f.expediente || undefined,
       importeMin: f.impMin !== '' ? f.impMin : undefined,
@@ -3607,8 +3667,10 @@ JS_BUSCADOR_UI = """
     const chips = [];
     const FUENTE = { estatal:'Estatal', agregadas:'Agregadas' };
     const ESTADO = { abierta:'Abiertas', cerrada:'Cerradas', todas:'Todas' };
+    const DESIERTAS = { todas:'Solo desiertas', total:'Solo desiertas totales' };
     if(f.fuente) chips.push({ tipo:'fuente', txt:'Fuente: ' + (FUENTE[f.fuente] || f.fuente) });
     if(f.estado) chips.push({ tipo:'estado', txt:'Estado: ' + (ESTADO[f.estado] || f.estado) });
+    if(f.desiertas) chips.push({ tipo:'desiertas', txt:DESIERTAS[f.desiertas] || f.desiertas });
     f.cpvPrefijo.forEach(function(p){ chips.push({ tipo:'cpv', val:p, txt:'CPV ' + p + '…' }); });
     // Solo mostramos el chip de expediente si de verdad dispara (>=3 chars normalizados),
     // para no engañar: con menos, el filtro no se aplica (búsqueda trivial).
@@ -3642,11 +3704,12 @@ JS_BUSCADOR_UI = """
   function bgLimpiarTodo(){
     if(bgTexto) bgTexto.value = '';
     bgFiltros.fuente = ''; bgFiltros.estado = ''; bgFiltros.orden = 'fecha_fin_plazo:asc';
+    bgFiltros.desiertas = '';
     bgFiltros.cpvPrefijo = [];
     bgFiltros.expediente = '';
     bgFiltros.impMin = ''; bgFiltros.impMax = '';
     bgFiltros.finDesde = ''; bgFiltros.finHasta = ''; bgFiltros.pubDesde = ''; bgFiltros.pubHasta = '';
-    bgSelPill('fuente', ''); bgSelPill('estado', '');
+    bgSelPill('fuente', ''); bgSelPill('estado', ''); bgSelPill('desiertas', '');
     if(bgOrden) bgOrden.value = 'fecha_fin_plazo:asc';
     [bgImpMin, bgImpMax, bgFinDesde, bgFinHasta, bgPubDesde, bgPubHasta, bgCpv, bgExp].forEach(function(el){ if(el) el.value = ''; });
     bgSincroniza();
@@ -3732,7 +3795,7 @@ JS_BUSCADOR_UI = """
     const btn = e.target.closest('.bg-pill'); if(!btn) return;
     const grupo = btn.closest('.bg-pill-grupo'); if(!grupo) return;
     const campo = grupo.dataset.filtro;
-    if(campo !== 'fuente' && campo !== 'estado') return;
+    if(campo !== 'fuente' && campo !== 'estado' && campo !== 'desiertas') return;
     bgFiltros[campo] = btn.dataset.val || '';
     grupo.querySelectorAll('.bg-pill').forEach(function(b){ b.classList.toggle('activo', b === btn); });
     bgSincroniza();
@@ -3773,6 +3836,7 @@ JS_BUSCADOR_UI = """
     const tipo = chip.dataset.tipo;
     if(tipo === 'fuente'){ bgFiltros.fuente = ''; bgSelPill('fuente', ''); }
     else if(tipo === 'estado'){ bgFiltros.estado = ''; bgSelPill('estado', ''); }
+    else if(tipo === 'desiertas'){ bgFiltros.desiertas = ''; bgSelPill('desiertas', ''); }
     else if(tipo === 'cpv'){ const v = chip.dataset.val; bgFiltros.cpvPrefijo = bgFiltros.cpvPrefijo.filter(function(p){ return p !== v; }); }
     else if(tipo === 'exp'){ bgFiltros.expediente = ''; if(bgExp) bgExp.value = ''; }
     else if(tipo === 'importe'){ bgFiltros.impMin = ''; bgFiltros.impMax = ''; if(bgImpMin) bgImpMin.value = ''; if(bgImpMax) bgImpMax.value = ''; }
@@ -3828,11 +3892,34 @@ JS_BUSCADOR_UI = """
 
   // Reaccionar a login/logout (listener propio, independiente del módulo).
   supabase.auth.onAuthStateChange(function(){
-    setTimeout(function(){ if(vistaActiva === 'buscador') bgActualizarGate(); }, 0);
+    setTimeout(function(){ if(vistaActiva === 'buscador' || vistaActiva === 'desiertas') bgActualizarGate(); }, 0);
   });
 
   // Hook que llama mostrarVista al entrar en la vista.
   window.__bgEntrar = function(){ bgActualizarGate(); if(sesionActiva && bgTexto) bgTexto.focus(); };
+
+  // Subapartado «Desiertas» del menú: la MISMA vista del Buscador, pero entrando con el
+  // filtro «Solo desiertas» ya aplicado y ordenado por las más recientes (que es justo el
+  // orden que tiene índice parcial, ver desiertas_schema.sql). No es una vista nueva ni
+  // una segunda consulta: solo pone el filtro y deja que el Buscador haga lo suyo.
+  window.__bgDesiertas = function(){
+    // Ponemos el filtro ANTES del gate: si es la primera entrada con sesión, la búsqueda
+    // inicial que dispara bgActualizarGate() ya sale filtrada (no gastamos una consulta
+    // de más ni enseñamos un listado sin filtrar durante un instante).
+    const cambia = (bgFiltros.desiertas !== 'todas');
+    if(cambia){
+      bgFiltros.desiertas = 'todas';
+      bgSelPill('desiertas', 'todas');
+      bgFiltros.orden = 'fecha_fin_plazo:desc';   // las desiertas más recientes primero
+      if(bgOrden) bgOrden.value = 'fecha_fin_plazo:desc';
+      bgRenderChips();
+      bgPagina = 1;
+    }
+    const primera = !bgYaBuscado;
+    bgActualizarGate();                                // si es la 1ª vez con sesión, ya lanza bgRun()
+    if(sesionActiva && cambia && !primera) bgRun();    // si ya había buscado, relanza con el filtro
+    if(sesionActiva && bgTexto) bgTexto.focus();
+  };
 
   // Si la página cargó directamente en el buscador, refresca el gate ya.
   if(typeof vistaActiva !== 'undefined' && vistaActiva === 'buscador') window.__bgEntrar();
@@ -4570,6 +4657,12 @@ pagina = f"""<!DOCTYPE html>
             <button type="button" class="bg-pill" data-val="abierta">Abiertas</button>
             <button type="button" class="bg-pill" data-val="cerrada">Cerradas</button>
             <button type="button" class="bg-pill" data-val="todas">Todas</button>
+          </div>
+          <div class="bg-pill-grupo" data-filtro="desiertas" role="group" aria-label="Desiertas">
+            <span class="bg-pill-et">Desiertas</span>
+            <button type="button" class="bg-pill activo" data-val="">Indiferente</button>
+            <button type="button" class="bg-pill" data-val="todas">Solo desiertas</button>
+            <button type="button" class="bg-pill" data-val="total">Solo totales</button>
           </div>
           <label class="bg-orden-lbl">Orden
             <select id="bg-orden" class="bg-sel" title="Ordenar por">

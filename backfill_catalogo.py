@@ -93,6 +93,11 @@ RPC_AUTOMARCAR = "automarcar_ganadas_lodepa"
 # public.adjudicaciones (competidores_schema.sql). El pipeline solo la INVOCA tras
 # upsertar adjudicaciones; el rebuild completo se midió en ~3.5 s.
 RPC_REFRESCAR_COMPETIDORES = "refrescar_competidores"
+# DESIERTAS · RPC que recalcula el agregado por licitación (licitaciones.estado_adjudicacion
+# y n_lotes_desiertos) desde public.adjudicaciones (desiertas_schema.sql). Igual que la de
+# competidores: el pipeline solo la INVOCA tras upsertar adjudicaciones. Es idempotente
+# (solo escribe lo que CAMBIA) y admite un tamaño de lote para no rozar el statement_timeout.
+RPC_REFRESCAR_DESIERTAS = "refrescar_desiertas"
 LIMITE_GRATIS_MB = 500          # plan gratuito de Supabase (~500 MB de base de datos)
 BASE = "https://contrataciondelsectorpublico.gob.es/sindicacion"
 
@@ -717,6 +722,87 @@ def refrescar_competidores_oneshot():
         sys.exit("Refresco de competidores no ejecutado (ver AVISO arriba).")
 
 
+# --- DESIERTAS · agregado por licitación (estado_adjudicacion) ---------------
+def _rpc_desiertas(sesion, url, headers, lote, reintentos=4):
+    """Una llamada a public.refrescar_desiertas(p_lote). Devuelve el nº de licitaciones
+    ACTUALIZADAS en esta tanda, o None si la RPC no está desplegada / falló sin remedio
+    (ya avisado). Mismo criterio que refrescar_competidores: 404/PGRST202 -> saltar;
+    5xx/red -> reintentar."""
+    h = {k: v for k, v in headers.items() if k != "Prefer"}
+    ultimo = None
+    for intento in range(1, reintentos + 1):
+        try:
+            r = sesion.post(url, headers=h, json={"p_lote": lote}, timeout=300)
+        except requests.RequestException as e:
+            ultimo = e
+        else:
+            if r.status_code == 200:
+                try:
+                    return int(r.text.strip())
+                except (ValueError, AttributeError):
+                    return 0
+            if r.status_code == 404 or "PGRST202" in r.text or "Could not find the function" in r.text:
+                print(f"  AVISO: la RPC public.{RPC_REFRESCAR_DESIERTAS} no existe todavía "
+                      f"(HTTP {r.status_code}). ¿Ejecutaste desiertas_schema.sql? SALTO el "
+                      f"refresco de desiertas (el resto de la ingesta va con normalidad).")
+                return None
+            if 400 <= r.status_code < 500 and r.status_code != 429:
+                print(f"  AVISO: {RPC_REFRESCAR_DESIERTAS} devolvió HTTP {r.status_code}: "
+                      f"{r.text[:300]}; salto.")
+                return None
+            ultimo = RuntimeError(f"HTTP {r.status_code}: {r.text[:200]}")
+        if intento < reintentos:
+            espera = 2 ** intento
+            print(f"    refrescar desiertas: reintento {intento}/{reintentos} en {espera}s ({ultimo})")
+            time.sleep(espera)
+    print(f"  AVISO: no pude refrescar desiertas ({ultimo}); salto (se reintenta en la "
+          f"próxima ingesta; es idempotente).")
+    return None
+
+
+def refrescar_desiertas_bucle(sesion, url_base, headers, lote=5000, verboso=False):
+    """DESIERTAS · pone al día licitaciones.estado_adjudicacion / n_lotes_desiertos desde
+    public.adjudicaciones. Se llama tras sube_adjudicaciones, junto a refrescar_competidores.
+    NO es fatal (si la RPC no está desplegada, avisa y salta).
+
+    EN BUCLE por lotes: la RPC actualiza como mucho `lote` licitaciones por llamada y aquí
+    repetimos hasta que devuelve 0. Así el MISMO código sirve para el delta diario (una
+    tanda corta y ya) y para el backfill inicial de ~326.822 filas, sin rozar nunca el
+    statement_timeout. Es IDEMPOTENTE y RESUMIBLE (la RPC solo escribe lo que DIFIERE):
+    si se corta a medias, la siguiente ejecución sigue por donde iba.
+
+    Devuelve el nº total de licitaciones actualizadas, o None si se saltó."""
+    url = f"{url_base}/rest/v1/rpc/{RPC_REFRESCAR_DESIERTAS}"
+    total, tanda = 0, 0
+    while True:
+        n = _rpc_desiertas(sesion, url, headers, lote)
+        if n is None:
+            return None            # RPC ausente o fallo: ya avisado
+        if n == 0:
+            break
+        total += n
+        tanda += 1
+        if verboso:
+            print(f"  tanda {tanda}: {n:,} actualizadas  ·  acumulado: {total:,}")
+    print(f"  Desiertas: agregado al día ({total:,} licitaciones actualizadas).")
+    return total
+
+
+def refrescar_desiertas_oneshot(lote=5000):
+    """DESIERTAS · backfill/refresco manual del agregado, sin reingerir:
+        python backfill_catalogo.py --refrescar-desiertas
+    Es lo que POBLA la columna la primera vez (~326.822 licitaciones)."""
+    sesion, headers, _endpoint, url_base = _preparar_upsert()
+    print("=" * 78)
+    print(f"REFRESCAR DESIERTAS — agregado por licitación · lotes de {lote:,} (repito hasta 0)")
+    print("=" * 78)
+    total = refrescar_desiertas_bucle(sesion, url_base, headers, lote, verboso=True)
+    if total is None:
+        sys.exit("Refresco de desiertas no ejecutado (ver AVISO arriba).")
+    if total:
+        print("RECUERDA (una sola vez, en el SQL Editor): analyze public.licitaciones;")
+
+
 def carga(unidades, limpiar=True):
     """Procesa las unidades (fuente, periodo) en STREAMING: descarga un ZIP →
     parsea sus .atom → upsert → libera el ZIP antes del siguiente, para no llenar
@@ -820,6 +906,10 @@ def carga(unidades, limpiar=True):
         # Fase E: reconstruye el agregado por CIF (public.competidores) con lo recién
         # backfilleado. Rebuild completo (~3.5 s); salta con aviso si la RPC no existe.
         refrescar_competidores(sesion, url_base, headers)
+        # DESIERTAS: pone al día licitaciones.estado_adjudicacion con lo recién cargado.
+        # Tras un backfill GRANDE puede haber muchas filas que actualizar y una sola
+        # llamada se quedaría corta, así que aquí va EN BUCLE (como el one-shot).
+        refrescar_desiertas_bucle(sesion, url_base, headers)
 
 
 def _cuenta(sesion, base_tabla, headers, filtro="?select=licitacion_id"):
@@ -927,6 +1017,9 @@ def diario(fuentes):
         # Fase E: reconstruye el agregado por CIF (public.competidores) con las
         # adjudicaciones nuevas del día. Rebuild completo (~3.5 s); salta si no existe.
         refrescar_competidores(sesion, url_base, headers)
+        # DESIERTAS: pone al día licitaciones.estado_adjudicacion con los resultados
+        # nuevos del día (el delta son unas pocas decenas de filas). Salta si no existe.
+        refrescar_desiertas_bucle(sesion, url_base, headers)
 
 
 # --- PURGA de la ventana (vía RPC en Supabase) ------------------------------
@@ -1120,6 +1213,10 @@ def main():
                          "Con --simular solo dice cuántas marcaría.")
     ap.add_argument("--refrescar-competidores", action="store_true",
                     help="Fase E: reconstruye public.competidores (agregado por CIF) sin reingerir.")
+    ap.add_argument("--refrescar-desiertas", action="store_true",
+                    help="DESIERTAS: pone al día licitaciones.estado_adjudicacion / n_lotes_desiertos "
+                         "desde adjudicaciones, sin reingerir. Es lo que POBLA la columna la primera "
+                         "vez (en lotes de --lote, repitiendo hasta agotar).")
     ap.add_argument("--simular", action="store_true",
                     help="Con --purgar: solo CUENTA lo que se borraría. Con --automarcar: previsualiza (no escribe).")
     ap.add_argument("--ventana-anios", type=int, default=3,
@@ -1162,6 +1259,8 @@ def main():
         automarcar_oneshot(args.simular)
     elif args.refrescar_competidores:
         refrescar_competidores_oneshot()
+    elif args.refrescar_desiertas:
+        refrescar_desiertas_oneshot(args.lote)
     elif args.purgar:
         purgar(args.ventana_anios, args.simular, args.lote)
     elif args.cargar:
