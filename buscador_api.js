@@ -47,6 +47,11 @@ const COLUMNAS = [
   'lugar_ejecucion',
   'ccaa',
   'enlace',
+  // DESIERTAS: agregado de public.adjudicaciones ya calculado en la fila (ver
+  // desiertas_schema.sql). Viene con la fila para que la tarjeta pinte el badge SIN
+  // esperar a la hidratación de adjudicaciones.
+  'estado_adjudicacion',
+  'n_lotes_desiertos',
 ].join(',');
 
 const POR_PAGINA_DEF = 25;
@@ -54,6 +59,15 @@ const UMBRAL_COUNT_EXACTO_DEF = 10000; // < a esto: count exacto; >= : estimaci�
 const ORDEN_PERMITIDO = new Set(['fecha_fin_plazo', 'valor_estimado', 'fecha_publicacion']);
 const MODOS_COUNT = new Set(['exact', 'estimated', 'planned']);
 const ESTADOS = new Set(['abierta', 'cerrada', 'todas']);
+// DESIERTAS: qué valores de licitaciones.estado_adjudicacion admite cada modo del
+// filtro. 'todas' = totales + parciales (por defecto se incluyen las parciales, y la
+// tarjeta las marca aparte). 'retirada' (desistimiento/renuncia del órgano) NUNCA
+// entra: no es "no se presentó nadie". Ver desiertas_schema.sql.
+const DESIERTAS = new Map([
+  ['todas',   ['desierta_total', 'desierta_parcial']],
+  ['total',   ['desierta_total']],
+  ['parcial', ['desierta_parcial']],
+]);
 
 // Número finito o null (ignora '', null, undefined, NaN).
 function aNumero(v) {
@@ -100,6 +114,10 @@ export function crearBuscador(supabase) {
   //                            ignorando / . - y mayúsculas (normalizado). Solo dispara
   //                            con >=3 chars normalizados; FUERZA la RPC (con o sin texto).
   //   fuente       'estatal' | 'agregadas'
+  //   desiertas    'todas' | 'total' | 'parcial'  -> filtra por la columna AGREGADA
+  //                            licitaciones.estado_adjudicacion (desiertas_schema.sql).
+  //                            'todas' = totales + parciales. NO fuerza la RPC: es un
+  //                            predicado normal, así que va por el camino que toque.
   //   importeMin / importeMax  -> rango sobre valor_estimado
   //   estado       'abierta' | 'cerrada' | 'todas'   (ver default abajo)
   //   fechaFinDesde / fechaFinHasta   -> rango sobre fecha_fin_plazo (ISO/Date)
@@ -140,6 +158,8 @@ export function crearBuscador(supabase) {
     const expedienteNorm = expedienteRaw ? expedienteRaw.toUpperCase().replace(/[\s./-]/g, '') : '';
     const expediente = expedienteNorm.length >= 3 ? expedienteRaw : null;
     const fuente = params.fuente === 'estatal' || params.fuente === 'agregadas' ? params.fuente : null;
+    // DESIERTAS: solo los modos de la lista blanca; cualquier otra cosa = sin filtro.
+    const desiertas = DESIERTAS.has(params.desiertas) ? params.desiertas : null;
     const impMin = aNumero(params.importeMin);
     const impMax = aNumero(params.importeMax);
     const finDesde = aISO(params.fechaFinDesde);
@@ -156,8 +176,11 @@ export function crearBuscador(supabase) {
     //   'todas'   -> no filtra por estado (aquí caen también las de fin de plazo NULL).
     // DEFAULT: 'abierta' SOLO si no hay ningún otro filtro (pantalla de entrada =
     // "primeras N abiertas"); si hay otro filtro (incluido texto), 'todas'.
+    // OJO con `desiertas`: una licitación desierta YA TIENE resultado publicado, así que
+    // su plazo está cerrado por definición. Si el filtro de desiertas no contase aquí, el
+    // default 'abierta' lo cruzaría con "plazo en el futuro" y daría SIEMPRE 0 resultados.
     const hayOtrosFiltros = !!(
-      texto || cpvs.length || cpvPrefijos.length || expediente || fuente ||
+      texto || cpvs.length || cpvPrefijos.length || expediente || fuente || desiertas ||
       impMin !== null || impMax !== null ||
       finDesde || finHasta || pubDesde || pubHasta
     );
@@ -197,6 +220,10 @@ export function crearBuscador(supabase) {
       // anterior si aún no se re-desplegó el SQL; el filtro de expediente exige la
       // RPC nueva (16 args) + expediente_schema.sql.
       if (expediente) rpcParams.p_expediente = expediente;
+      // Ídem con p_desiertas: solo se envía si el filtro está puesto, así que una
+      // búsqueda normal sigue casando la RPC anterior (16 args) si aún no se
+      // re-desplegó buscador_rpc.sql. Degradación segura.
+      if (desiertas) rpcParams.p_desiertas = desiertas;
       const { data, error } = await supabase.rpc('buscar_licitaciones', rpcParams);
       if (error) return fallo(error);
       return {
@@ -219,6 +246,13 @@ export function crearBuscador(supabase) {
     const aplicarFiltros = (q) => {
       if (cpvs.length) q = q.overlaps('cpv', cpvs); // OR; código COMPLETO (el prefijo va por la RPC, ver arriba)
       if (fuente) q = q.eq('fuente', fuente);
+      // DESIERTAS: predicado sobre la columna agregada -> índices PARCIALES de
+      // desiertas_schema.sql (el de orden fecha_fin_plazo desc para el listado del
+      // subapartado; el de estado para el resto de combos).
+      if (desiertas) {
+        const estados = DESIERTAS.get(desiertas);
+        q = estados.length === 1 ? q.eq('estado_adjudicacion', estados[0]) : q.in('estado_adjudicacion', estados);
+      }
       if (impMin !== null) q = q.gte('valor_estimado', impMin);
       if (impMax !== null) q = q.lte('valor_estimado', impMax);
       if (finDesde) q = q.gte('fecha_fin_plazo', finDesde);
