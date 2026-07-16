@@ -108,6 +108,23 @@ FUENTES = {
     "agregadas": {"sind": "1044", "fichero": "PlataformasAgregadasSinMenores"},
 }
 
+# FASE M · CONTRATOS MENORES — conjunto SEPARADO en Datos Abiertos PLACSP (sindicación
+# 1143), que el catálogo actual EXCLUYE (la fuente agregada se llama "SinMenores").
+# Estatal-only: las agregadas no publican menores por este canal (verificado en PASO 0).
+# Mismo formato CODICE y mismo extractor (feeds.extrae_entrada) que 643/1044.
+TABLA_MENORES = "menores"
+MENORES = {"sind": "1143", "fichero": "contratosMenoresPerfilesContratantes"}
+
+
+def url_zip_menores(periodo):
+    """URL del ZIP de menores para un periodo ('2025' anual, '202506' mensual)."""
+    return f"{BASE}/sindicacion_{MENORES['sind']}/{MENORES['fichero']}_{periodo}.zip"
+
+
+# Feed .atom EN VIVO de menores (confirmado en PASO 0): permite el volcado diario
+# incremental (como el 643 del Radar), sin rebajar el ZIP mensual de 45k cada día.
+MENORES_ATOM = f"{BASE}/sindicacion_{MENORES['sind']}/{MENORES['fichero']}.atom"
+
 CACHE_DIR = Path("cache_backfill")          # ZIP descargados (reutilizables / reanudables)
 ESTADO_LOAD = Path("backfill_estado.json")  # checkpoint de carga: .atom ya subidos
 
@@ -803,6 +820,148 @@ def refrescar_desiertas_oneshot(lote=5000):
         print("RECUERDA (una sola vez, en el SQL Editor): analyze public.licitaciones;")
 
 
+# ============================================================================
+# FASE M · MENORES — ingesta a public.menores (contratos menores estatales)
+# ----------------------------------------------------------------------------
+# Decisión de producto v2: se ingieren TODOS los menores del estatal (~1,1M en 2
+# años) SIN filtrar por nicho; el nicho/competidor se calcula AL CONSULTAR (front).
+# Tabla SEPARADA (public.menores) para no tocar el Buscador. Reutiliza toda la
+# maquinaria del backfill (descarga_zip, itera_atoms, _sube_lote, extractor).
+# ============================================================================
+def fila_menor(reg):
+    """Mapea el dict del extractor a las columnas de public.menores. UNA fila por
+    menor: toma el adjudicatario PRINCIPAL (el primero con CIF; si ninguno lo tiene,
+    el primero a secas). Solo el 0,22% de menores tienen >1 ganador distinto (medido
+    en PASO 0); n_adjudicatarios marca ese caso raro. El CIF ya viene NORMALIZADO del
+    extractor (feeds.normaliza_cif), así casa con la Competencia por CIF. El tsv lo
+    pone el trigger de la tabla (no se envía)."""
+    adjs = reg.get("adjudicaciones") or []
+    principal = next((a for a in adjs if a.get("cif_adjudicatario")), (adjs[0] if adjs else {}))
+    cifs_distintos = {a.get("cif_adjudicatario") for a in adjs if a.get("cif_adjudicatario")}
+    return {
+        "licitacion_id": reg["id"],
+        "objeto": reg["objeto"] or reg["titulo"],   # el menor no trae "título" propio útil
+        "cpv": reg["cpv"],
+        "importe_sin_iva": principal.get("importe_sin_iva"),
+        "importe_con_iva": principal.get("importe_con_iva"),
+        "organo_contratacion": reg["organismo"],
+        "adjudicatario": principal.get("adjudicatario"),
+        "cif_adjudicatario": principal.get("cif_adjudicatario"),
+        "fecha_adjudicacion": principal.get("fecha_adjudicacion"),
+        "num_expediente": reg["num_expediente"],
+        "enlace": reg["enlace"],
+        "fuente": "estatal",
+        "n_adjudicatarios": len(cifs_distintos) or None,
+        "updated_at": AHORA_ISO,
+    }
+
+
+def _tabla_menores_lista(sesion, url_base, headers, reintentos=3):
+    """¿Está creada public.menores? Igual que _tabla_adjudicaciones_lista: distingue
+    'no existe' (404 / PGRST205) de un blip transitorio (reintenta). Sirve para no
+    romper la ingesta si el código va por delante de menores_schema.sql."""
+    url = f"{url_base}/rest/v1/{TABLA_MENORES}?select=licitacion_id&limit=1"
+    h = {k: v for k, v in headers.items() if k != "Prefer"}
+    ultimo = None
+    for intento in range(1, reintentos + 1):
+        try:
+            r = sesion.get(url, headers=h, timeout=60)
+        except requests.RequestException as e:
+            ultimo = e
+        else:
+            if r.status_code == 200:
+                return True
+            if r.status_code == 404 or "PGRST205" in r.text or "Could not find the table" in r.text:
+                print(f"  AVISO: public.{TABLA_MENORES} no existe todavía (HTTP {r.status_code}). "
+                      f"¿Ejecutaste menores_schema.sql? SALTO la ingesta de menores.")
+                return False
+            ultimo = RuntimeError(f"HTTP {r.status_code}: {r.text[:200]}")
+        if intento < reintentos:
+            time.sleep(2 ** intento)
+    print(f"  AVISO: no pude confirmar public.{TABLA_MENORES} ({ultimo}); asumo que existe.")
+    return True
+
+
+def _periodos_menores():
+    """Ventana de 2 años para el backfill de menores (decisión v2): meses del año en
+    curso (de más nuevo a más viejo) + los dos años previos por ZIP anual. Mismo
+    criterio que construir_unidades, pero fuente única (estatal 1143)."""
+    hoy = datetime.now()
+    a = hoy.year
+    return [f"{a}{m:02d}" for m in range(hoy.month, 0, -1)] + [str(a - 1), str(a - 2)]
+
+
+def carga_menores(periodos=None, limpiar=True):
+    """Backfill de menores en STREAMING: por cada periodo, descarga el ZIP, parsea sus
+    .atom uno a uno (memoria acotada), upserta a public.menores (idempotente por PK
+    licitacion_id) y libera el ZIP. AVISA del coste; es lo que POBLA la tabla (~1,1M
+    en 2 años). Necesita service_role. Reanudable a nivel de fichero por el caché de ZIP."""
+    sesion, headers, _ep, url_base = _preparar_upsert()
+    if not _tabla_menores_lista(sesion, url_base, headers):
+        sys.exit("Ingesta de menores no ejecutada: falta public.menores (menores_schema.sql).")
+    endpoint = f"{url_base}/rest/v1/{TABLA_MENORES}?on_conflict=licitacion_id"
+    periodos = periodos or _periodos_menores()
+    print("=" * 78)
+    print("FASE M · BACKFILL de MENORES (estatal, sindicación 1143) a public.menores")
+    print(f"Periodos ({len(periodos)}): {periodos}")
+    print("AVISO: descarga ~24 ZIP mensuales (~580 MB) y parsea ~1,1M entradas (~30-60 min).")
+    print("=" * 78)
+    total = 0
+    for periodo in periodos:
+        destino = CACHE_DIR / f"menores_{periodo}.zip"
+        try:
+            descarga_zip(url_zip_menores(periodo), destino)
+        except SystemExit:
+            print(f"  AVISO: no pude descargar el ZIP de menores {periodo}; salto ese periodo.")
+            continue
+        n_periodo = 0
+        # Un .atom (página) cada vez: dedup DENTRO de la página y upsert -> memoria
+        # acotada aunque el ZIP anual traiga cientos de miles de entradas.
+        for _nom, blob in itera_atoms(destino):
+            por_id = {}
+            for entrada in entradas_de(blob):
+                reg = extrae_entrada(entrada, "estatal")
+                por_id[reg["id"]] = fila_menor(reg)
+            filas = list(por_id.values())
+            for i in range(0, len(filas), 500):
+                _sube_lote(sesion, endpoint, headers, filas[i:i + 500])
+            n_periodo += len(filas)
+        total += n_periodo
+        print(f"  {periodo}: {n_periodo:,} menores upsertados (acumulado {total:,})")
+        if limpiar and destino.exists():
+            try:
+                destino.unlink()
+            except OSError:
+                pass
+    print("=" * 78)
+    print(f"Backfill de menores terminado. Filas upsertadas (con repeticiones entre .atom): {total:,}")
+    print("RECUERDA (una vez, en el SQL Editor): analyze public.menores;")
+
+
+def menores_incremental(sesion, url_base, headers):
+    """Volcado DIARIO de menores: lee el feed .atom EN VIVO (como el Radar) y upserta
+    los menores recientes. Ligero (no rebaja el ZIP mensual). NO es fatal: si la tabla
+    no existe, avisa y salta. Se llama desde diario()."""
+    if not _tabla_menores_lista(sesion, url_base, headers):
+        return 0
+    endpoint = f"{url_base}/rest/v1/{TABLA_MENORES}?on_conflict=licitacion_id"
+    try:
+        entradas, paginas, tope = descarga_entradas(MENORES_ATOM)
+    except Exception as e:
+        print(f"  AVISO: no pude leer el feed de menores ({e}); salto (se reintenta mañana).")
+        return 0
+    por_id = {}
+    for entrada in entradas:
+        reg = extrae_entrada(entrada, "estatal")
+        por_id[reg["id"]] = fila_menor(reg)
+    filas = list(por_id.values())
+    for i in range(0, len(filas), 500):
+        _sube_lote(sesion, endpoint, headers, filas[i:i + 500])
+    aviso = "  [TOPE de páginas: puede faltar histórico reciente]" if tope else ""
+    print(f"  Menores (diario): {len(filas):,} upsertados de {paginas} pág{aviso}")
+    return len(filas)
+
+
 def carga(unidades, limpiar=True):
     """Procesa las unidades (fuente, periodo) en STREAMING: descarga un ZIP →
     parsea sus .atom → upsert → libera el ZIP antes del siguiente, para no llenar
@@ -1004,6 +1163,10 @@ def diario(fuentes):
         vistos.update(por_id.keys())
         print(f"  upsert «{feed['fuente']}»: {len(filas):,} filas (acumulado {total:,})"
               f"  ·  adjudicaciones: {n_adj:,}")
+
+    # FASE M: volcado diario de menores del feed en vivo (1143). Independiente del
+    # catálogo (otra tabla, otra fuente); guardado y no fatal (salta si no existe).
+    menores_incremental(sesion, url_base, headers)
 
     print("=" * 78)
     print(f"Ingesta diaria terminada. Filas upsertadas: {total:,}  ·  adjudicaciones: {total_adj:,}")
@@ -1217,6 +1380,10 @@ def main():
                     help="DESIERTAS: pone al día licitaciones.estado_adjudicacion / n_lotes_desiertos "
                          "desde adjudicaciones, sin reingerir. Es lo que POBLA la columna la primera "
                          "vez (en lotes de --lote, repitiendo hasta agotar).")
+    ap.add_argument("--cargar-menores", action="store_true",
+                    help="FASE M: backfill de contratos MENORES (estatal, sind. 1143) a public.menores "
+                         "(ventana de 2 años, ~1,1M filas; usa --periodos para trocear). Necesita "
+                         "service_role; AVISA del coste. Requiere menores_schema.sql ejecutado.")
     ap.add_argument("--simular", action="store_true",
                     help="Con --purgar: solo CUENTA lo que se borraría. Con --automarcar: previsualiza (no escribe).")
     ap.add_argument("--ventana-anios", type=int, default=3,
@@ -1261,6 +1428,8 @@ def main():
         refrescar_competidores_oneshot()
     elif args.refrescar_desiertas:
         refrescar_desiertas_oneshot(args.lote)
+    elif args.cargar_menores:
+        carga_menores(args.periodos, limpiar=not args.conservar_zip)
     elif args.purgar:
         purgar(args.ventana_anios, args.simular, args.lote)
     elif args.cargar:
