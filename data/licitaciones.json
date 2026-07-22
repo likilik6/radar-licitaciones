@@ -489,10 +489,10 @@
     "valor_estimado": 1307416.0,
     "fecha_fin_plazo": "2026-03-20",
     "fecha_publicacion": "2026-02-18",
-    "fecha_actualizacion": "2026-06-18T11:12:22.215+02:00",
+    "fecha_actualizacion": "2026-07-21T12:41:52.204+02:00",
     "primera_vez": "2026-06-25T09:04:28.410821",
-    "ultima_vez": "2026-06-30T09:39:40.245535",
-    "num_expediente": null
+    "ultima_vez": "2026-07-22T08:35:37.340013",
+    "num_expediente": "CONTR 2026 0000026017"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19235666": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19235666",
@@ -720,7 +720,7 @@
     "fecha_publicacion": "2026-06-15",
     "fecha_actualizacion": "2026-07-17T14:12:00.692+02:00",
     "primera_vez": "2026-06-25T09:04:28.410821",
-    "ultima_vez": "2026-07-21T08:31:30.495965",
+    "ultima_vez": "2026-07-22T08:35:37.340013",
     "num_expediente": "CSE/AH06/1101473538/26/PO"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19295263": {
@@ -770,7 +770,7 @@
     "fecha_publicacion": "2026-03-27",
     "fecha_actualizacion": "2026-07-14T08:32:36.244+02:00",
     "primera_vez": "2026-06-26T09:05:39.995142",
-    "ultima_vez": "2026-07-21T08:31:30.495965",
+    "ultima_vez": "2026-07-22T08:35:37.340013",
     "num_expediente": "15-3-2.01-0044/2026"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19207311": {
@@ -845,7 +845,7 @@
     "fecha_publicacion": "2026-03-12",
     "fecha_actualizacion": "2026-07-15T09:40:59.233+02:00",
     "primera_vez": "2026-06-26T09:05:39.995142",
-    "ultima_vez": "2026-07-21T08:31:30.495965",
+    "ultima_vez": "2026-07-22T08:35:37.340013",
     "num_expediente": "252-2025"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19172138": {
@@ -1857,7 +1857,7 @@
     "fecha_publicacion": "2026-07-17",
     "fecha_actualizacion": "2026-07-17T10:14:22.020+02:00",
     "primera_vez": "2026-07-09T06:57:36.289614",
-    "ultima_vez": "2026-07-21T08:31:30.495965"
+    "ultima_vez": "2026-07-22T08:35:37.340013"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18964355": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18964355",
@@ -2035,7 +2035,7 @@
     "fecha_publicacion": "2026-07-13",
     "fecha_actualizacion": "2026-07-16T11:43:14.048+02:00",
     "primera_vez": "2026-07-14T08:14:20.006070",
-    "ultima_vez": "2026-07-21T08:31:30.495965"
+    "ultima_vez": "2026-07-22T08:35:37.340013"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20050226": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20050226",
@@ -2160,10 +2160,10 @@
     "presupuesto_sin_iva": 7508.6,
     "valor_estimado": 36041.28,
     "fecha_fin_plazo": "2026-07-06",
-    "fecha_publicacion": "2026-06-08",
-    "fecha_actualizacion": "2026-07-15T12:39:00.129+02:00",
+    "fecha_publicacion": "2026-07-16",
+    "fecha_actualizacion": "2026-07-16T12:14:59.971+02:00",
     "primera_vez": "2026-07-16T08:20:22.193908",
-    "ultima_vez": "2026-07-21T08:31:30.495965"
+    "ultima_vez": "2026-07-22T08:35:37.340013"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19357472": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19357472",
@@ -2187,9 +2187,9 @@
     "valor_estimado": 838950.0,
     "fecha_fin_plazo": "2026-04-30",
     "fecha_publicacion": "2026-04-08",
-    "fecha_actualizacion": "2026-07-16T09:42:43.420+02:00",
+    "fecha_actualizacion": "2026-07-21T08:05:36.328+02:00",
     "primera_vez": "2026-07-17T08:19:35.172747",
-    "ultima_vez": "2026-07-21T08:31:30.495965"
+    "ultima_vez": "2026-07-22T08:35:37.340013"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20067581": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20067581",
@@ -2219,7 +2219,7 @@
     "fecha_publicacion": "2026-07-16",
     "fecha_actualizacion": "2026-07-16T17:53:45.282+02:00",
     "primera_vez": "2026-07-17T08:19:35.172747",
-    "ultima_vez": "2026-07-21T08:31:30.495965"
+    "ultima_vez": "2026-07-22T08:35:37.340013"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19239674": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19239674",
@@ -2243,7 +2243,7 @@
     "fecha_publicacion": "2026-03-13",
     "fecha_actualizacion": "2026-07-14T15:42:10.816+02:00",
     "primera_vez": "2026-07-17T08:19:35.172747",
-    "ultima_vez": "2026-07-21T08:31:30.495965"
+    "ultima_vez": "2026-07-22T08:35:37.340013"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19380024": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19380024",
@@ -2272,7 +2272,7 @@
     "fecha_publicacion": "2026-04-01",
     "fecha_actualizacion": "2026-07-17T09:29:32.016+02:00",
     "primera_vez": "2026-07-20T08:57:46.801915",
-    "ultima_vez": "2026-07-21T08:31:30.495965"
+    "ultima_vez": "2026-07-22T08:35:37.340013"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20081569": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20081569",
@@ -2296,7 +2296,7 @@
     "fecha_publicacion": "2026-07-17",
     "fecha_actualizacion": "2026-07-17T15:42:25.176+02:00",
     "primera_vez": "2026-07-20T08:57:46.801915",
-    "ultima_vez": "2026-07-21T08:31:30.495965"
+    "ultima_vez": "2026-07-22T08:35:37.340013"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/14030788": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/14030788",
@@ -2320,7 +2320,7 @@
     "fecha_publicacion": "2023-12-29",
     "fecha_actualizacion": "2026-07-20T10:30:55.541+02:00",
     "primera_vez": "2026-07-21T08:31:30.495965",
-    "ultima_vez": "2026-07-21T08:31:30.495965"
+    "ultima_vez": "2026-07-22T08:35:37.340013"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/12751736": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/12751736",
@@ -2378,6 +2378,109 @@
     "fecha_publicacion": "2023-05-19",
     "fecha_actualizacion": "2026-07-20T08:36:44.039+02:00",
     "primera_vez": "2026-07-21T08:31:30.495965",
-    "ultima_vez": "2026-07-21T08:31:30.495965"
+    "ultima_vez": "2026-07-22T08:35:37.340013"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19357496": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19357496",
+    "titulo": "Suministro e instalación de un equipo de cromatografía de gases acoplado a un espectrómetro de masas (GC-MS/MS) con detector de ionización de llama (FID) e inyector multimodo para inyecciones líquidas, gases y fibra (SPME) para el Centro Nacional de Alimentación (CNA) de la Agencia Española de Seguridad Alimentaria y Nutrición (AESAN OA)",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=SV5udiNmygXzAq95uGTrDQ%3D%3D",
+    "cpv": [
+      "38432210"
+    ],
+    "fuente": "estatal",
+    "num_expediente": "0100026AD010",
+    "organismo": "Dirección Ejecutiva de la Agencia Española de Seguridad Alimentaria y Nutrición",
+    "plataforma": null,
+    "region": "Comunidad de Madrid",
+    "region_codigo": "ES30",
+    "categoria": "criticas",
+    "coincidencia": "palabra clave «ionización»",
+    "presupuesto_con_iva": 260150.0,
+    "presupuesto_sin_iva": 215000.0,
+    "valor_estimado": 215000.0,
+    "fecha_fin_plazo": "2026-04-28",
+    "fecha_publicacion": "2026-04-09",
+    "fecha_actualizacion": "2026-07-21T09:44:18.307+02:00",
+    "primera_vez": "2026-07-22T08:35:37.340013",
+    "ultima_vez": "2026-07-22T08:35:37.340013"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18376788": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18376788",
+    "titulo": "Servicio de cualificación anual y verificación periódica de la Bioseguridad Ambiental en las salas de ambiente controlado y revisión de la Calidad de Ambiente Interior (CAI), respetuoso con el medio ambiente, del Hospital Universitario de Torrevieja",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=c4%2BkefrZn30Xhk1FZxEyvw%3D%3D",
+    "cpv": [
+      "71620000",
+      "90714500",
+      "90731100",
+      "71610000",
+      "90714200"
+    ],
+    "fuente": "estatal",
+    "num_expediente": "PA 567/2025",
+    "organismo": "Departamento de Salud de Torrevieja. Dirección Económica-Gerencia",
+    "plataforma": null,
+    "region": "Alicante/Alacant",
+    "region_codigo": "ES521",
+    "categoria": "criticas",
+    "coincidencia": "CPV 90731100 (coincide con 90731100)",
+    "presupuesto_con_iva": 325578.33,
+    "presupuesto_sin_iva": 269073.0,
+    "valor_estimado": 412578.6,
+    "fecha_fin_plazo": "2025-12-24",
+    "fecha_publicacion": "2025-11-12",
+    "fecha_actualizacion": "2026-07-21T09:43:02.319+02:00",
+    "primera_vez": "2026-07-22T08:35:37.340013",
+    "ultima_vez": "2026-07-22T08:35:37.340013"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20098453": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20098453",
+    "titulo": "Servicio de asesoramiento técnico en arquitectura para el Instituto Social de la Marina",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=Pox1x6jUZqvs%2BnLj3vAg5A%3D%3D",
+    "cpv": [
+      "71200000",
+      "71300000",
+      "90731700"
+    ],
+    "fuente": "estatal",
+    "num_expediente": "602026PA1008",
+    "organismo": "Instituto Social de la Marina -División de Administración y Análisis Presupuestario",
+    "plataforma": null,
+    "region": "Madrid",
+    "region_codigo": "ES300",
+    "categoria": "a_revisar",
+    "coincidencia": "CPV 90731700 (coincide con 9073)",
+    "presupuesto_con_iva": 242012.1,
+    "presupuesto_sin_iva": 200010.0,
+    "valor_estimado": 800040.0,
+    "fecha_fin_plazo": "2026-08-30",
+    "fecha_publicacion": "2026-07-21",
+    "fecha_actualizacion": "2026-07-21T12:23:10.298+02:00",
+    "primera_vez": "2026-07-22T08:35:37.340013",
+    "ultima_vez": "2026-07-22T08:35:37.340013"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19172191": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19172191",
+    "titulo": "Asistencia técnica para la ejecución del plan de vigilancia ambiental en los Puertos de Algeciras y Tarifa acorde a la ROM 5.1 y la Directiva Marco de Aguas 2000/60/CE en la zona de servicios de la APBA",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=PEkia9GG9KweIBJRHQiPkQ%3D%3D",
+    "cpv": [
+      "90733000",
+      "90741100"
+    ],
+    "fuente": "estatal",
+    "num_expediente": "2026-011",
+    "organismo": "Presidencia de la Autoridad Portuaria de la Bahía de Algeciras",
+    "plataforma": null,
+    "region": "Cádiz",
+    "region_codigo": "ES612",
+    "categoria": "a_revisar",
+    "coincidencia": "CPV 90733000 (coincide con 9073)",
+    "presupuesto_con_iva": 91960.0,
+    "presupuesto_sin_iva": 76000.0,
+    "valor_estimado": 190000.0,
+    "fecha_fin_plazo": "2026-03-25",
+    "fecha_publicacion": "2026-03-04",
+    "fecha_actualizacion": "2026-07-21T10:27:22.011+02:00",
+    "primera_vez": "2026-07-22T08:35:37.340013",
+    "ultima_vez": "2026-07-22T08:35:37.340013"
   }
 }
