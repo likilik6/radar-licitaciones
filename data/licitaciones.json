@@ -16,7 +16,7 @@
     "fecha_publicacion": "2026-07-07",
     "fecha_actualizacion": "2026-07-23T10:57:30.693+02:00",
     "primera_vez": "2026-06-24T09:23:14.737353",
-    "ultima_vez": "2026-07-24T08:30:41.810966",
+    "ultima_vez": "2026-07-27T09:51:03.625749",
     "organismo": "Dirección General de Mercados Centrales de Abastecimiento de Madrid S.A. (MERCAMADRID S.A.)",
     "plataforma": null,
     "region": "Madrid",
@@ -106,7 +106,7 @@
     "fecha_publicacion": "2026-06-01",
     "fecha_actualizacion": "2026-07-23T13:29:20.614+02:00",
     "primera_vez": "2026-06-25T09:04:28.410821",
-    "ultima_vez": "2026-07-24T08:30:41.810966",
+    "ultima_vez": "2026-07-27T09:51:03.625749",
     "num_expediente": "014-SER-2026"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19596190": {
@@ -465,10 +465,10 @@
     "valor_estimado": 24026427.6,
     "fecha_fin_plazo": "2027-07-31",
     "fecha_publicacion": "2026-01-23",
-    "fecha_actualizacion": "2026-06-19T13:12:25.709+02:00",
+    "fecha_actualizacion": "2026-07-24T13:41:20.706+02:00",
     "primera_vez": "2026-06-25T09:04:28.410821",
-    "ultima_vez": "2026-07-01T12:38:46.468304",
-    "num_expediente": null
+    "ultima_vez": "2026-07-27T09:51:03.625749",
+    "num_expediente": "CE18196HO01/24"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19071782": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19071782",
@@ -491,7 +491,7 @@
     "fecha_publicacion": "2026-02-18",
     "fecha_actualizacion": "2026-07-21T12:41:52.204+02:00",
     "primera_vez": "2026-06-25T09:04:28.410821",
-    "ultima_vez": "2026-07-24T08:30:41.810966",
+    "ultima_vez": "2026-07-27T09:51:03.625749",
     "num_expediente": "CONTR 2026 0000026017"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19235666": {
@@ -720,7 +720,7 @@
     "fecha_publicacion": "2026-06-15",
     "fecha_actualizacion": "2026-07-17T14:12:00.692+02:00",
     "primera_vez": "2026-06-25T09:04:28.410821",
-    "ultima_vez": "2026-07-24T08:30:41.810966",
+    "ultima_vez": "2026-07-27T09:51:03.625749",
     "num_expediente": "CSE/AH06/1101473538/26/PO"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19295263": {
@@ -770,7 +770,7 @@
     "fecha_publicacion": "2026-03-27",
     "fecha_actualizacion": "2026-07-14T08:32:36.244+02:00",
     "primera_vez": "2026-06-26T09:05:39.995142",
-    "ultima_vez": "2026-07-24T08:30:41.810966",
+    "ultima_vez": "2026-07-27T09:51:03.625749",
     "num_expediente": "15-3-2.01-0044/2026"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19207311": {
@@ -845,7 +845,7 @@
     "fecha_publicacion": "2026-03-12",
     "fecha_actualizacion": "2026-07-15T09:40:59.233+02:00",
     "primera_vez": "2026-06-26T09:05:39.995142",
-    "ultima_vez": "2026-07-24T08:30:41.810966",
+    "ultima_vez": "2026-07-27T09:51:03.625749",
     "num_expediente": "252-2025"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19172138": {
@@ -1610,7 +1610,7 @@
     "fecha_publicacion": "2026-07-06",
     "fecha_actualizacion": "2026-07-22T08:39:41.312+02:00",
     "primera_vez": "2026-07-06T10:30:31.860266",
-    "ultima_vez": "2026-07-24T08:30:41.810966",
+    "ultima_vez": "2026-07-27T09:51:03.625749",
     "num_expediente": "LICT/99/024/2025/0180"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/17916056": {
@@ -1665,7 +1665,7 @@
     "fecha_publicacion": "2026-07-03",
     "fecha_actualizacion": "2026-07-22T11:54:53.600+02:00",
     "primera_vez": "2026-07-06T10:30:31.860266",
-    "ultima_vez": "2026-07-24T08:30:41.810966",
+    "ultima_vez": "2026-07-27T09:51:03.625749",
     "num_expediente": "CO-OE-26-018"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19265760": {
@@ -2062,7 +2062,7 @@
     "fecha_publicacion": "2026-07-15",
     "fecha_actualizacion": "2026-07-23T11:51:42.677+02:00",
     "primera_vez": "2026-07-15T08:16:02.341920",
-    "ultima_vez": "2026-07-24T08:30:41.810966"
+    "ultima_vez": "2026-07-27T09:51:03.625749"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20050456": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20050456",
@@ -2163,7 +2163,7 @@
     "fecha_publicacion": "2026-07-16",
     "fecha_actualizacion": "2026-07-22T07:04:43.837+02:00",
     "primera_vez": "2026-07-16T08:20:22.193908",
-    "ultima_vez": "2026-07-24T08:30:41.810966"
+    "ultima_vez": "2026-07-27T09:51:03.625749"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19357472": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19357472",
@@ -2189,7 +2189,7 @@
     "fecha_publicacion": "2026-04-08",
     "fecha_actualizacion": "2026-07-21T08:05:36.328+02:00",
     "primera_vez": "2026-07-17T08:19:35.172747",
-    "ultima_vez": "2026-07-24T08:30:41.810966"
+    "ultima_vez": "2026-07-27T09:51:03.625749"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20067581": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20067581",
@@ -2243,7 +2243,7 @@
     "fecha_publicacion": "2026-03-13",
     "fecha_actualizacion": "2026-07-14T15:42:10.816+02:00",
     "primera_vez": "2026-07-17T08:19:35.172747",
-    "ultima_vez": "2026-07-24T08:30:41.810966"
+    "ultima_vez": "2026-07-27T09:51:03.625749"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19380024": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19380024",
@@ -2296,7 +2296,7 @@
     "fecha_publicacion": "2026-07-17",
     "fecha_actualizacion": "2026-07-17T15:42:25.176+02:00",
     "primera_vez": "2026-07-20T08:57:46.801915",
-    "ultima_vez": "2026-07-24T08:30:41.810966"
+    "ultima_vez": "2026-07-27T09:51:03.625749"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/14030788": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/14030788",
@@ -2402,7 +2402,7 @@
     "fecha_publicacion": "2026-04-09",
     "fecha_actualizacion": "2026-07-21T09:44:18.307+02:00",
     "primera_vez": "2026-07-22T08:35:37.340013",
-    "ultima_vez": "2026-07-24T08:30:41.810966"
+    "ultima_vez": "2026-07-27T09:51:03.625749"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18376788": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18376788",
@@ -2430,7 +2430,7 @@
     "fecha_publicacion": "2025-11-12",
     "fecha_actualizacion": "2026-07-21T09:43:02.319+02:00",
     "primera_vez": "2026-07-22T08:35:37.340013",
-    "ultima_vez": "2026-07-24T08:30:41.810966"
+    "ultima_vez": "2026-07-27T09:51:03.625749"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20098453": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20098453",
@@ -2456,7 +2456,7 @@
     "fecha_publicacion": "2026-07-21",
     "fecha_actualizacion": "2026-07-21T12:23:10.298+02:00",
     "primera_vez": "2026-07-22T08:35:37.340013",
-    "ultima_vez": "2026-07-24T08:30:41.810966"
+    "ultima_vez": "2026-07-27T09:51:03.625749"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19172191": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19172191",
@@ -2481,7 +2481,7 @@
     "fecha_publicacion": "2026-03-04",
     "fecha_actualizacion": "2026-07-21T10:27:22.011+02:00",
     "primera_vez": "2026-07-22T08:35:37.340013",
-    "ultima_vez": "2026-07-24T08:30:41.810966"
+    "ultima_vez": "2026-07-27T09:51:03.625749"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20107130": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20107130",
@@ -2505,7 +2505,7 @@
     "fecha_publicacion": "2026-07-22",
     "fecha_actualizacion": "2026-07-22T09:46:49.851+02:00",
     "primera_vez": "2026-07-23T08:37:52.945152",
-    "ultima_vez": "2026-07-24T08:30:41.810966"
+    "ultima_vez": "2026-07-27T09:51:03.625749"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19522257": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19522257",
@@ -2531,6 +2531,47 @@
     "fecha_publicacion": "2026-04-20",
     "fecha_actualizacion": "2026-07-23T10:14:25.256+02:00",
     "primera_vez": "2026-07-24T08:30:41.810966",
-    "ultima_vez": "2026-07-24T08:30:41.810966"
+    "ultima_vez": "2026-07-27T09:51:03.625749"
+  },
+  "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/18313918": {
+    "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/18313918",
+    "titulo": "Gestió integral de l'abastament d'aigua al municipi, incloent-hi, d'una banda, la xarxa de distribució d'aigua potable per abastament de la població, i de l'altra, la xarxa d'aigua no potable per a reg i altres usos municipals.\nPer gestió integral s'ha d'entendre tot el conjunt de serveis, subministraments i obres que consten el Plec i en la resta de documents de la licitació, encaminats a oferir un servei integral respecte de les xarxes d'aigua potable i no potable del municipi. Queden incloses dins l'objecte del contracte de les obres, inversions i actuacions de renovació i millora, tant inicials como periòdiques, així com el servei de subministrament d'aigua potable a la ciutadania. \nA escala funcional, l'àmbit general del contracte s'inicia en el punt de recepció o captació de l'aigua de fonts pròpies o externes, i finalitza al punt lliurament de l'aigua a l'usuari final (comptador d’usuari, font d’aigua potable, font ornamental, hidrant, boca de reg, boca d’aigua no potable, pericó, o element similar).\nPel que fa a les fonts externes, l’àmbit del contracte s’inicia en els punts de recepció de l’aigua en alta de l’Ens Aigües Ter-Llobregat. Pel que fa a les fonts pròpies (pous subterranis), l’àmbit del contracte s’inicia en el mateix punt de captació, i inclou en aquest cas el manteniment, control i explotació del punt de captació.\nL’àmbit funcional del contracte inclou també altres elements, com el manteniment de les fonts ornamentals, les fonts d’aigua potable, les instal·lacions de reg i els hidrants a la via pública. També s’inclouen dins l’àmbit del contracte tots els serveis de gestió administrativa i auxiliars previs, concurrents i posteriors al servei de subministrament d’aigua, com ara l’atenció al client integral a les persones usuàries finals, i la liquidació, recaptació i ingrés a l’Ajuntament de les prestacions patrimonials no tributàries que s’estableixin, entre d’altres.",
+    "enlace": "https://contractaciopublica.cat/ca/detall-publicacio/c3c626a0-056e-45bb-977d-549319bfde06/300843224",
+    "cpv": [
+      "65110000",
+      "90733000",
+      "45232151",
+      "65130000",
+      "45262660",
+      "41120000",
+      "45232150",
+      "45232100",
+      "45232430",
+      "65100000",
+      "65111000",
+      "65500000",
+      "44162500",
+      "45231300",
+      "41110000",
+      "50411100",
+      "44161200",
+      "71800000"
+    ],
+    "fuente": "agregadas",
+    "num_expediente": "COSE/25034",
+    "organismo": "Ajuntament de Mollet del Vallès",
+    "plataforma": "Generalitat de Catalunya",
+    "region": null,
+    "region_codigo": "ES511",
+    "categoria": "a_revisar",
+    "coincidencia": "CPV 90733000 (coincide con 9073)",
+    "presupuesto_con_iva": null,
+    "presupuesto_sin_iva": 18471590.88,
+    "valor_estimado": 26924409.07,
+    "fecha_fin_plazo": "2026-01-05",
+    "fecha_publicacion": "2025-11-04",
+    "fecha_actualizacion": "2026-07-24T10:06:09.932+02:00",
+    "primera_vez": "2026-07-27T09:51:03.625749",
+    "ultima_vez": "2026-07-27T09:51:03.625749"
   }
 }
