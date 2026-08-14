@@ -58,15 +58,23 @@ create table if not exists public.menores (
   -- Representación textual del CPV para filtrar POR PREFIJO desde PostgREST (columna
   -- REAL, no una función, para que el front pueda hacer cpv_txt=ilike.'% 9073%'). Un
   -- espacio antepuesto a cada código: "empieza por 9073" == la cadena CONTIENE ' 9073'.
-  -- array_to_string es IMMUTABLE -> vale para columna generada. Se apoya en el trigram.
-  cpv_txt              text generated always as (' ' || array_to_string(cpv, ' ')) stored,
+  -- NO es GENERATED: array_to_string está marcada STABLE (no IMMUTABLE), y una columna
+  -- generada exige IMMUTABLE (Postgres da 42P17). La rellena el MISMO trigger que el tsv
+  -- (coherente con cómo se rellena tsv, que tampoco puede ser generada por el unaccent).
+  cpv_txt              text,
   updated_at           timestamptz default now()
 );
 
+-- Idempotencia: si la tabla ya existía de un intento previo, asegura la columna
+-- (no rompe si ya está). El trigram de abajo se apoya en ella.
+alter table public.menores add column if not exists cpv_txt text;
+
 -- ----------------------------------------------------------------------------
--- 2) tsv por TRIGGER (mismo patrón que licitaciones: unaccent es STABLE, no vale
---    columna generada). Config 'spanish' + unaccent para casar "formaldehído" con o
---    sin tilde. Pesa el objeto (A) por encima del órgano (C). search_path fijo.
+-- 2) tsv + cpv_txt por TRIGGER (mismo patrón que licitaciones: unaccent/array_to_string
+--    no son IMMUTABLE, así que no valen para columna generada). Config 'spanish' +
+--    unaccent para casar "formaldehído" con o sin tilde. Pesa el objeto (A) por encima
+--    del órgano (C). cpv_txt = ' ' + códigos separados por espacio (el front filtra por
+--    prefijo con ilike '% 9073%', acelerado por el trigram). search_path fijo.
 -- ----------------------------------------------------------------------------
 create or replace function public.menores_tsv_update()
 returns trigger
@@ -77,6 +85,8 @@ begin
   new.tsv :=
       setweight(to_tsvector('spanish', unaccent(coalesce(new.objeto,              ''))), 'A')
    || setweight(to_tsvector('spanish', unaccent(coalesce(new.organo_contratacion, ''))), 'C');
+  -- Espacio inicial + un espacio entre códigos, para que el prefijo ancle en ' <cod>'.
+  new.cpv_txt := ' ' || array_to_string(coalesce(new.cpv, '{}'::text[]), ' ');
   return new;
 end;
 $$;
@@ -94,8 +104,8 @@ create trigger menores_tsv_trg
 create index if not exists menores_tsv_gin
   on public.menores using gin (tsv);
 
--- (b) NICHO/filtro por CPV PREFIJO -> GIN trigram sobre la columna generada cpv_txt.
---     El front filtra por PostgREST: cpv_txt=ilike.'% 9073%' (acelerado por el trigram).
+-- (b) NICHO/filtro por CPV PREFIJO -> GIN trigram sobre la columna cpv_txt (la rellena
+--     el trigger). El front filtra por PostgREST: cpv_txt=ilike.'% 9073%' (vía trigram).
 create index if not exists menores_cpv_txt_trgm
   on public.menores using gin (cpv_txt extensions.gin_trgm_ops);
 
