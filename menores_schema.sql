@@ -43,13 +43,23 @@ create table if not exists public.menores (
   importe_con_iva      numeric,                       -- importe con IVA (si viene)
   organo_contratacion  text,                          -- ÓRGANO COMPRADOR (vertiente "oportunidad": quién compra)
   adjudicatario        text,                          -- razón social del ganador
-  cif_adjudicatario    text,                          -- CIF NORMALIZADO del ganador (cruce con Competencia)
+  cif_adjudicatario    text,                          -- CIF NORMALIZADO del ganador PRINCIPAL (el de mayor importe)
+  -- TODOS los CIFs ganadores distintos (incl. el principal). Un menor se adjudica
+  -- directo y casi siempre tiene 1 ganador, pero el 0,22% tiene >1 (medido en PASO 0).
+  -- Guardarlos TODOS evita perder CIFs de competidor: «solo CIFS_SEGUIDOS» y los cruces
+  -- casan con CUALQUIER ganador (`&&`), no solo el principal.
+  cifs_adjudicatarios  text[] not null default '{}',
   fecha_adjudicacion   date,                          -- cbc:AwardDate
   num_expediente       text,                          -- nº de expediente del órgano (dato de contexto)
   enlace               text,                          -- enlace al detalle en la PLACSP
   fuente               text  not null default 'estatal',
   n_adjudicatarios     integer,                       -- nº de ganadores distintos (normalmente 1; marca el multi-lote raro)
   tsv                  tsvector,                      -- índice de texto del objeto+órgano (lo rellena el trigger de abajo)
+  -- Representación textual del CPV para filtrar POR PREFIJO desde PostgREST (columna
+  -- REAL, no una función, para que el front pueda hacer cpv_txt=ilike.'% 9073%'). Un
+  -- espacio antepuesto a cada código: "empieza por 9073" == la cadena CONTIENE ' 9073'.
+  -- array_to_string es IMMUTABLE -> vale para columna generada. Se apoya en el trigram.
+  cpv_txt              text generated always as (' ' || array_to_string(cpv, ' ')) stored,
   updated_at           timestamptz default now()
 );
 
@@ -84,14 +94,19 @@ create trigger menores_tsv_trg
 create index if not exists menores_tsv_gin
   on public.menores using gin (tsv);
 
--- (b) NICHO/filtro por CPV PREFIJO -> GIN trigram sobre cpv_texto(cpv) (reutiliza el
---     helper del Buscador). "empieza por 9073" = la cadena CONTIENE ' 9073'.
-create index if not exists menores_cpv_trgm
-  on public.menores using gin (public.cpv_texto(cpv) extensions.gin_trgm_ops);
+-- (b) NICHO/filtro por CPV PREFIJO -> GIN trigram sobre la columna generada cpv_txt.
+--     El front filtra por PostgREST: cpv_txt=ilike.'% 9073%' (acelerado por el trigram).
+create index if not exists menores_cpv_txt_trgm
+  on public.menores using gin (cpv_txt extensions.gin_trgm_ops);
 
--- (c) CIFS_SEGUIDOS y cruces por competidor -> btree sobre el CIF (igualdad / IN).
+-- (c) CIFS_SEGUIDOS y cruces por competidor -> btree sobre el CIF PRINCIPAL (igualdad
+--     / IN) para el caso común, y GIN sobre el ARRAY de todos los CIFs para que
+--     «solo CIFS_SEGUIDOS» (`cifs_adjudicatarios && ARRAY[...]`) case también con el
+--     ganador secundario del 0,22% multi-ganador (sin perder competidores).
 create index if not exists menores_cif_idx
   on public.menores (cif_adjudicatario);
+create index if not exists menores_cifs_gin
+  on public.menores using gin (cifs_adjudicatarios);
 
 -- (d) ÓRGANO comprador -> btree para la agregación "quién compra" (GROUP BY) y el
 --     filtro por órgano exacto. (El "contiene" por texto libre, si se pide, tira del

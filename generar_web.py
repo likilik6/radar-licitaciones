@@ -87,6 +87,8 @@ OPCIONES_MENU = [
     # Subapartado del Buscador (mismo patrón que 'En observación' bajo Radar): reutiliza
     # el bloque #vista-buscador con el filtro «Solo desiertas» YA aplicado.
     {"nombre": "Desiertas", "vista": "desiertas", "enlace": "#vista-buscador", "icono": "🏜️", "sub": True},
+    # Fase M: subapartado de MENORES (tabla aparte public.menores; su propia vista).
+    {"nombre": "Menores", "vista": "menores", "enlace": "#vista-menores", "icono": "🧾", "sub": True},
     {"nombre": "Competencia", "vista": "competencia", "enlace": "#vista-competencia", "icono": "🏆"},
     {"nombre": "Cartera", "vista": "cartera", "enlace": "#vista-cartera", "icono": "💼"},
     {"nombre": "Calendario", "vista": "calendario", "enlace": "#vista-calendario", "icono": "📅"},
@@ -199,6 +201,28 @@ CSS = """
   .tag.desierta { background:#fee2e2; color:#b91c1c; }
   .tag.desierta-parcial { background:#fef3c7; color:#b45309; }
   .tag.retirada { background:#e5e7eb; color:#4b5563; }
+  /* Fase M · MENORES: badges y tarjeta del explorador. */
+  .tag.mn-competidor { background:#fee2e2; color:#b91c1c; }   /* ganó un CIF seguido (competencia) */
+  .tag.mn-lodepa { background:#dcfce7; color:#15803d; }       /* ganó LODEPA */
+  .mn-intro { font-size:.9rem; color:var(--suave); margin:0 0 12px; }
+  .mn-card .mn-tags { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:6px; }
+  .mn-card .mn-multi { font-size:.72rem; color:var(--suave); }
+  .mn-org-fila { margin:4px 0 8px; }
+  /* Órgano comprador DESTACADO y clicable (vertiente oportunidad). */
+  .mn-organo { font:inherit; font-size:.86rem; font-weight:600; color:var(--acento-2);
+    background:#eff6ff; border:1px solid #dbeafe; border-radius:8px; padding:4px 10px; cursor:pointer; text-align:left; }
+  .mn-organo:hover { background:#dbeafe; border-color:#93c5fd; }
+  .mn-adj { font-size:.86rem; margin-bottom:6px; }
+  .mn-adj .et { color:var(--suave); font-size:.78rem; }
+  .mn-ganador { font:inherit; font-size:.86rem; background:none; border:none; padding:0; cursor:pointer;
+    color:var(--texto); text-align:left; text-decoration:underline dotted; }
+  .mn-ganador:hover { color:var(--acento-2); }
+  .mn-ganador.es-seguido { font-weight:700; color:#b91c1c; }
+  .mn-ganador .mn-cif { color:var(--suave); font-size:.78rem; }
+  .mn-ganador-vacio { font-size:.86rem; color:var(--suave); }
+  .mn-meta { font-size:.84rem; color:var(--texto); }
+  .mn-importe { font-weight:600; }
+  .mn-fecha { color:var(--suave); }
   .cpv { font-size:.82rem; color:var(--suave); display:flex; flex-wrap:wrap; gap:5px; align-items:center; }
   .cpv .et { font-weight:600; color:var(--texto); }
   .cpv code { background:#f1f5f9; color:#334155; padding:2px 7px; border-radius:6px; font-size:.78rem; }
@@ -2042,6 +2066,7 @@ JS_SUPABASE = """
   const vistaCartera    = document.getElementById('vista-cartera');
   const vistaCalendario = document.getElementById('vista-calendario');
   const vistaBuscador   = document.getElementById('vista-buscador');   // BG-4
+  const vistaMenores    = document.getElementById('vista-menores');    // Fase M
   const vistaCompetencia = document.getElementById('vista-competencia');  // Fase E
   const carteraCont     = document.getElementById('cartera-contenido');
   const calendarioCont  = document.getElementById('calendario-contenido');
@@ -2052,8 +2077,8 @@ JS_SUPABASE = """
   // marcadas ('favoritas') y oculta el tablist + el filtro de CPV del Radar.
   // 'desiertas' es un subapartado del Buscador (mismo patrón que 'observacion' bajo Radar):
   // REUTILIZA el bloque #vista-buscador, solo entra con el filtro «Solo desiertas» puesto.
-  const VISTAS  = ['radar', 'observacion', 'cartera', 'calendario', 'buscador', 'desiertas', 'competencia'];
-  const TITULOS = { radar: 'Radar', observacion: 'En observación', cartera: 'Cartera', calendario: 'Calendario', buscador: 'Buscador', desiertas: 'Desiertas', competencia: 'Competencia' };
+  const VISTAS  = ['radar', 'observacion', 'cartera', 'calendario', 'buscador', 'desiertas', 'menores', 'competencia'];
+  const TITULOS = { radar: 'Radar', observacion: 'En observación', cartera: 'Cartera', calendario: 'Calendario', buscador: 'Buscador', desiertas: 'Desiertas', menores: 'Menores', competencia: 'Competencia' };
   let vistaActiva = 'radar';   // vista por defecto
 
   // Ajusta el modo 'En observación' vs Radar sobre el MISMO grid: fuerza la pestaña
@@ -2070,6 +2095,7 @@ JS_SUPABASE = """
     if (vistaCartera)    vistaCartera.hidden    = (vistaActiva !== 'cartera');
     if (vistaCalendario) vistaCalendario.hidden = (vistaActiva !== 'calendario');
     if (vistaBuscador)   vistaBuscador.hidden   = !(vistaActiva === 'buscador' || vistaActiva === 'desiertas');  // BG-4 (+ subapartado Desiertas)
+    if (vistaMenores)    vistaMenores.hidden    = (vistaActiva !== 'menores');       // Fase M
     if (vistaCompetencia) vistaCompetencia.hidden = (vistaActiva !== 'competencia');  // Fase E
     // Marca activa la entrada del lateral y ajusta la cabecera.
     document.querySelectorAll('.sidebar .nav-item[data-vista]').forEach(function (a) {
@@ -2088,6 +2114,7 @@ JS_SUPABASE = """
     if (vistaActiva === 'calendario' && sesionActiva) cargarCalendario();
     if (vistaActiva === 'buscador' && window.__bgEntrar) window.__bgEntrar();   // BG-4
     if (vistaActiva === 'desiertas' && window.__bgDesiertas) window.__bgDesiertas();  // subapartado
+    if (vistaActiva === 'menores' && window.__mnEntrar) window.__mnEntrar();          // Fase M
     if (vistaActiva === 'competencia' && window.__compEntrar) window.__compEntrar();  // Fase E
   }
 
@@ -3932,6 +3959,299 @@ JS_BUSCADOR = (
     if _BUSCADOR_API_SRC else ""
 )
 
+# ============================================================================
+# FASE M · Explorador de MENORES (vista #vista-menores). Mismo patrón de inline
+# que el Buscador: leemos menores_api.js TAL CUAL (fuente única, testeable) y le
+# quitamos el 'export'. La UI (abajo) es una cadena NORMAL (lleva llaves de JS).
+# El nicho (CPV+palabras) y CIFS_SEGUIDOS llegan por window.__MENORES_* (los emite
+# DATOS_MENORES_JS, calculado más abajo desde intereses.yaml -> filtrado al consultar).
+# ============================================================================
+_ruta_api_menores = Path("menores_api.js")
+_MENORES_API_SRC = (
+    _ruta_api_menores.read_text(encoding="utf-8").replace(
+        "export function crearMenores", "function crearMenores"
+    )
+    if _ruta_api_menores.exists()
+    else ""
+)
+
+JS_MENORES_UI = r"""
+  // === FASE M · UI del explorador de MENORES (vista #vista-menores) ==========
+  // Privado (authenticated). Tabla AISLADA public.menores; NO toca el Buscador.
+  const _mn = crearMenores(supabase);
+  const mnBuscarFn = _mn.buscar;
+
+  const MN_NICHO_CPV = Array.isArray(window.__MENORES_NICHO_CPV) ? window.__MENORES_NICHO_CPV : [];
+  const MN_NICHO_KW  = typeof window.__MENORES_NICHO_KW === 'string' ? window.__MENORES_NICHO_KW : '';
+  const MN_CIFS      = Array.isArray(window.__MENORES_CIFS) ? window.__MENORES_CIFS : [];
+  const MN_LODEPA    = (typeof CIFS_LODEPA_FRONT !== 'undefined') ? CIFS_LODEPA_FRONT : ['B86833753'];
+
+  const mnGate  = document.getElementById('mn-gate');
+  const mnPanel = document.getElementById('mn-panel');
+  const mnTexto = document.getElementById('mn-texto');
+  const mnPills = document.getElementById('mn-pills');
+  const mnMas   = document.getElementById('mn-mas');
+  const mnAvanz = document.getElementById('mn-avanzado');
+  const mnCpv   = document.getElementById('mn-cpv');
+  const mnCpvAdd= document.getElementById('mn-cpv-add');
+  const mnImpMin= document.getElementById('mn-imp-min');
+  const mnImpMax= document.getElementById('mn-imp-max');
+  const mnDesde = document.getElementById('mn-desde');
+  const mnHasta = document.getElementById('mn-hasta');
+  const mnOrden = document.getElementById('mn-orden');
+  const mnChips = document.getElementById('mn-chips');
+  const mnLimpiar = document.getElementById('mn-limpiar');
+  const mnCont  = document.getElementById('mn-contador');
+  const mnMsg   = document.getElementById('mn-estado-msg');
+  const mnRes   = document.getElementById('mn-resultados');
+  const mnPag   = document.getElementById('mn-paginacion');
+  const mnPrev  = document.getElementById('mn-prev');
+  const mnNext  = document.getElementById('mn-next');
+  const mnPagInfo = document.getElementById('mn-pag-info');
+
+  const MN_POR_PAGINA = 25;
+  let mnPagina = 1, mnCargando = false, mnYaBuscado = false;
+
+  // Estado de filtros (fuente de verdad). '' = sin filtro.
+  const mnFiltros = {
+    modo: 'todo',            // 'todo' | 'nicho' | 'cifs'
+    cpvPrefijo: [],
+    impMin: '', impMax: '',
+    desde: '', hasta: '',
+    organo: '',              // órgano comprador EXACTO (se pone al clicar un órgano)
+    orden: 'fecha_adjudicacion:desc',
+  };
+
+  function mnEsc(s){ const d=document.createElement('div'); d.textContent=(s==null?'':String(s)); return d.innerHTML; }
+  function mnFecha(iso){ if(!iso) return '—'; const d=new Date(iso); return Number.isNaN(d.getTime())?'—':d.toLocaleDateString('es-ES'); }
+  function mnEsSeguido(cif){ return !!cif && MN_CIFS.indexOf(cif) >= 0; }
+  function mnEsLodepa(cif){ return !!cif && MN_LODEPA.indexOf(cif) >= 0; }
+  // ¿Alguno de los ganadores (principal o secundarios) es un CIF seguido?
+  function mnCifsSeguidosDe(f){
+    const todos = Array.isArray(f.cifs_adjudicatarios) && f.cifs_adjudicatarios.length
+                ? f.cifs_adjudicatarios : (f.cif_adjudicatario ? [f.cif_adjudicatario] : []);
+    return todos.filter(mnEsSeguido);
+  }
+  function mnPrefijo(s){ return String(s==null?'':s).trim().split('-')[0].trim(); }
+
+  function mnParams(){
+    const f = mnFiltros;
+    const partes = (f.orden || 'fecha_adjudicacion:desc').split(':');
+    return {
+      modo: f.modo,
+      nichoCpv: f.modo === 'nicho' ? MN_NICHO_CPV : undefined,
+      nichoKw:  f.modo === 'nicho' ? MN_NICHO_KW  : undefined,
+      cifsSeguidos: f.modo === 'cifs' ? MN_CIFS : undefined,
+      cpvPrefijo: f.cpvPrefijo.length ? f.cpvPrefijo.slice() : undefined,
+      texto: mnTexto ? mnTexto.value : '',
+      organo: f.organo || undefined,
+      importeMin: f.impMin !== '' ? f.impMin : undefined,
+      importeMax: f.impMax !== '' ? f.impMax : undefined,
+      fechaDesde: f.desde || undefined,
+      fechaHasta: f.hasta || undefined,
+      ordenCampo: partes[0],
+      ordenAsc: partes[1] !== 'desc',
+      pagina: mnPagina,
+      porPagina: MN_POR_PAGINA,
+    };
+  }
+
+  // Tarjeta de un menor: órgano comprador DESTACADO (oportunidad), ganador clicable a
+  // su ficha de Competencia (inteligencia), badge si es CIF seguido / LODEPA.
+  function mnTarjeta(f){
+    const id = f.licitacion_id || '';
+    const objeto = mnEsc(f.objeto || '(sin objeto)');
+    const enlace = f.enlace ? mnEsc(f.enlace) : '';
+    const tituloHtml = enlace ? '<a href="'+enlace+'" target="_blank" rel="noopener">'+objeto+'</a>' : objeto;
+    // Badges: LODEPA (si ganó LODEPA), o COMPETIDOR (si ganó un CIF seguido).
+    const seguidos = mnCifsSeguidosDe(f);
+    let badge = '';
+    if(seguidos.some(mnEsLodepa)) badge = '<span class="tag mn-lodepa">LODEPA</span>';
+    else if(seguidos.length)      badge = '<span class="tag mn-competidor">COMPETIDOR</span>';
+    const multi = (f.n_adjudicatarios || 0) > 1
+      ? ' <span class="mn-multi" title="Este menor tuvo varios adjudicatarios">'+f.n_adjudicatarios+' adjudicatarios</span>' : '';
+    // Órgano comprador destacado y clicable (filtra "todo lo que compra este órgano").
+    const org = f.organo_contratacion
+      ? '<button type="button" class="mn-organo" data-organo="'+mnEsc(f.organo_contratacion)+'" title="Ver todo lo que compra este órgano por menor">🏛️ '+mnEsc(f.organo_contratacion)+'</button>'
+      : '';
+    // Ganador clicable -> ficha de Competencia por CIF (cruce E.4).
+    const cif = f.cif_adjudicatario || '';
+    const nombre = mnEsc(f.adjudicatario || cif || '—');
+    const ganador = cif
+      ? '<button type="button" class="mn-ganador'+(mnEsSeguido(cif)?' es-seguido':'')+'" data-cif="'+mnEsc(cif)+'" title="Ver ficha de competencia">'+nombre+' <span class="mn-cif">'+mnEsc(cif)+'</span> ›</button>'
+      : '<span class="mn-ganador-vacio">'+nombre+'</span>';
+    const importe = (f.importe_sin_iva != null)
+      ? '<span class="mn-importe">'+fmtEur(f.importe_sin_iva)+' <small>s/IVA</small></span>' : '';
+    return '<article class="card mn-card" data-menor-id="'+mnEsc(id)+'">'
+      + (badge ? '<div class="mn-tags">'+badge+multi+'</div>' : (multi ? '<div class="mn-tags">'+multi+'</div>' : ''))
+      + '<h2 class="card-title">'+tituloHtml+'</h2>'
+      + (org ? '<div class="mn-org-fila">'+org+'</div>' : '')
+      + '<div class="mn-adj"><span class="et">Adjudicado a</span> '+ganador+'</div>'
+      + '<div class="mn-meta">'+importe+' · <span class="mn-fecha">'+mnFecha(f.fecha_adjudicacion)+'</span></div>'
+      + '</article>';
+  }
+
+  function mnPintaChips(){
+    const f = mnFiltros, chips = [];
+    const MODO = { nicho:'Solo nicho', cifs:'Solo competidores seguidos' };
+    if(f.modo !== 'todo') chips.push({ tipo:'modo', txt: MODO[f.modo] || f.modo });
+    f.cpvPrefijo.forEach(function(p){ chips.push({ tipo:'cpv', val:p, txt:'CPV '+p+'…' }); });
+    if(f.organo) chips.push({ tipo:'organo', txt:'Órgano: '+f.organo });
+    if(f.impMin !== '' || f.impMax !== ''){
+      let t; if(f.impMin!=='' && f.impMax!=='') t=fmtEur(Number(f.impMin))+' – '+fmtEur(Number(f.impMax));
+      else if(f.impMin!=='') t='≥ '+fmtEur(Number(f.impMin)); else t='≤ '+fmtEur(Number(f.impMax));
+      chips.push({ tipo:'importe', txt:'Importe: '+t });
+    }
+    if(f.desde || f.hasta){
+      const t = (f.desde&&f.hasta) ? (mnFecha(f.desde)+' – '+mnFecha(f.hasta)) : (f.desde?('desde '+mnFecha(f.desde)):('hasta '+mnFecha(f.hasta)));
+      chips.push({ tipo:'fecha', txt:'Fecha: '+t });
+    }
+    if(mnChips){
+      mnChips.innerHTML = chips.map(function(c){
+        return '<span class="bg-chip" data-tipo="'+c.tipo+'"'+(c.val!=null?' data-val="'+mnEsc(c.val)+'"':'')+'>'+mnEsc(c.txt)
+             + ' <button type="button" class="bg-chip-x" aria-label="Quitar filtro">×</button></span>';
+      }).join('');
+      mnChips.hidden = chips.length === 0;
+    }
+    const hayTexto = !!(mnTexto && mnTexto.value.trim());
+    if(mnLimpiar) mnLimpiar.hidden = !(chips.length || hayTexto);
+  }
+
+  function mnReinicia(){ mnPagina = 1; mnRun(); }
+  function mnSincroniza(){ mnPintaChips(); mnReinicia(); }
+
+  function mnSelPill(val){
+    if(!mnPills) return;
+    mnPills.querySelectorAll('.bg-pill').forEach(function(b){ b.classList.toggle('activo', (b.dataset.val||'todo')===val); });
+  }
+
+  function mnLimpiarTodo(){
+    if(mnTexto) mnTexto.value = '';
+    mnFiltros.modo='todo'; mnFiltros.cpvPrefijo=[]; mnFiltros.impMin=''; mnFiltros.impMax='';
+    mnFiltros.desde=''; mnFiltros.hasta=''; mnFiltros.organo=''; mnFiltros.orden='fecha_adjudicacion:desc';
+    mnSelPill('todo');
+    if(mnOrden) mnOrden.value = 'fecha_adjudicacion:desc';
+    [mnImpMin,mnImpMax,mnDesde,mnHasta,mnCpv].forEach(function(el){ if(el) el.value=''; });
+    mnSincroniza();
+  }
+
+  async function mnRun(){
+    if(!sesionActiva){ mnActualizarGate(); return; }
+    if(mnCargando) return;
+    mnCargando = true; mnYaBuscado = true;
+    if(mnMsg){ mnMsg.hidden=false; mnMsg.textContent='Buscando…'; }
+    if(mnPag){ mnPag.hidden=true; if(mnPagInfo) mnPagInfo.textContent=''; }
+    let r;
+    try { r = await mnBuscarFn(mnParams()); }
+    catch(e){ r = { error: e }; }
+    mnCargando = false;
+    if(r.error){
+      if(mnRes) mnRes.innerHTML='';
+      if(mnMsg){ mnMsg.hidden=false; mnMsg.textContent='Error en la búsqueda: '+(r.error.message||r.error); }
+      if(mnCont) mnCont.textContent='';
+      if(mnPag) mnPag.hidden=true;
+      return;
+    }
+    const filas = r.filas || [];
+    if(!filas.length){
+      if(mnRes) mnRes.innerHTML='';
+      if(mnMsg){ mnMsg.hidden=false; mnMsg.textContent='Sin resultados. Prueba con otros filtros.'; }
+      if(mnCont) mnCont.textContent='';
+      if(mnPag) mnPag.hidden=true;
+      return;
+    }
+    if(mnMsg) mnMsg.hidden = true;
+    if(mnRes) mnRes.innerHTML = filas.map(mnTarjeta).join('');
+    if(mnCont){
+      const aprox = r.aproximado ? '≈ ' : '';
+      mnCont.textContent = aprox + (r.total||0).toLocaleString('es-ES') + ' menor' + ((r.total===1)?'':'es');
+    }
+    // Paginación.
+    const totalPag = Math.max(1, Math.ceil((r.total||0) / MN_POR_PAGINA));
+    if(mnPag){
+      mnPag.hidden = false;
+      if(mnPagInfo) mnPagInfo.textContent = 'Página ' + mnPagina + (r.aproximado ? '' : ' de ' + totalPag);
+      if(mnPrev) mnPrev.disabled = mnPagina <= 1;
+      if(mnNext) mnNext.disabled = filas.length < MN_POR_PAGINA;
+    }
+  }
+
+  // --- Eventos ---------------------------------------------------------------
+  let mnTimer = null;
+  if(mnTexto) mnTexto.addEventListener('input', function(){ clearTimeout(mnTimer); mnTimer=setTimeout(function(){ mnPintaChips(); mnReinicia(); }, 300); });
+  if(mnOrden) mnOrden.addEventListener('change', function(){ mnFiltros.orden = mnOrden.value; mnReinicia(); });
+  if(mnPills) mnPills.addEventListener('click', function(e){
+    const btn = e.target.closest('.bg-pill'); if(!btn) return;
+    mnFiltros.modo = btn.dataset.val || 'todo';
+    mnSelPill(mnFiltros.modo);
+    mnSincroniza();
+  });
+  if(mnMas) mnMas.addEventListener('click', function(){
+    const abierto = mnMas.getAttribute('aria-expanded') === 'true';
+    mnMas.setAttribute('aria-expanded', abierto ? 'false' : 'true');
+    if(mnAvanz) mnAvanz.hidden = abierto;
+  });
+  function mnAddCpv(){
+    if(!mnCpv) return;
+    mnCpv.value.split(/[ ,;]+/).forEach(function(t){
+      const p = mnPrefijo(t);
+      if(p && mnFiltros.cpvPrefijo.indexOf(p) < 0) mnFiltros.cpvPrefijo.push(p);
+    });
+    mnCpv.value = '';
+    mnSincroniza();
+  }
+  if(mnCpvAdd) mnCpvAdd.addEventListener('click', mnAddCpv);
+  if(mnCpv) mnCpv.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); mnAddCpv(); } });
+  if(mnImpMin) mnImpMin.addEventListener('change', function(){ mnFiltros.impMin = mnImpMin.value; mnSincroniza(); });
+  if(mnImpMax) mnImpMax.addEventListener('change', function(){ mnFiltros.impMax = mnImpMax.value; mnSincroniza(); });
+  if(mnDesde) mnDesde.addEventListener('change', function(){ mnFiltros.desde = mnDesde.value; mnSincroniza(); });
+  if(mnHasta) mnHasta.addEventListener('change', function(){ mnFiltros.hasta = mnHasta.value; mnSincroniza(); });
+  if(mnLimpiar) mnLimpiar.addEventListener('click', mnLimpiarTodo);
+  if(mnChips) mnChips.addEventListener('click', function(e){
+    const x = e.target.closest('.bg-chip-x'); if(!x) return;
+    const chip = x.closest('.bg-chip'); if(!chip) return;
+    const tipo = chip.dataset.tipo;
+    if(tipo==='modo'){ mnFiltros.modo='todo'; mnSelPill('todo'); }
+    else if(tipo==='cpv'){ const v=chip.dataset.val; mnFiltros.cpvPrefijo = mnFiltros.cpvPrefijo.filter(function(p){ return p!==v; }); }
+    else if(tipo==='organo'){ mnFiltros.organo=''; }
+    else if(tipo==='importe'){ mnFiltros.impMin=''; mnFiltros.impMax=''; if(mnImpMin) mnImpMin.value=''; if(mnImpMax) mnImpMax.value=''; }
+    else if(tipo==='fecha'){ mnFiltros.desde=''; mnFiltros.hasta=''; if(mnDesde) mnDesde.value=''; if(mnHasta) mnHasta.value=''; }
+    mnSincroniza();
+  });
+  if(mnPrev) mnPrev.addEventListener('click', function(){ if(mnPagina>1){ mnPagina--; mnRun(); } });
+  if(mnNext) mnNext.addEventListener('click', function(){ mnPagina++; mnRun(); });
+  // Clic en resultados: órgano -> filtra por ese órgano; ganador -> ficha Competencia.
+  if(mnRes) mnRes.addEventListener('click', function(e){
+    const org = e.target.closest('.mn-organo');
+    if(org){ mnFiltros.organo = org.getAttribute('data-organo') || ''; mnSincroniza(); return; }
+    const g = e.target.closest('.mn-ganador');
+    if(g){
+      const cif = g.getAttribute('data-cif');
+      if(typeof irAFichaCompetidor === 'function') irAFichaCompetidor(cif);
+      else if(window.__irAFichaCompetidor) window.__irAFichaCompetidor(cif);
+    }
+  });
+
+  function mnActualizarGate(){
+    const dentro = !!sesionActiva;
+    if(mnGate)  mnGate.hidden  = dentro;
+    if(mnPanel) mnPanel.hidden = !dentro;
+    if(dentro && !mnYaBuscado) mnRun();   // primera búsqueda al entrar logueado
+  }
+  supabase.auth.onAuthStateChange(function(){
+    setTimeout(function(){ if(vistaActiva === 'menores') mnActualizarGate(); }, 0);
+  });
+  window.__mnEntrar = function(){ mnActualizarGate(); if(sesionActiva && mnTexto) mnTexto.focus(); };
+"""
+
+# Envolvemos api + UI en un IIFE (aísla helpers; ve `supabase`, `fmtEur`, `sesionActiva`,
+# `vistaActiva`, `irAFichaCompetidor`/`CIFS_LODEPA_FRONT` por closure del módulo).
+JS_MENORES = (
+    ("\n  // ===================== FASE M: MENORES =====================\n"
+     "  (function () {\n" + _MENORES_API_SRC + "\n" + JS_MENORES_UI + "\n  })();\n")
+    if _MENORES_API_SRC else ""
+)
+
 
 def slug(texto):
     """Convierte un texto en algo seguro para usar como clase CSS:
@@ -4409,6 +4729,53 @@ try:
 except (OSError, yaml.YAMLError):
     criterios_defecto = {}
 
+
+# --- Fase M: nicho + CIFS_SEGUIDOS para el explorador de MENORES -------------
+# El nicho (CPV prefijos + palabras) se calcula AL CONSULTAR en el cliente (decisión
+# v2: no se etiqueta en la ingesta, así ampliarlo = editar intereses.yaml y regenerar,
+# sin re-backfill). Sale de criticas + a_revisar (NUNCA 'pruebas'). Las palabras van
+# SIN TILDES y unidas por ' or ' (websearch) para casar el tsv (guardado con unaccent).
+def _nicho_menores(criterios):
+    import unicodedata
+    def sin_tildes(t):
+        return "".join(c for c in unicodedata.normalize("NFD", str(t).lower())
+                       if unicodedata.category(c) != "Mn")
+    cpv, kws = [], []
+    for grupo in ("criticas", "a_revisar"):
+        crit = (criterios or {}).get(grupo) or {}
+        for c in crit.get("cpv") or []:
+            s = str(c).strip()
+            if s and s not in cpv:
+                cpv.append(s)
+        for p in crit.get("palabras_clave") or []:
+            s = sin_tildes(p).strip()
+            if s and s not in kws:
+                kws.append(s)
+    return cpv, " or ".join(kws)
+
+
+MENORES_NICHO_CPV, MENORES_NICHO_KW = _nicho_menores(criterios_defecto)
+
+# CIFS_SEGUIDOS: lista curada (ROADMAP.md) de competidores + LODEPA. Se usa para el
+# modo «solo competidores seguidos» y el badge. Son datos públicos (CIF de empresas).
+MENORES_CIFS_SEGUIDOS = [
+    "B86833753",  # LODEPA
+    "B85578573",  # CRIOGES
+    "A28345577",  # SGS Tecnos
+    "A82850611",  # Anticimex 3D
+    "B82636275",  # TDM
+    "A33062407",  # Envira Sostenible
+    "A03637899",  # Labaqua
+    "B39594817",  # Raducan
+]
+
+# Se inyecta como <script> aparte (como DATOS_CONFIG_JS): el módulo lo lee de window.
+DATOS_MENORES_JS = (
+    "window.__MENORES_NICHO_CPV = " + json.dumps(MENORES_NICHO_CPV) + ";\n"
+    "window.__MENORES_NICHO_KW = " + json.dumps(MENORES_NICHO_KW, ensure_ascii=False) + ";\n"
+    "window.__MENORES_CIFS = " + json.dumps(MENORES_CIFS_SEGUIDOS) + ";\n"
+)
+
 # CPV ACTIVOS (prefijos) para limitar el desplegable "Filtrar por CPV" a solo los
 # CPV que el radar tiene activos ahora mismo (los de la config; o los del YAML si
 # aún no hay config). Vacío = no filtrar (mostrar todos los presentes).
@@ -4749,13 +5116,77 @@ pagina = f"""<!DOCTYPE html>
         <div id="comp-directa-contenido"></div>
       </div>
     </div>
+
+    <div id="vista-menores" hidden>
+      <div id="mn-gate" class="bg-gate" hidden>🔒 Inicia sesión para explorar los contratos menores.</div>
+      <div id="mn-panel" hidden>
+        <p class="mn-intro">Contratos <strong>menores</strong> estatales (adjudicación directa). Explora quién capta el gasto de tu nicho y qué órganos compran tu tipo de servicio.</p>
+        <div class="bg-barra">
+          <input id="mn-texto" class="bg-input" type="search" autocomplete="off"
+                 placeholder="Buscar en objeto u órgano…  (p. ej. formaldehído, calidad del aire)">
+          <button id="mn-mas" class="bg-mas-btn" type="button" aria-expanded="false" aria-controls="mn-avanzado">Más filtros</button>
+        </div>
+        <div id="mn-pills" class="bg-pills">
+          <div class="bg-pill-grupo" role="group" aria-label="Qué menores">
+            <span class="bg-pill-et">Ver</span>
+            <button type="button" class="bg-pill activo" data-val="todo">Todos</button>
+            <button type="button" class="bg-pill" data-val="nicho">Solo mi nicho</button>
+            <button type="button" class="bg-pill" data-val="cifs">Solo competidores seguidos</button>
+          </div>
+          <label class="bg-orden-lbl">Orden
+            <select id="mn-orden" class="bg-sel" title="Ordenar por">
+              <option value="fecha_adjudicacion:desc">Fecha ↓</option>
+              <option value="fecha_adjudicacion:asc">Fecha ↑</option>
+              <option value="importe_sin_iva:desc">Importe ↓</option>
+              <option value="importe_sin_iva:asc">Importe ↑</option>
+            </select>
+          </label>
+        </div>
+        <div id="mn-avanzado" class="bg-avanzado" hidden>
+          <div class="bg-campo">
+            <label for="mn-cpv">CPV (empieza por)</label>
+            <div class="bg-cpv-fila">
+              <input id="mn-cpv" class="bg-input-sm" type="text" inputmode="numeric" autocomplete="off" placeholder="p. ej. 9073">
+              <button id="mn-cpv-add" class="bg-mini-btn" type="button">Añadir</button>
+            </div>
+          </div>
+          <div class="bg-campo">
+            <label>Importe (s/IVA)</label>
+            <div class="bg-rango">
+              <input id="mn-imp-min" class="bg-input-sm" type="number" min="0" step="100" placeholder="mín." aria-label="Importe mínimo">
+              <input id="mn-imp-max" class="bg-input-sm" type="number" min="0" step="100" placeholder="máx." aria-label="Importe máximo">
+            </div>
+          </div>
+          <div class="bg-campo">
+            <label>Fecha de adjudicación</label>
+            <div class="bg-rango">
+              <input id="mn-desde" class="bg-input-sm" type="date" aria-label="Fecha desde">
+              <input id="mn-hasta" class="bg-input-sm" type="date" aria-label="Fecha hasta">
+            </div>
+          </div>
+        </div>
+        <div id="mn-chips" class="bg-chips" hidden></div>
+        <div class="bg-barra-inf">
+          <span id="mn-contador" class="bg-contador"></span>
+          <button id="mn-limpiar" class="bg-limpiar" type="button" hidden>Limpiar filtros</button>
+        </div>
+        <div id="mn-estado-msg" class="bg-msg" hidden></div>
+        <div id="mn-resultados" class="grid"></div>
+        <div id="mn-paginacion" class="bg-pag" hidden>
+          <button id="mn-prev" class="bg-pag-btn" type="button">‹ Anterior</button>
+          <span id="mn-pag-info" class="bg-pag-info"></span>
+          <button id="mn-next" class="bg-pag-btn" type="button">Siguiente ›</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 {CONTRATO_MODAL}{CARTERA_DOCS_MODAL}{AJUSTES_MODAL}</div>
 
 <script>{DATOS_CONFIG_JS}</script>
+<script>{DATOS_MENORES_JS}</script>
 <script>{JS}</script>
-<script type="module">{JS_SUPABASE}{JS_BUSCADOR}</script>
+<script type="module">{JS_SUPABASE}{JS_BUSCADOR}{JS_MENORES}</script>
 </body>
 </html>
 """

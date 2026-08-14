@@ -829,15 +829,24 @@ def refrescar_desiertas_oneshot(lote=5000):
 # maquinaria del backfill (descarga_zip, itera_atoms, _sube_lote, extractor).
 # ============================================================================
 def fila_menor(reg):
-    """Mapea el dict del extractor a las columnas de public.menores. UNA fila por
-    menor: toma el adjudicatario PRINCIPAL (el primero con CIF; si ninguno lo tiene,
-    el primero a secas). Solo el 0,22% de menores tienen >1 ganador distinto (medido
-    en PASO 0); n_adjudicatarios marca ese caso raro. El CIF ya viene NORMALIZADO del
-    extractor (feeds.normaliza_cif), así casa con la Competencia por CIF. El tsv lo
-    pone el trigger de la tabla (no se envía)."""
+    """Mapea el dict del extractor a las columnas de public.menores. UNA fila por menor.
+
+    Multi-ganador (solo el 0,22%, medido en PASO 0): NO se pierde ningún competidor.
+      · PRINCIPAL (para mostrar: adjudicatario/cif/importe/fecha) = el de MAYOR importe
+        (los empates y los que no traen importe caen al final; fallback al primero).
+      · cifs_adjudicatarios = TODOS los CIFs ganadores distintos (para «solo CIFS_SEGUIDOS»
+        y los cruces por `&&`, que así casan con cualquier ganador, no solo el principal).
+    El CIF ya viene NORMALIZADO del extractor (feeds.normaliza_cif) → casa con la
+    Competencia por CIF. El tsv lo pone el trigger de la tabla (no se envía)."""
     adjs = reg.get("adjudicaciones") or []
-    principal = next((a for a in adjs if a.get("cif_adjudicatario")), (adjs[0] if adjs else {}))
-    cifs_distintos = {a.get("cif_adjudicatario") for a in adjs if a.get("cif_adjudicatario")}
+    con_cif = [a for a in adjs if a.get("cif_adjudicatario")]
+    # PRINCIPAL = mayor importe_sin_iva (los None van al final); si nadie tiene CIF,
+    # el primero a secas para no perder objeto/órgano/fecha del registro.
+    ordenados = sorted(con_cif, key=lambda a: (a.get("importe_sin_iva") is not None,
+                                               a.get("importe_sin_iva") or 0), reverse=True)
+    principal = ordenados[0] if ordenados else (adjs[0] if adjs else {})
+    # Todos los CIFs distintos, ordenados para que el upsert sea estable (idempotente).
+    cifs = sorted({a["cif_adjudicatario"] for a in con_cif})
     return {
         "licitacion_id": reg["id"],
         "objeto": reg["objeto"] or reg["titulo"],   # el menor no trae "título" propio útil
@@ -847,11 +856,12 @@ def fila_menor(reg):
         "organo_contratacion": reg["organismo"],
         "adjudicatario": principal.get("adjudicatario"),
         "cif_adjudicatario": principal.get("cif_adjudicatario"),
+        "cifs_adjudicatarios": cifs,                 # text[]; casi siempre 1 elemento
         "fecha_adjudicacion": principal.get("fecha_adjudicacion"),
         "num_expediente": reg["num_expediente"],
         "enlace": reg["enlace"],
         "fuente": "estatal",
-        "n_adjudicatarios": len(cifs_distintos) or None,
+        "n_adjudicatarios": len(cifs) or None,
         "updated_at": AHORA_ISO,
     }
 
