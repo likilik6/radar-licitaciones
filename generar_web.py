@@ -205,6 +205,25 @@ CSS = """
   .tag.mn-competidor { background:#fee2e2; color:#b91c1c; }   /* ganó un CIF seguido (competencia) */
   .tag.mn-lodepa { background:#dcfce7; color:#15803d; }       /* ganó LODEPA */
   .mn-intro { font-size:.9rem; color:var(--suave); margin:0 0 12px; }
+  /* Atajo «¿buscas una empresa?»: esta caja busca en el TEXTO del contrato, así que al
+     escribir el nombre de un competidor se ofrece saltar a SUS menores (filtro por CIF). */
+  .mn-sug { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:10px 0 2px;
+            background:#eef2ff; border:1px solid #c7d2fe; border-radius:10px; padding:8px 12px; }
+  /* El atributo [hidden] NO basta contra el `display:flex` de arriba: la regla de AUTOR gana
+     a la del navegador aunque tenga menos especificidad. Sin esto, los `mnSug.hidden = true`
+     del JS no ocultan nada y queda una banda índigo vacía fija bajo el buscador. Mismo
+     antídoto que .bg-pag[hidden], .login-pantalla[hidden] y .modal-fondo[hidden]. */
+  .mn-sug[hidden] { display:none; }
+  .mn-sug-et { font-size:.82rem; color:var(--suave); }
+  .mn-sug-item { font:inherit; font-size:.86rem; cursor:pointer; background:var(--panel);
+                 border:1px solid #c7d2fe; border-radius:8px; padding:4px 10px; color:var(--acento-2); font-weight:600; }
+  .mn-sug-item:hover { background:#e0e7ff; }
+  .mn-sug-item .mn-sug-cif { color:var(--suave); font-weight:400; font-size:.78rem; }
+  .mn-sug-item .mn-sug-var { color:var(--suave); font-weight:400; font-size:.74rem; font-style:italic; }
+  .mn-sug-item .mn-sug-n { color:var(--texto); font-weight:700; }
+  .mn-sug-vacio { font-size:.86rem; color:var(--suave); padding:4px 10px; border:1px dashed #c7d2fe; border-radius:8px; }
+  .mn-sug-item.mn-sug-cero { cursor:default; opacity:.6; border-style:dashed; }
+  .mn-sug-item.mn-sug-cero:hover { background:var(--panel); }
   .mn-card .mn-tags { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:6px; }
   .mn-card .mn-multi { font-size:.72rem; color:var(--suave); }
   .mn-org-fila { margin:4px 0 8px; }
@@ -4126,6 +4145,7 @@ JS_MENORES_UI = r"""
   const mnGate  = document.getElementById('mn-gate');
   const mnPanel = document.getElementById('mn-panel');
   const mnTexto = document.getElementById('mn-texto');
+  const mnSug   = document.getElementById('mn-sugerencias');   // atajo «¿buscas una empresa?»
   const mnPills = document.getElementById('mn-pills');
   const mnMas   = document.getElementById('mn-mas');
   const mnAvanz = document.getElementById('mn-avanzado');
@@ -4167,7 +4187,15 @@ JS_MENORES_UI = r"""
     orden: 'fecha_adjudicacion:desc',
   };
 
-  function mnEsc(s){ const d=document.createElement('div'); d.textContent=(s==null?'':String(s)); return d.innerHTML; }
+  // OJO: la versión anterior era `d.textContent = s; return d.innerHTML`, que al serializar un
+  // NODO DE TEXTO escapa &, < y > pero NO la comilla doble — y aquí se mete el resultado DENTRO
+  // de atributos entrecomillados (data-organo, data-cif, data-nom, data-val). Una razón social
+  // como  Barroso Nava y Cia, S.A. "banasa"  (hay 82 con comillas en competidores) cortaba el
+  // atributo en seco. Ahora escapa igual que catEsc, que es el helper bueno para atributos.
+  function mnEsc(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
   function mnFecha(iso){ if(!iso) return '—'; const d=new Date(iso); return Number.isNaN(d.getTime())?'—':d.toLocaleDateString('es-ES'); }
   function mnEsSeguido(cif){ return !!cif && MN_CIFS.indexOf(cif) >= 0; }
   function mnEsLodepa(cif){ return !!cif && MN_LODEPA.indexOf(cif) >= 0; }
@@ -4273,8 +4301,229 @@ JS_MENORES_UI = r"""
     if(mnLimpiar) mnLimpiar.hidden = !(chips.length || hayTexto);
   }
 
+  // ===== ATAJO «¿BUSCAS UNA EMPRESA?» =======================================
+  // EL PROBLEMA QUE RESUELVE (caso real, 14/09/2026): buscar «crioges» aquí devolvía 6
+  // menores y su ficha decía 15. No era un fallo: esta caja busca en el TEXTO del contrato
+  // (objeto peso A + órgano peso C; el adjudicatario NO está en el tsv), y solo 6 de sus
+  // menores nombran la marca «CRIOGES» en el título. Además la empresa figura con CUATRO
+  // razones sociales distintas —todas «BIOSEGURIDAD SANITARIA POR FRIO…»— y ninguna es
+  // «Crioges», que es la marca. O sea: por texto NUNCA se llega a «todo lo de esta empresa».
+  //
+  // POR QUÉ NO SE BUSCA DIRECTAMENTE EN EL ADJUDICATARIO: medido, un
+  // `adjudicatario ILIKE '%...%'` sobre 1,4M es un Seq Scan paralelo de 8,6 s -> timeout.
+  // Haría falta un índice trigram nuevo sobre la columna (regla 4: índice antes que consulta).
+  //
+  // LO QUE SE HACE EN SU LUGAR: preguntarle el nombre a `public.competidores`, que YA tiene
+  // el GIN pg_trgm sobre nombre_busqueda CON TODAS LAS VARIANTES del nombre (es la misma
+  // consulta que usa el buscador de Competencia, interactiva hoy), y ofrecer el salto al
+  // filtro por CIF que ya existe. Sin índice nuevo y sin tocar la tabla de 1,4M.
+  const MN_SUG_MIN = 3;      // menos de 3 letras no se sugiere nada
+  const MN_SUG_MAX = 3;      // como mucho 3 empresas sugeridas
+  const MN_SUG_CAND = 8;     // se piden 8 y se re-ordenan aquí (ver mnRangoNombre)
+  let mnSugGen = 0;          // descarta respuestas de una búsqueda ya caducada
+
+  // MAYÚSCULAS y sin acentos: es como el pipeline guardó competidores.nombre_busqueda.
+  function mnNormNombre(s){
+    return String(s == null ? '' : s).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  }
+  // CIF normalizado igual que la ingesta (feeds.normaliza_cif) y que compNormCif del front.
+  function mnNormCif(s){ return String(s == null ? '' : s).toUpperCase().replace(/[\s./-]/g, ''); }
+  // ¿Lo tecleado parece un CIF/NIF? Misma heurística que pareceCif de la vista Competencia.
+  function mnPareceCif(s){ const c = mnNormCif(s); return /^[A-Z0-9]{8,10}$/.test(c) && /[0-9]/.test(c); }
+
+  // ATAJO POR CIF. Pegar un CIF aquí no daba NADA: el adjudicatario no está en el tsv y
+  // competidores.nombre_busqueda guarda nombres, no CIFs. Ahora se resuelve directo.
+  // OJO: un CIF puede tener menores y NO estar en public.competidores (esa tabla se construye
+  // con las adjudicaciones 643+1044, así que quien solo haya ganado MENORES no figura ahí).
+  // Por eso el número lo manda siempre la RPC, y el nombre es un adorno que se busca primero
+  // en competidores y, si no está, en los propios menores.
+  async function mnSugerirPorCif(cif, gen){
+    let n = 0, nombre = '';
+    try{
+      const [rMen, rComp] = await Promise.all([
+        supabase.rpc('menores_resumen_cif', { p_cif: cif }),
+        supabase.from('competidores').select('nombre_canonico').eq('cif', cif).maybeSingle(),
+      ]);
+      if(rMen && rMen.error) throw rMen.error;          // supabase-js no lanza: el error viene aquí
+      n = (rMen && rMen.data && Number(rMen.data.n)) || 0;
+      nombre = (rComp && !rComp.error && rComp.data && rComp.data.nombre_canonico) || '';
+      // Sin nombre en competidores pero CON menores: se lo pedimos a los propios menores.
+      // CLAVE: por `cif_adjudicatario` (el PRINCIPAL, índice menores_cif_idx), NO por el array.
+      // `menores.adjudicatario` es el nombre del adjudicatario PRINCIPAL de esa fila, así que
+      // buscando por el array un CIF que solo figure como ganador SECUNDARIO se traería el
+      // nombre de OTRA empresa (medido: 1.298 CIF están solo como secundarios). Si no aparece
+      // como principal en ninguna, no se inventa nombre: se enseña el CIF a secas.
+      if(!nombre && n){
+        const { data: dm } = await supabase.from('menores').select('adjudicatario')
+          .eq('cif_adjudicatario', cif).limit(1);
+        if(dm && dm[0]) nombre = dm[0].adjudicatario || '';
+      }
+    }catch(err){
+      console.error('Menores: no se pudo resolver el CIF', cif, err && (err.message||err));
+      if(gen === mnSugGen && mnSug){ mnSug.hidden = true; mnSug.innerHTML = ''; }
+      return;
+    }
+    if(gen !== mnSugGen || !mnSug) return;
+    // «Parece un CIF», no «es un CIF»: la heurística (8-10 alfanuméricos con algún dígito) la
+    // cumple también un nº de expediente como 2024/0123, y no vamos a afirmarle al usuario que
+    // su expediente es un CIF.
+    const et = '<span class="mn-sug-et">Parece un CIF. Esta caja busca en el título y el órgano:</span>';
+    if(!n){
+      mnSug.hidden = false;
+      mnSug.innerHTML = et + '<span class="mn-sug-vacio">' + mnEsc(nombre || cif)
+        + ' no tiene contratos menores estatales.</span>';
+      return;
+    }
+    mnSug.hidden = false;
+    mnSug.innerHTML = et
+      + '<button type="button" class="mn-sug-item" data-cif="' + mnEsc(cif) + '"'
+      + ' data-nom="' + mnEsc(nombre || cif) + '">' + mnEsc(nombre || cif)
+      + ' <span class="mn-sug-cif">' + mnEsc(cif) + '</span>'
+      + ' <span class="mn-sug-n">' + (n === 1 ? '· ver su único menor ›' : '· ver sus ' + n + ' menores ›') + '</span></button>';
+  }
+
+  // RELEVANCIA. `nombre_busqueda` es la CONCATENACIÓN de todas las variantes del nombre, así
+  // que un LIKE '%SGS%' casa también con empresas cuyo nombre visible no lo contiene (una UTE
+  // en la que participan, una razón social antigua...). Ordenar por importe, como hace el
+  // buscador de Competencia, colaba delante justo a esas: medido, «anticimex» ponía primero a
+  // SERVEO (983 menores) y «labaqua» a una «UTE COSTA VERDE» con el CIF U00000000. Aquí manda
+  // el NOMBRE VISIBLE: primero quien lo lleva de verdad, y cuanto antes y más corto, mejor.
+  function mnRangoNombre(nombre, termino){
+    const n = mnNormNombre(nombre);
+    const i = n.indexOf(termino);
+    if(i < 0) return 10000 + n.length;          // casó por una variante oculta: al final
+    return i * 10 + n.length / 100;             // aparece antes y nombre más ceñido = mejor
+  }
+
+  // Trozo de nombre_busqueda alrededor de donde casó, para poder EXPLICAR por qué se ofrece una
+  // empresa cuyo nombre visible no lleva lo tecleado. Sin esto, buscar «anticimex» ofrecía
+  // «SERVEO SERVICIOS, S.A.U.» sin más (su nombre_busqueda contiene «ANTICIMEX 3D SANIDAD
+  // AMIBIENTAL…», un error de la fuente) y parecía que la web se inventaba el parentesco.
+  // Las variantes van pegadas con espacios, así que se recorta una ventana, no una variante.
+  function mnVariante(nombreBusqueda, termino){
+    const s = String(nombreBusqueda == null ? '' : nombreBusqueda);
+    const i = s.indexOf(termino);
+    if(i < 0) return '';
+    const ini = Math.max(0, i - 22), fin = Math.min(s.length, i + termino.length + 22);
+    return (ini > 0 ? '…' : '') + s.slice(ini, fin).trim() + (fin < s.length ? '…' : '');
+  }
+
+  async function mnSugerirEmpresas(texto){
+    if(!mnSug) return;
+    const t = String(texto == null ? '' : texto).trim();
+    const gen = ++mnSugGen;
+    // Sin texto suficiente, o cuando YA estamos filtrando por un CIF, no se sugiere nada.
+    if(t.length < MN_SUG_MIN || mnFiltros.cif || !sesionActiva){ mnSug.hidden = true; mnSug.innerHTML = ''; return; }
+    // ¿Han pegado un CIF? Se resuelve por otra vía (ni el tsv ni nombre_busqueda llevan CIFs).
+    if(mnPareceCif(t)){ await mnSugerirPorCif(mnNormCif(t), gen); return; }
+    let empresas = [];
+    try{
+      const { data, error } = await supabase.from('competidores')
+        .select('cif,nombre_canonico,nombre_busqueda')
+        .ilike('nombre_busqueda', '%' + mnNormNombre(t) + '%')     // GIN pg_trgm
+        // CON .order() a sabiendas de que cuesta: medido, ordenar por importe tienta al planner
+        // a recorrer competidores_importe_idx filtrando fila a fila (11-29 ms; 224 ms en frío)
+        // en vez del trigram (0,09-1,4 ms). Se quitó… y «sgs» dejó de encontrar a SGS TECNOS:
+        // sin orden, el LIMIT se queda con 8 filas ARBITRARIAS y con un término corto casan
+        // decenas de UTEs con basura en el nombre. Preferimos 20 ms a no encontrar la empresa.
+        .order('importe_total_sin_iva', { ascending:false, nullsFirst:false })
+        .limit(MN_SUG_CAND);
+      if(error) throw error;
+      const termino = mnNormNombre(t);
+      let cands = (data || [])
+        // Fuera los identificadores que no tienen forma de CIF: en competidores hay basura del
+        // origen (B180022, 290597, UTEPENDIENTEDECONSTITUIR) sobre la que no vamos a afirmar
+        // «sin menores estatales» como si fuera una empresa.
+        .filter(function(e){ return mnPareceCif(e.cif); })
+        .sort(function(a, b){
+          return mnRangoNombre(a.nombre_canonico || a.cif, termino)
+               - mnRangoNombre(b.nombre_canonico || b.cif, termino);
+        });
+      // Los que casan por una VARIANTE OCULTA no se tiran: ese es justo el diseño de
+      // nombre_busqueda («CRIOGES tiene 10 variantes y solo UNA contiene CRIOGES», dice
+      // competidores_schema.sql), y tirarlos se cargaría el caso que originó todo esto.
+      // Lo que se hace es DECIR POR QUÉ salen: se guarda el fragmento que casó y se pinta.
+      empresas = cands.slice(0, MN_SUG_MAX).map(function(e){
+        const visible = mnNormNombre(e.nombre_canonico || e.cif).indexOf(termino) >= 0;
+        return { cif:e.cif, nombre_canonico:e.nombre_canonico,
+                 variante: visible ? '' : mnVariante(e.nombre_busqueda, termino) };
+      });
+    }catch(err){
+      console.error('Menores: no se pudo sugerir empresa para', t, err && (err.message||err));
+      if(gen === mnSugGen){ mnSug.hidden = true; mnSug.innerHTML = ''; }
+      return;
+    }
+    if(gen !== mnSugGen) return;                 // el usuario ya escribió otra cosa
+    if(!empresas.length){
+      // NO callarse. `competidores` se construye con las adjudicaciones 643+1044, y el 64% de
+      // los CIF que aparecen en menores NO está ahí (empresas que solo ganan por menor):
+      // GEDILAB tiene 1.203 menores y cero filas en competidores. Sin este aviso, quien busca
+      // «gedilab» ve 3 resultados de texto y se lleva que GEDILAB tiene 3 menores.
+      mnSug.hidden = false;
+      mnSug.innerHTML = '<span class="mn-sug-et">Esto busca en el título y el órgano, no en el adjudicatario. '
+        + 'Si buscabas una empresa y no te sale aquí, pega su CIF.</span>';
+      return;
+    }
+    // Se pintan YA (sin el número) y cada cuenta llega por su cuenta: la misma RPC de la
+    // ficha, ~10-14 ms por CIF, en paralelo y sin bloquear nada.
+    mnSug.hidden = false;
+    mnSug.innerHTML = '<span class="mn-sug-et">Esto busca en el título del contrato. ¿Buscabas una empresa?</span>'
+      + empresas.map(function(e){
+          return '<button type="button" class="mn-sug-item" data-cif="' + mnEsc(e.cif) + '"'
+               + ' data-nom="' + mnEsc(e.nombre_canonico || e.cif) + '">'
+               + mnEsc(e.nombre_canonico || e.cif)
+               + ' <span class="mn-sug-cif">' + mnEsc(e.cif) + '</span>'
+               + (e.variante ? ' <span class="mn-sug-var">también: ' + mnEsc(e.variante) + '</span>' : '')
+               + ' <span class="mn-sug-n" data-n-cif="' + mnEsc(e.cif) + '">…</span></button>';
+        }).join('');
+    empresas.forEach(function(e){
+      supabase.rpc('menores_resumen_cif', { p_cif: e.cif }).then(function(r){
+        if(gen !== mnSugGen || !mnSug) return;                  // respuesta caducada
+        const hueco = mnSug.querySelector('[data-n-cif="' + CSS.escape(e.cif) + '"]');
+        if(!hueco) return;
+        // OJO: supabase-js NO lanza en error de base, lo devuelve en r.error. Sin esta rama,
+        // un fallo de la RPC se leería como «n=0» y le diríamos al usuario que esta empresa
+        // no tiene menores, que es MENTIRA y además le desactivaría el botón.
+        if(r && r.error){
+          console.error('Menores: no se pudo contar menores de', e.cif, r.error.message || r.error);
+          hueco.textContent = '· ver sus menores ›';
+          return;
+        }
+        const n = (r && r.data && Number(r.data.n)) || 0;
+        if(n){ hueco.textContent = n === 1 ? '· ver su único menor ›' : ('· ver sus ' + n + ' menores ›'); }
+        else{
+          // 0 menores: no se manda al usuario a una lista vacía; se le dice, se desactiva y se
+          // manda al final, para que delante queden siempre las empresas en las que sí hay algo.
+          const btn = hueco.closest('.mn-sug-item');
+          if(btn){ btn.disabled = true; btn.classList.add('mn-sug-cero'); mnSug.appendChild(btn); }
+          hueco.textContent = '· sin menores estatales';
+        }
+      }).catch(function(err){
+        console.error('Menores: no se pudo contar menores de', e.cif, err && (err.message||err));
+        if(gen !== mnSugGen || !mnSug) return;
+        const hueco = mnSug.querySelector('[data-n-cif="' + CSS.escape(e.cif) + '"]');
+        if(hueco) hueco.textContent = '· ver sus menores ›';     // degradado: sin número, pero va
+      });
+    });
+  }
+
+  if(mnSug) mnSug.addEventListener('click', function(e){
+    const b = e.target.closest('.mn-sug-item');
+    if(!b || b.disabled) return;
+    // El clic suele llegar ANTES de que venza el debounce de la última tecla. Si no se mata el
+    // temporizador, 300 ms después dispara otra búsqueda idéntica sobre el estado ya cambiado.
+    clearTimeout(mnTimer);
+    mnSug.hidden = true; mnSug.innerHTML = '';
+    mnSugGen++;                                   // invalida las cuentas aún en vuelo
+    if(mnTexto) mnTexto.value = '';               // el texto ya no aplica: filtramos por CIF
+    window.__mnVerCif(b.getAttribute('data-cif'), b.getAttribute('data-nom'));
+  });
+
   function mnReinicia(){ mnPagina = 1; mnRun(); }
-  function mnSincroniza(){ mnPintaChips(); mnReinicia(); }
+  // Al soltar el chip «Adjudicatario:» (o cambiar de pastilla) se vuelve a evaluar el atajo: si
+  // no, con texto ya escrito la sugerencia no reaparecía nunca —porque solo la disparaba el
+  // debounce del teclado— y te quedabas justo con la búsqueda por texto que causó todo esto.
+  function mnSincroniza(){ mnPintaChips(); if(mnTexto) mnSugerirEmpresas(mnTexto.value); mnReinicia(); }
 
   function mnSelPill(val){
     if(!mnPills) return;
@@ -4283,6 +4532,7 @@ JS_MENORES_UI = r"""
 
   function mnLimpiarTodo(){
     if(mnTexto) mnTexto.value = '';
+    if(mnSug){ mnSug.hidden = true; mnSug.innerHTML = ''; }  mnSugGen++;
     mnFiltros.modo='todo'; mnFiltros.cpvPrefijo=[]; mnFiltros.impMin=''; mnFiltros.impMax='';
     mnFiltros.desde=''; mnFiltros.hasta=''; mnFiltros.organo=''; mnFiltros.orden='fecha_adjudicacion:desc';
     mnFiltros.cif=''; mnFiltros.cifNombre='';
@@ -4340,7 +4590,7 @@ JS_MENORES_UI = r"""
 
   // --- Eventos ---------------------------------------------------------------
   let mnTimer = null;
-  if(mnTexto) mnTexto.addEventListener('input', function(){ clearTimeout(mnTimer); mnTimer=setTimeout(function(){ mnPintaChips(); mnReinicia(); }, 300); });
+  if(mnTexto) mnTexto.addEventListener('input', function(){ clearTimeout(mnTimer); mnTimer=setTimeout(function(){ mnPintaChips(); mnSugerirEmpresas(mnTexto.value); mnReinicia(); }, 300); });
   if(mnOrden) mnOrden.addEventListener('change', function(){ mnFiltros.orden = mnOrden.value; mnReinicia(); });
   if(mnPills) mnPills.addEventListener('click', function(e){
     const btn = e.target.closest('.bg-pill'); if(!btn) return;
@@ -4440,7 +4690,7 @@ JS_MENORES_UI = r"""
     // Normalizado igual que la ingesta (feeds.normaliza_cif) y que compNormCif del front:
     // `overlaps` compara EXACTO, así que un CIF en minúsculas o con guiones devolvería
     // cero resultados sin dar ningún error.
-    const c = String(cif == null ? '' : cif).toUpperCase().replace(/[\s./-]/g, '');
+    const c = mnNormCif(cif);
     if(!c) return;   // sin CIF no se entra: el modo 'cifs' con array vacío NO filtra nada
     // HASH #menores=CIF, gemelo de #competencia=CIF y #expediente=ID: así el botón ATRÁS
     // vuelve a la ficha del competidor (el hash anterior es su #competencia=CIF) en vez
@@ -4453,10 +4703,17 @@ JS_MENORES_UI = r"""
       if(typeof vistaActiva !== 'undefined' && vistaActiva !== 'menores' && vistaActiva !== 'competencia'){
         compVistaAnterior = vistaActiva;
       }
-      const nuevo = 'menores=' + encodeURIComponent(c);
-      if(('#' + nuevo) !== location.hash){
+      const nuevo = '#menores=' + encodeURIComponent(c);
+      if(nuevo !== location.hash){
+        // Si YA estamos en Menores (atajo «¿buscas una empresa?»), se REEMPLAZA la entrada del
+        // historial en vez de apilar otra: apilando, el Atrás quitaba el fragmento de la URL
+        // pero no deshacía nada en pantalla, y el segundo Atrás te sacaba de la web. Viniendo
+        // de la ficha sí se apila, que es lo que hace que el Atrás vuelva a la ficha.
+        const dentroDeMenores = (typeof vistaActiva !== 'undefined' && vistaActiva === 'menores');
         _compHashNav = true;
-        try{ location.hash = nuevo; }catch(e){ _compHashNav = false; }
+        try{
+          if(dentroDeMenores) location.replace(nuevo); else location.hash = nuevo;
+        }catch(e){ _compHashNav = false; }
       }
     }
     // El botón promete «ver sus N menores»: se sueltan los demás filtros para que salgan
@@ -4476,6 +4733,8 @@ JS_MENORES_UI = r"""
     mnPagina = 1;
     mnPintaChips();
     const primera = !mnYaBuscado;           // ¿la dispara sola el gate al entrar?
+    if(mnSug){ mnSug.hidden = true; mnSug.innerHTML = ''; }   // ya filtramos por CIF
+    mnSugGen++;                             // invalida cuentas de sugerencia en vuelo
     mnEntradaPorCif = true;                 // avisa a __mnEntrar de que este CIF es querido
     mostrarVista('menores');                // -> window.__mnEntrar -> gate -> mnRun() la 1ª vez
     if(sesionActiva && !primera) mnRun();   // si ya se había buscado, relanza con el filtro
@@ -5361,9 +5620,12 @@ pagina = f"""<!DOCTYPE html>
         <p class="mn-intro">Contratos <strong>menores</strong> estatales (adjudicación directa). Explora quién capta el gasto de tu nicho y qué órganos compran tu tipo de servicio.</p>
         <div class="bg-barra">
           <input id="mn-texto" class="bg-input" type="search" autocomplete="off"
-                 placeholder="Buscar en objeto u órgano…  (p. ej. formaldehído, calidad del aire)">
+                 placeholder="Título del contrato u órgano… (formaldehído, calidad del aire) · o el nombre o el CIF de una empresa">
           <button id="mn-mas" class="bg-mas-btn" type="button" aria-expanded="false" aria-controls="mn-avanzado">Más filtros</button>
         </div>
+        <!-- Atajo a empresa: esta caja busca en el TEXTO del contrato, no en el adjudicatario.
+             Si lo escrito se parece al nombre de un competidor, se ofrece ir a SUS menores. -->
+        <div id="mn-sugerencias" class="mn-sug" hidden></div>
         <div id="mn-pills" class="bg-pills">
           <div class="bg-pill-grupo" role="group" aria-label="Qué menores">
             <span class="bg-pill-et">Ver</span>
