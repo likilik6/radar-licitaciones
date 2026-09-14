@@ -2925,6 +2925,8 @@ JS_SUPABASE = """
     if(m){ _compAbrirDesdeHash(decodeURIComponent(m[1])); return; }        // ficha de competidor
     m = /(?:^|#)expediente=(.+)$/.exec(h);
     if(m){ if(window.__irAExpedienteBuscador) window.__irAExpedienteBuscador(decodeURIComponent(m[1]), true); return; }  // E.5 P2
+    m = /(?:^|#)menores=(.+)$/.exec(h);   // menores de UN adjudicatario (desde la ficha)
+    if(m){ if(window.__mnVerCif) window.__mnVerCif(decodeURIComponent(m[1]), null, true); return; }
     if(compVistaAnterior){ const v = compVistaAnterior; compVistaAnterior = null; mostrarVista(v); }   // atrás
   });
 
@@ -4413,12 +4415,31 @@ JS_MENORES_UI = r"""
   // este IIFE. Mismo patrón, ya probado, que window.__bgDesiertas: se pone el filtro
   // ANTES de entrar en la vista, para que la primera consulta salga ya filtrada — ni una
   // consulta de más, ni un instante enseñando 1,4M de menores sin filtrar.
-  window.__mnVerCif = function(cif, nombre){
+  // `desdeHash` = true cuando quien llama es el botón ATRÁS del navegador: entonces NO se
+  // vuelve a escribir el hash (lo acaba de cambiar el propio navegador).
+  window.__mnVerCif = function(cif, nombre, desdeHash){
     // Normalizado igual que la ingesta (feeds.normaliza_cif) y que compNormCif del front:
     // `overlaps` compara EXACTO, así que un CIF en minúsculas o con guiones devolvería
     // cero resultados sin dar ningún error.
     const c = String(cif == null ? '' : cif).toUpperCase().replace(/[\s./-]/g, '');
     if(!c) return;   // sin CIF no se entra: el modo 'cifs' con array vacío NO filtra nada
+    // HASH #menores=CIF, gemelo de #competencia=CIF y #expediente=ID: así el botón ATRÁS
+    // vuelve a la ficha del competidor (el hash anterior es su #competencia=CIF) en vez
+    // de saltarse Menores. `_compHashNav` avisa de que el hashchange es NUESTRO.
+    if(!desdeHash){
+      // Solo se recuerda la vista anterior si NO venimos de Competencia: a la ficha se
+      // vuelve por su propio hash (#competencia=CIF), así que pisar aquí el valor haría
+      // que el último Atrás de la cadena se quedase en Competencia en vez de devolverte
+      // al Buscador (o al Radar) desde donde empezaste.
+      if(typeof vistaActiva !== 'undefined' && vistaActiva !== 'menores' && vistaActiva !== 'competencia'){
+        compVistaAnterior = vistaActiva;
+      }
+      const nuevo = 'menores=' + encodeURIComponent(c);
+      if(('#' + nuevo) !== location.hash){
+        _compHashNav = true;
+        try{ location.hash = nuevo; }catch(e){ _compHashNav = false; }
+      }
+    }
     // El botón promete «ver sus N menores»: se sueltan los demás filtros para que salgan
     // ESOS N y no su intersección con lo que hubiera puesto antes (un órgano, un CPV...).
     if(mnTexto) mnTexto.value = '';
@@ -4428,8 +4449,11 @@ JS_MENORES_UI = r"""
     [mnImpMin, mnImpMax, mnDesde, mnHasta, mnCpv].forEach(function(el){ if(el) el.value = ''; });
     if(mnOrden) mnOrden.value = 'fecha_adjudicacion:desc';
     mnSelPill('todo');
+    // Por el hash solo viaja el CIF, no el nombre: si se vuelve al MISMO competidor se
+    // conserva el nombre que ya teníamos, para que el chip no degrade a un CIF pelado.
+    const nombreAnterior = (mnFiltros.cif === c) ? mnFiltros.cifNombre : '';
     mnFiltros.cif = c;
-    mnFiltros.cifNombre = (nombre && String(nombre).trim()) || '';
+    mnFiltros.cifNombre = (nombre && String(nombre).trim()) || nombreAnterior;
     mnPagina = 1;
     mnPintaChips();
     const primera = !mnYaBuscado;           // ¿la dispara sola el gate al entrar?
