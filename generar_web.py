@@ -791,7 +791,20 @@ CSS = """
   .comp-cruce-perdida .comp-cruce-et{ background:#fee2e2; color:#b91c1c; }
   .comp-cruce-ganada .comp-cruce-et{ background:#dcfce7; color:#15803d; }
   .comp-cruce-presentada .comp-cruce-et{ background:#dbeafe; color:#1e40af; }
-  @media (max-width:680px){ .comp-kpis{ grid-template-columns:repeat(2,1fr); } }
+  /* Bloque «Contratos menores» de la ficha. Tinte AZUL FRÍO (los cruces son naranja) a
+     propósito: es OTRO UNIVERSO de datos (menores = sindicación 1143, solo Estado), no
+     una sección más de las adjudicaciones. El color es la primera pista de que esos
+     importes no se suman con los de arriba. */
+  .comp-menores-bloque{ background:#f1f5f9; border:1px solid #cbd5e1; border-radius:12px; padding:12px 14px; margin:14px 0; }
+  .comp-menores-bloque .comp-sub-h{ margin-top:0; }
+  .comp-menores-kpis{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:10px 0 8px; }
+  .comp-menores-nota{ font-size:.78rem; color:var(--suave); margin:6px 2px 0; line-height:1.45; }
+  .comp-menores-cargando{ padding:10px 2px; color:var(--suave); font-size:.9rem; }
+  .comp-menores-error{ padding:10px 2px; color:#b91c1c; font-size:.9rem; }
+  .comp-menores-vacio{ padding:6px 2px; color:var(--suave); font-size:.9rem; }
+  .comp-ver-menores{ font:inherit; font-size:.85rem; font-weight:600; cursor:pointer; background:var(--panel); border:1px solid #cbd5e1; border-radius:8px; padding:6px 12px; color:var(--acento-2); }
+  .comp-ver-menores:hover{ background:#e2e8f0; }
+  @media (max-width:680px){ .comp-kpis{ grid-template-columns:repeat(2,1fr); } .comp-menores-kpis{ grid-template-columns:1fr; } }
 
   /* ---- E.2 · bloque Adjudicación en Detalles ---- */
   .adj-sec{ margin-top:18px; border-top:1px solid var(--borde); padding-top:14px; }
@@ -2538,6 +2551,13 @@ JS_SUPABASE = """
     if(compResultados) compResultados.hidden = true;
     compMsg('','');
     if(compFicha){ compFicha.hidden=false; compFicha.innerHTML='<p class="comp-cargando">Cargando ficha…</p>'; }
+    // CONTRATOS MENORES · se lanza AQUÍ, ANTES del primer await, y NO se espera: corre en
+    // paralelo con cabecera + adjudicaciones + títulos + cruces (regla 2 de rendimiento).
+    // El "slot" es un objeto privado de ESTA apertura de ficha: la respuesta escribe
+    // siempre en él, pero solo toca el DOM si sigue siendo el de la ficha en pantalla
+    // (ver compRefrescarMenores). Así dos clics seguidos no se pisan.
+    const menoresSlot = { estado:'cargando', datos:null };
+    compCargarMenores(cif, menoresSlot);
     try{
       const { data: cab, error: e1 } = await supabase.from('competidores').select('*').eq('cif',cif).maybeSingle();
       if(e1) throw e1;
@@ -2553,7 +2573,7 @@ JS_SUPABASE = """
       let cruces = [];
       try{ const cc = await compCargarCruces(); cruces = cc.porExpediente.filter(function(x){ return x.a.cif_adjudicatario===cif; }); }
       catch(e){ console.error('Ficha: cruces no disponibles:', e && (e.message||e)); }
-      compFichaEstado = { cif:cif, cab:cab, adj:adj||[], titulos:titulos, mostradas:COMP_PAGINA, orden:'fecha', cruces:cruces };
+      compFichaEstado = { cif:cif, cab:cab, adj:adj||[], titulos:titulos, mostradas:COMP_PAGINA, orden:'fecha', cruces:cruces, menores:menoresSlot };
       compPintarFicha();
       compScrollFicha();   // E.3: viajar a la ficha (ya pintada) con highlight breve
     }catch(err){
@@ -2645,7 +2665,7 @@ JS_SUPABASE = """
       '<div class="comp-ficha-cab"><button type="button" class="comp-volver">‹ Volver</button>'+cmpBtn
       + '<h2>'+catEsc(nombre)+(esLodepa?' <span class="comp-lodepa">es LODEPA</span>':'')+'</h2>'
       + '<div class="comp-item-cif">'+catEsc(st.cif)+'</div></div>'
-      + kpis + tope + compBloqueCruces(st) + ordenCtrl
+      + kpis + tope + compBloqueCruces(st) + compBloqueMenores(st) + ordenCtrl
       + '<h3 class="comp-sub-h">Todas sus adjudicaciones</h3>'
       + '<div class="comp-tabla-wrap"><table class="comp-tabla"><thead><tr>'
       + '<th>Fecha</th><th>Licitación / órgano</th><th>Lote</th><th>Resultado</th><th>Importe s/IVA</th><th>Ofertas</th>'
@@ -2669,6 +2689,111 @@ JS_SUPABASE = """
     }).join('');
     return '<div class="comp-cruces-bloque"><h3 class="comp-sub-h">⚔️ Cruces contigo ('+cruces.length+')</h3>'
       +'<div class="comp-tabla-wrap"><table class="comp-tabla"><thead><tr><th>Resultado</th><th>Licitación / órgano</th><th>Lote</th><th>Importe</th><th>Fecha</th></tr></thead><tbody>'+filas+'</tbody></table></div></div>';
+  }
+
+  // ===== BLOQUE «CONTRATOS MENORES» DE LA FICHA ==============================
+  // POR QUÉ: esta ficha sale de public.adjudicaciones (sindicaciones 643 + 1044), que NO
+  // incluye los contratos menores. Los menores viven en public.menores (sindicación 1143,
+  // SOLO Estado). Sin este bloque, para ver a un rival entero había que mirar en dos
+  // sitios — y en algunos la parte de menores es la mitad del negocio (SGS: 374 menores y
+  // 1,7 M€ que aquí arriba no aparecen por ningún lado).
+  //
+  // UNIVERSOS DISTINTOS: los importes de menores NO se suman con los de las adjudicaciones.
+  // El bloque lo dice por escrito, y el color (azul frío, frente al naranja de los cruces)
+  // lo repite en visual para que no se lea como «una sección más» de lo de arriba.
+  //
+  // RENDIMIENTO (reglas 2 y 3): una sola RPC —menores_resumen_cif, ver menores_ficha.sql—
+  // resuelve nº + importe + último en UNA pasada por el índice GIN (10-14 ms medidos,
+  // Bitmap Index Scan; NO hay count exacto sobre 1,4M). Se lanza antes del primer await de
+  // compAbrirFicha y no se espera: la ficha se pinta igual de rápido que antes.
+  async function compCargarMenores(cif, slot){
+    try{
+      const { data, error } = await supabase.rpc('menores_resumen_cif', { p_cif: cif });
+      if(error) throw error;
+      slot.datos = data || null;
+      slot.estado = 'ok';
+    }catch(err){
+      // Si aquí sale PGRST202 / "function does not exist", es que falta por ejecutar
+      // menores_ficha.sql en el SQL Editor de Supabase. La ficha sigue funcionando.
+      console.error('Competencia: error cargando contratos menores de', cif, err && (err.message||err));
+      slot.estado = 'error';
+    }
+    compRefrescarMenores(slot);
+  }
+
+  // Pinta SOLO el interior del bloque, sin rehacer la ficha (no se pierde el scroll).
+  // Guarda de carrera: si el usuario ya abrió otra ficha —o la misma otra vez—, el slot
+  // vigente es OTRO objeto y la respuesta tardía se descarta sin tocar el DOM. Si la RPC
+  // llega ANTES de que la ficha exista (lo normal: 14 ms contra varios cientos), no pinta
+  // nada aquí, pero el slot ya está en 'ok' y el primer pintado lo muestra directamente.
+  function compRefrescarMenores(slot){
+    if(!compFicha || compFicha.hidden) return;
+    if(!compFichaEstado || compFichaEstado.menores !== slot) return;
+    const nodo = compFicha.querySelector('#comp-menores');
+    if(nodo) nodo.innerHTML = compMenoresInterior(compFichaEstado);
+  }
+
+  // A diferencia de compBloqueCruces (que se esconde si no hay cruces), este bloque se
+  // pinta SIEMPRE: «este rival no tiene menores» también es información — dice que su
+  // negocio va por concurso, no a dedo.
+  function compBloqueMenores(st){
+    return '<section id="comp-menores" class="comp-menores-bloque">' + compMenoresInterior(st) + '</section>';
+  }
+
+  function compMenoresInterior(st){
+    const m = st && st.menores;
+    const h = '<h3 class="comp-sub-h">🧾 Contratos menores</h3>';
+    const fuente = '<p class="comp-menores-nota">Fuente distinta: <strong>contratos menores del Estado</strong> '
+      + '(sindicación 1143). <strong>No se suman</strong> con las adjudicaciones de arriba, que salen de las '
+      + 'sindicaciones 643 + 1044 (Estado + plataformas agregadas). Un menor va a dedo: no es un concurso perdido, '
+      + 'es una puerta que tocar.</p>';
+    if(!m || m.estado === 'cargando') return h + '<p class="comp-menores-cargando">Cargando contratos menores…</p>';
+    if(m.estado === 'error') return h + '<p class="comp-menores-error">No se pudieron cargar los contratos menores.</p>';
+
+    const d = m.datos || {};
+    const n = Number(d.n) || 0;
+    if(!n) return h + '<p class="comp-menores-vacio">Sin contratos menores a su nombre.</p>' + fuente;
+
+    const kpis = '<div class="comp-menores-kpis">'
+      + compKpi(n, n === 1 ? 'contrato menor' : 'contratos menores')
+      + compKpi(compEur(d.importe_total), 'importe total s/IVA')
+      + compKpi(d.ultimo ? compFecha(d.ultimo) : '—', 'último menor')
+      + '</div>';
+    const nombre = (st.cab && st.cab.nombre_canonico) || st.cif;
+    const ver = '<button type="button" class="comp-ver-menores" data-cif="' + catEsc(st.cif) + '"'
+      + ' data-nom="' + catEsc(nombre) + '">' + (n === 1 ? 'Ver su único menor' : 'Ver sus ' + n + ' menores') + ' ›</button>';
+
+    // Honestidad sobre el dato sucio (medido el 14/09/2026: 140 filas de toda la tabla con
+    // fecha anterior a 2018 —imposibles, error del origen— y 4.879 sin fecha). La RPC ya
+    // las excluye del «último»; aquí se DICE, en vez de fingir que el dato está limpio.
+    const sinFecha = Number(d.n_sin_fecha) || 0;
+    const fechaRara = Number(d.n_fecha_rara) || 0;
+    const sinImporte = Number(d.n_sin_importe) || 0;
+    const compartidos = Number(d.n_compartidos) || 0;
+    const impCompartido = Number(d.importe_compartido) || 0;
+    const avisos = [];
+    // MENORES REPARTIDOS: la fuente da UNA fila por menor, con el importe del contrato
+    // ENTERO y un adjudicatario «principal». Si este CIF solo figura como ganador
+    // secundario, ese dinero NO es suyo. Sin este aviso la ficha llegó a inflar x640 a un
+    // rival (EXGONVAL: 2.300 € propios frente a 1,47 M€ de una obra repartida).
+    if(compartidos){
+      avisos.push(compartidos === 1
+        ? ('1 de ellos es un contrato repartido entre varios adjudicatarios en el que NO consta como principal: de ese, el importe que se cuenta aquí es el del contrato entero ('
+           + compEur(impCompartido) + '), no la parte que se llevó.')
+        : (compartidos + ' de ellos son contratos repartidos entre varios adjudicatarios en los que NO consta como principal: de esos, el importe que se cuenta aquí es el de los contratos enteros ('
+           + compEur(impCompartido) + '), no la parte que se llevó.'));
+    }
+    if(sinFecha || fechaRara){
+      const partes = [];
+      if(sinFecha) partes.push(sinFecha + (sinFecha === 1 ? ' sin fecha' : ' sin fecha'));
+      if(fechaRara) partes.push(fechaRara + ' con fecha imposible (anterior a 2018, error del origen)');
+      avisos.push('Para «último menor» se ignoran ' + partes.join(' y ') + '.');
+    }
+    if(!d.ultimo) avisos.push('Ninguno trae una fecha utilizable, así que no se puede decir cuál fue el último.');
+    if(sinImporte) avisos.push(sinImporte + (sinImporte === 1 ? ' no publica importe' : ' no publican importe') + ', así que el total se queda corto.');
+    const avisoHtml = avisos.length ? '<p class="comp-menores-nota">' + catEsc(avisos.join(' ')) + '</p>' : '';
+
+    return h + kpis + ver + avisoHtml + fuente;
   }
 
   // Debounce del input (300-400 ms) + delegación de clicks (resultado -> ficha; volver; más).
@@ -2696,6 +2821,16 @@ JS_SUPABASE = """
     compFicha.addEventListener('click', function(e){
       const vexp = e.target.closest('.comp-ver-exp');   // E.5 P2: ver expediente (bloque cruces)
       if(vexp){ if(window.__irAExpedienteBuscador) window.__irAExpedienteBuscador(vexp.getAttribute('data-exp-id')); return; }
+      // «Ver sus N menores» -> vista Menores ya filtrada por este CIF. Rama ARRIBA y con
+      // return propio (abajo, el else final captura .comp-orden-btn). El puente se
+      // comprueba en el clic, no al evaluar el módulo: el IIFE de Menores se concatena
+      // DESPUÉS de este código, así que window.__mnVerCif todavía no existe al cargar.
+      const vmen = e.target.closest('.comp-ver-menores');
+      if(vmen){
+        if(window.__mnVerCif) window.__mnVerCif(vmen.getAttribute('data-cif'), vmen.getAttribute('data-nom'));
+        else console.error('Competencia: la vista Menores no está disponible (falta menores_api.js).');
+        return;
+      }
       if(e.target.closest('.comp-volver')){
         compFicha.hidden = true;
         if(compResultados) compResultados.hidden = false;
@@ -4011,6 +4146,12 @@ JS_MENORES_UI = r"""
 
   const MN_POR_PAGINA = 25;
   let mnPagina = 1, mnCargando = false, mnYaBuscado = false;
+  // ¿Se pidió otra consulta mientras había una en vuelo? Antes se descartaba EN SILENCIO
+  // (`if(mnCargando) return;`) y nadie la reintentaba: los filtros y los chips quedaban
+  // puestos, pero la respuesta que acababa pintando era la ANTIGUA. Con la entrada nueva
+  // desde la ficha de competidor eso era grave: el chip decía «Adjudicatario: B» sobre los
+  // menores de A. Ahora la última petición se encola y se relanza al terminar la anterior.
+  let mnPendiente = false;
 
   // Estado de filtros (fuente de verdad). '' = sin filtro.
   const mnFiltros = {
@@ -4019,6 +4160,8 @@ JS_MENORES_UI = r"""
     impMin: '', impMax: '',
     desde: '', hasta: '',
     organo: '',              // órgano comprador EXACTO (se pone al clicar un órgano)
+    cif: '',                 // UN adjudicatario concreto (entrada desde la ficha de competidor)
+    cifNombre: '',           // solo para el texto del chip; el filtro va por `cif`
     orden: 'fecha_adjudicacion:desc',
   };
 
@@ -4037,11 +4180,21 @@ JS_MENORES_UI = r"""
   function mnParams(){
     const f = mnFiltros;
     const partes = (f.orden || 'fecha_adjudicacion:desc').split(':');
+    // FILTRO POR UN ADJUDICATARIO CONCRETO (se llega desde la ficha de competidor).
+    // Manda sobre el modo: reutiliza tal cual el modo 'cifs' de la API —que hace
+    // overlaps sobre cifs_adjudicatarios, con índice GIN, así que casa también cuando
+    // el CIF es ganador SECUNDARIO de un menor repartido— pero con ESTE CIF en lugar de
+    // la lista curada. No hay que tocar menores_api.js.
+    // OJO (asimetría de la API): el modo 'cifs' con array VACÍO no aplica filtro alguno
+    // y devolvería la tabla entera disfrazada de «menores de este competidor». Por eso
+    // el array se construye SOLO si f.cif tiene valor.
+    const unCif = f.cif ? [f.cif] : null;
+    const modo = unCif ? 'cifs' : f.modo;
     return {
-      modo: f.modo,
-      nichoCpv: f.modo === 'nicho' ? MN_NICHO_CPV : undefined,
-      nichoKw:  f.modo === 'nicho' ? MN_NICHO_KW  : undefined,
-      cifsSeguidos: f.modo === 'cifs' ? MN_CIFS : undefined,
+      modo: modo,
+      nichoCpv: modo === 'nicho' ? MN_NICHO_CPV : undefined,
+      nichoKw:  modo === 'nicho' ? MN_NICHO_KW  : undefined,
+      cifsSeguidos: unCif || (modo === 'cifs' ? MN_CIFS : undefined),
       cpvPrefijo: f.cpvPrefijo.length ? f.cpvPrefijo.slice() : undefined,
       texto: mnTexto ? mnTexto.value : '',
       organo: f.organo || undefined,
@@ -4094,6 +4247,7 @@ JS_MENORES_UI = r"""
   function mnPintaChips(){
     const f = mnFiltros, chips = [];
     const MODO = { nicho:'Solo nicho', cifs:'Solo competidores seguidos' };
+    if(f.cif) chips.push({ tipo:'cif', txt:'Adjudicatario: ' + (f.cifNombre || f.cif) });
     if(f.modo !== 'todo') chips.push({ tipo:'modo', txt: MODO[f.modo] || f.modo });
     f.cpvPrefijo.forEach(function(p){ chips.push({ tipo:'cpv', val:p, txt:'CPV '+p+'…' }); });
     if(f.organo) chips.push({ tipo:'organo', txt:'Órgano: '+f.organo });
@@ -4129,6 +4283,7 @@ JS_MENORES_UI = r"""
     if(mnTexto) mnTexto.value = '';
     mnFiltros.modo='todo'; mnFiltros.cpvPrefijo=[]; mnFiltros.impMin=''; mnFiltros.impMax='';
     mnFiltros.desde=''; mnFiltros.hasta=''; mnFiltros.organo=''; mnFiltros.orden='fecha_adjudicacion:desc';
+    mnFiltros.cif=''; mnFiltros.cifNombre='';
     mnSelPill('todo');
     if(mnOrden) mnOrden.value = 'fecha_adjudicacion:desc';
     [mnImpMin,mnImpMax,mnDesde,mnHasta,mnCpv].forEach(function(el){ if(el) el.value=''; });
@@ -4137,7 +4292,7 @@ JS_MENORES_UI = r"""
 
   async function mnRun(){
     if(!sesionActiva){ mnActualizarGate(); return; }
-    if(mnCargando) return;
+    if(mnCargando){ mnPendiente = true; return; }   // no se pierde: se relanza al terminar
     mnCargando = true; mnYaBuscado = true;
     if(mnMsg){ mnMsg.hidden=false; mnMsg.textContent='Buscando…'; }
     if(mnPag){ mnPag.hidden=true; if(mnPagInfo) mnPagInfo.textContent=''; }
@@ -4145,6 +4300,11 @@ JS_MENORES_UI = r"""
     try { r = await mnBuscarFn(mnParams()); }
     catch(e){ r = { error: e }; }
     mnCargando = false;
+    // Si mientras viajaba esta consulta se pidió otra (típico: «Ver sus N menores» desde la
+    // ficha de un competidor), esta respuesta está CADUCADA. No se pinta —pintarla
+    // atribuiría estos menores al competidor que ya anuncia el chip— y se relanza con los
+    // filtros vigentes, dejando el «Buscando…» puesto mientras tanto.
+    if(mnPendiente){ mnPendiente = false; mnRun(); return; }
     if(r.error){
       if(mnRes) mnRes.innerHTML='';
       if(mnMsg){ mnMsg.hidden=false; mnMsg.textContent='Error en la búsqueda: '+(r.error.message||r.error); }
@@ -4183,6 +4343,10 @@ JS_MENORES_UI = r"""
   if(mnPills) mnPills.addEventListener('click', function(e){
     const btn = e.target.closest('.bg-pill'); if(!btn) return;
     mnFiltros.modo = btn.dataset.val || 'todo';
+    // El filtro por un CIF concreto MANDA sobre el modo (ver mnParams), así que al elegir
+    // pastilla hay que soltarlo: si no, la pastilla diría «Solo mi nicho» mientras se
+    // sigue viendo un único adjudicatario.
+    mnFiltros.cif = ''; mnFiltros.cifNombre = '';
     mnSelPill(mnFiltros.modo);
     mnSincroniza();
   });
@@ -4212,6 +4376,7 @@ JS_MENORES_UI = r"""
     const chip = x.closest('.bg-chip'); if(!chip) return;
     const tipo = chip.dataset.tipo;
     if(tipo==='modo'){ mnFiltros.modo='todo'; mnSelPill('todo'); }
+    else if(tipo==='cif'){ mnFiltros.cif=''; mnFiltros.cifNombre=''; }
     else if(tipo==='cpv'){ const v=chip.dataset.val; mnFiltros.cpvPrefijo = mnFiltros.cpvPrefijo.filter(function(p){ return p!==v; }); }
     else if(tipo==='organo'){ mnFiltros.organo=''; }
     else if(tipo==='importe'){ mnFiltros.impMin=''; mnFiltros.impMax=''; if(mnImpMin) mnImpMin.value=''; if(mnImpMax) mnImpMax.value=''; }
@@ -4242,6 +4407,35 @@ JS_MENORES_UI = r"""
     setTimeout(function(){ if(vistaActiva === 'menores') mnActualizarGate(); }, 0);
   });
   window.__mnEntrar = function(){ mnActualizarGate(); if(sesionActiva && mnTexto) mnTexto.focus(); };
+
+  // Entrada desde la FICHA DE COMPETIDOR (sección Competencia): abre esta vista con los
+  // menores de UN adjudicatario. Va colgado de window porque Competencia vive FUERA de
+  // este IIFE. Mismo patrón, ya probado, que window.__bgDesiertas: se pone el filtro
+  // ANTES de entrar en la vista, para que la primera consulta salga ya filtrada — ni una
+  // consulta de más, ni un instante enseñando 1,4M de menores sin filtrar.
+  window.__mnVerCif = function(cif, nombre){
+    // Normalizado igual que la ingesta (feeds.normaliza_cif) y que compNormCif del front:
+    // `overlaps` compara EXACTO, así que un CIF en minúsculas o con guiones devolvería
+    // cero resultados sin dar ningún error.
+    const c = String(cif == null ? '' : cif).toUpperCase().replace(/[\s./-]/g, '');
+    if(!c) return;   // sin CIF no se entra: el modo 'cifs' con array vacío NO filtra nada
+    // El botón promete «ver sus N menores»: se sueltan los demás filtros para que salgan
+    // ESOS N y no su intersección con lo que hubiera puesto antes (un órgano, un CPV...).
+    if(mnTexto) mnTexto.value = '';
+    mnFiltros.modo = 'todo'; mnFiltros.cpvPrefijo = []; mnFiltros.impMin = ''; mnFiltros.impMax = '';
+    mnFiltros.desde = ''; mnFiltros.hasta = ''; mnFiltros.organo = '';
+    mnFiltros.orden = 'fecha_adjudicacion:desc';
+    [mnImpMin, mnImpMax, mnDesde, mnHasta, mnCpv].forEach(function(el){ if(el) el.value = ''; });
+    if(mnOrden) mnOrden.value = 'fecha_adjudicacion:desc';
+    mnSelPill('todo');
+    mnFiltros.cif = c;
+    mnFiltros.cifNombre = (nombre && String(nombre).trim()) || '';
+    mnPagina = 1;
+    mnPintaChips();
+    const primera = !mnYaBuscado;           // ¿la dispara sola el gate al entrar?
+    mostrarVista('menores');                // -> window.__mnEntrar -> gate -> mnRun() la 1ª vez
+    if(sesionActiva && !primera) mnRun();   // si ya se había buscado, relanza con el filtro
+  };
 """
 
 # Envolvemos api + UI en un IIFE (aísla helpers; ve `supabase`, `fmtEur`, `sesionActiva`,
