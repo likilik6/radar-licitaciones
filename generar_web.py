@@ -4408,7 +4408,26 @@ JS_MENORES_UI = r"""
   supabase.auth.onAuthStateChange(function(){
     setTimeout(function(){ if(vistaActiva === 'menores') mnActualizarGate(); }, 0);
   });
-  window.__mnEntrar = function(){ mnActualizarGate(); if(sesionActiva && mnTexto) mnTexto.focus(); };
+  // ¿La próxima entrada en la vista viene de la ficha de un competidor («Ver sus N
+  // menores») o del hash #menores=CIF? Lo pone __mnVerCif justo antes de entrar.
+  let mnEntradaPorCif = false;
+
+  window.__mnEntrar = function(){
+    // Entrar por el MENÚ LATERAL significa «quiero la vista Menores», no «quiero a este
+    // competidor»: el filtro por CIF llegó desde OTRA vista, así que aquí se suelta. Si no,
+    // el usuario entra por el menú, ve 15 resultados donde hay 1,4 millones y no relaciona
+    // el chip «Adjudicatario: X» con la causa — porque ese filtro no lo puso él aquí.
+    // Los filtros que SÍ se ponen dentro de esta vista (CPV, órgano, importe, fecha, texto)
+    // siguen siendo pegajosos como siempre: esos el usuario sabe que los puso.
+    if(!mnEntradaPorCif && mnFiltros.cif){
+      mnFiltros.cif = ''; mnFiltros.cifNombre = '';
+      mnPagina = 1;
+      mnPintaChips();
+      if(sesionActiva && mnYaBuscado) mnRun();   // si aún no había buscado, ya lo hace el gate
+    }
+    mnEntradaPorCif = false;
+    mnActualizarGate(); if(sesionActiva && mnTexto) mnTexto.focus();
+  };
 
   // Entrada desde la FICHA DE COMPETIDOR (sección Competencia): abre esta vista con los
   // menores de UN adjudicatario. Va colgado de window porque Competencia vive FUERA de
@@ -4457,6 +4476,7 @@ JS_MENORES_UI = r"""
     mnPagina = 1;
     mnPintaChips();
     const primera = !mnYaBuscado;           // ¿la dispara sola el gate al entrar?
+    mnEntradaPorCif = true;                 // avisa a __mnEntrar de que este CIF es querido
     mostrarVista('menores');                // -> window.__mnEntrar -> gate -> mnRun() la 1ª vez
     if(sesionActiva && !primera) mnRun();   // si ya se había buscado, relanza con el filtro
   };
