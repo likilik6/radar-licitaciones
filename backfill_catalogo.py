@@ -984,10 +984,17 @@ def menores_incremental(sesion, url_base, headers):
     return len(filas)
 
 
-def carga(unidades, limpiar=True):
+def carga(unidades, limpiar=True, solo_catalogo=False):
     """Procesa las unidades (fuente, periodo) en STREAMING: descarga un ZIP →
     parsea sus .atom → upsert → libera el ZIP antes del siguiente, para no llenar
-    el disco del runner. Reanudable por checkpoint (unidad y .atom)."""
+    el disco del runner. Reanudable por checkpoint (unidad y .atom).
+
+    solo_catalogo=True escribe SOLO public.licitaciones: ni adjudicaciones, ni
+    automarcar, ni el rebuild de competidores, ni el bucle de desiertas. Es para
+    re-backfills que solo buscan rellenar columnas del catálogo (p. ej. el de
+    ccaa/lugar_ejecucion): reescribir 600.975 adjudicaciones ya verificadas no
+    aporta nada y es buena parte de las ~3 h que tarda un backfill completo.
+    """
     sesion, headers, endpoint, url_base = _preparar_upsert()
     unidades_ok, atoms_ok = _carga_estado()
 
@@ -995,6 +1002,9 @@ def carga(unidades, limpiar=True):
     print("CARGA a Supabase (upsert idempotente por licitacion_id, en streaming)")
     print(f"Unidades: {len(unidades)}  ·  ya completas: {len(unidades_ok)}  ·  "
           f"borrar ZIP tras procesar: {limpiar}")
+    if solo_catalogo:
+        print("MODO --solo-catalogo: se escribe SOLO public.licitaciones.")
+        print("  NO se tocan adjudicaciones, ni automarcar, ni competidores, ni desiertas.")
     print("=" * 78)
 
     # Dedup por EJECUCIÓN: como las unidades van de más nueva a más antigua, la
@@ -1005,7 +1015,8 @@ def carga(unidades, limpiar=True):
     vistos_run = set()
     # ¿Está creada public.adjudicaciones? Si no, se ingiere el catálogo igual y solo
     # se salta la parte de adjudicaciones (defensa para el orden de despliegue).
-    escribir_adj = _tabla_adjudicaciones_lista(sesion, url_base, headers)
+    # Con --solo-catalogo ni siquiera se pregunta: no se van a escribir.
+    escribir_adj = (not solo_catalogo) and _tabla_adjudicaciones_lista(sesion, url_base, headers)
 
     total = 0
     total_adj = 0
@@ -1424,6 +1435,10 @@ def main():
                          "+ año en curso mensual). Sirve para trocear el job.")
     ap.add_argument("--solo", choices=list(FUENTES), default=None,
                     help="Procesar solo una fuente (por defecto: las dos). Sirve para trocear.")
+    ap.add_argument("--solo-catalogo", action="store_true",
+                    help="Escribir SOLO public.licitaciones: ni adjudicaciones, ni automarcar, "
+                         "ni competidores, ni desiertas. Para re-backfills que solo rellenan "
+                         "columnas del catalogo (p. ej. ccaa/lugar_ejecucion).")
     ap.add_argument("--conservar-zip", action="store_true",
                     help="No borrar los ZIP tras procesarlos (por defecto se borran en --cargar "
                          "para no llenar el disco del runner).")
@@ -1455,7 +1470,8 @@ def main():
     elif args.purgar:
         purgar(args.ventana_anios, args.simular, args.lote)
     elif args.cargar:
-        carga(construir_unidades(args.solo, args.periodos), limpiar=not args.conservar_zip)
+        carga(construir_unidades(args.solo, args.periodos),
+              limpiar=not args.conservar_zip, solo_catalogo=args.solo_catalogo)
     else:
         dry_run(anios, fuentes)
 

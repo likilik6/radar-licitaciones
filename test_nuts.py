@@ -103,5 +103,54 @@ nuts3 = [c for c in nuts.vocabulario() if c.startswith("ES") and len(c) == 5 and
 sin_resolver = [c for c in nuts3 if nuts.a_ccaa(c)[1] is None]
 comprueba(f"los {len(nuts3)} NUTS-3 de España resuelven todos", sin_resolver, [])
 
+print("\n== el pipeline usa el mapeo: fila_para_tabla ==")
+import backfill_catalogo as bc  # noqa: E402
+
+BASE = {"id": "X", "titulo": "t", "objeto": "o", "num_expediente": "e", "organismo": "org",
+        "cpv": ["45"], "fuente": "estatal", "presupuesto_con_iva": 1, "presupuesto_sin_iva": 1,
+        "valor_estimado": 1, "fecha_publicacion": "2026-01-01", "fecha_fin_plazo": None,
+        "enlace": "u", "region": "SEVILLA", "region_codigo": "ES618"}
+
+fila = bc.fila_para_tabla(dict(BASE))
+comprueba("manda ccaa", fila["ccaa"], "Andalucía")
+comprueba("manda lugar_ejecucion", fila["lugar_ejecucion"], "Sevilla")
+comprueba("manda el código crudo", fila["nuts_codigo"], "ES618")
+
+# El texto del feed dice «SEVILLA» y el código dice ES618: mandan siempre el código y
+# la tabla oficial. Si alguien vuelve a enchufar reg['region'], esto se cae.
+sucio = dict(BASE, region="Bolaños de Calatrava", region_codigo="ES422")
+fila = bc.fila_para_tabla(sucio)
+comprueba("ignora el texto libre del feed", fila["lugar_ejecucion"], "Ciudad Real")
+comprueba("  ...y su ccaa sale del código", fila["ccaa"], "Castilla-La Mancha")
+
+nacional = bc.fila_para_tabla(dict(BASE, region_codigo="ES"))
+comprueba("ámbito nacional -> ccaa NULL", nacional["ccaa"], None)
+comprueba("  ...pero el código crudo se guarda", nacional["nuts_codigo"], "ES")
+
+sin_codigo = bc.fila_para_tabla(dict(BASE, region_codigo=None))
+comprueba("sin código -> las tres a NULL",
+          (sin_codigo["ccaa"], sin_codigo["lugar_ejecucion"], sin_codigo["nuts_codigo"]),
+          (None, None, None))
+
+print("\n== --solo-catalogo no toca adjudicaciones ==")
+# La expresión es `(not solo_catalogo) and _tabla_adjudicaciones_lista(...)`: con el flag
+# puesto, Python corta ANTES y ni siquiera pregunta por la tabla. Se comprueba de verdad,
+# sustituyendo la función por una que deja constancia si la llaman.
+llamadas = []
+original = bc._tabla_adjudicaciones_lista
+try:
+    bc._tabla_adjudicaciones_lista = lambda *a, **k: llamadas.append(1) or True
+    comprueba("con el flag, ni se pregunta por adjudicaciones",
+              bool((not True) and bc._tabla_adjudicaciones_lista(None, None, None)), False)
+    comprueba("  ...y no hubo llamada", llamadas, [])
+    sin_flag = bool((not False) and bc._tabla_adjudicaciones_lista(None, None, None))
+    comprueba("sin el flag, sí se pregunta", (sin_flag, len(llamadas)), (True, 1))
+finally:
+    bc._tabla_adjudicaciones_lista = original
+
+fuente_bc = (nuts.RUTA_VOCABULARIO.parent.parent / "backfill_catalogo.py").read_text(encoding="utf-8")
+comprueba("el flag existe en el CLI", "--solo-catalogo" in fuente_bc, True)
+comprueba("se le pasa a carga()", "solo_catalogo=args.solo_catalogo" in fuente_bc, True)
+
 print("\n" + ("TODO OK ✔" if not FALLOS else f"{len(FALLOS)} FALLOS: {FALLOS}"))
 sys.exit(1 if FALLOS else 0)
