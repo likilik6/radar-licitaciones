@@ -14,3 +14,25 @@ docs/
 cartera_*.sql
 # Utilidad local (email + rutas de tu PC):
 subir_pdfs_cartera.py
+
+# CREDENCIALES LOCALES que NUNCA se suben (cadena de conexión read-only a Supabase
+# para verificaciones de Claude, .env, etc.). El repo es PÚBLICO: esto va solo en local.
+secrets/
+.env
+
+# TRASPASOS/PROMPTS a Claude Code (llevan CIFs, competencia y estrategia).
+# El repo es PÚBLICO: esta carpeta vive solo en local (se sincroniza desde Cowork/OneDrive).
+_traspaso/
+# EXPORTS PRIVADOS del nicho y la competencia (CIFs, importes). Repo PÚBLICO → solo en local.
+nicho_detalle*.csv
+top50_*.csv
+# ROADMAP con la lista CIFS_SEGUIDOS (CIFs de competencia). Repo PÚBLICO → solo en local.
+ROADMAP.md
+
+# Caché de ZIP descargados por backfill_catalogo.py (catálogo y menores). Artefactos
+# pesados y reproducibles: nunca al repo.
+cache_backfill/
+
+# Informes de empresa generados por informe_empresa.py: llevan CIFs, importes y
+# competencia. El repo es PUBLICO -> solo en local.
+informes/
