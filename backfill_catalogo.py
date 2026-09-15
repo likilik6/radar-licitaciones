@@ -63,6 +63,8 @@ from lxml import etree
 # ATOM para localizar las <entry> y el EXTRACTOR de campos CODICE (único punto de
 # extracción del proyecto). Nada de esto se duplica aquí.
 from feeds import CABECERAS, ATOM_NS, FEEDS, descarga_entradas, extrae_entrada, normaliza_cif
+# Traduce el código territorial del CODICE a (ccaa, lugar_ejecucion). Ver nuts.py.
+import nuts
 
 # Acentos y "ñ" correctos en la consola de Windows.
 sys.stdout.reconfigure(encoding="utf-8")
@@ -212,15 +214,25 @@ def anio_de(reg):
 def fila_para_tabla(reg):
     """Mapea el dict del extractor a las columnas de public.licitaciones.
 
-    - lugar_ejecucion y ccaa NO se incluyen: van null. El extractor aún NO los saca
-      (queda como iteración posterior; el código NUTS sí está en reg['region_codigo']
-      pero el mapeo a CCAA/lugar se hará cuando se aborde esa mejora).
+    - ccaa, lugar_ejecucion y nuts_codigo SE DERIVAN del código territorial del CODICE
+      (reg['region_codigo']) con nuts.traduce(). Antes iban null y el comentario decía
+      que «el extractor aún NO los saca»: era inexacto, feeds.py:414-416 lleva sacándolo
+      desde siempre; lo que faltaba era este mapeo. Se guarda también el código CRUDO
+      (nuts_codigo), misma lección que D1.1 con sistema_contratacion: el código es la
+      clave estable y los nombres son presentación, reetiquetables sin re-backfill.
+      OJO: nuts_codigo exige haber ejecutado ANTES ccaa_schema.sql.
+    - reg['region'] (el texto libre del feed) NO se usa: en las agregadas no viene nunca
+      (0% medido) y donde viene está sucio. Ver la cabecera de nuts.py.
     - tsv lo calcula el trigger de la tabla (no se envía).
     - primera_vez NO se envía: en INSERT toma el default now(); en UPDATE queda intacto.
     - ultima_vez = ahora (se actualiza siempre).
     """
+    ccaa, lugar_ejecucion, nuts_codigo = nuts.traduce(reg.get("region_codigo"))
     return {
         "licitacion_id": reg["id"],
+        "ccaa": ccaa,
+        "lugar_ejecucion": lugar_ejecucion,
+        "nuts_codigo": nuts_codigo,
         "titulo": reg["titulo"],
         "objeto": reg["objeto"],
         "num_expediente": reg["num_expediente"],
@@ -972,10 +984,17 @@ def menores_incremental(sesion, url_base, headers):
     return len(filas)
 
 
-def carga(unidades, limpiar=True):
+def carga(unidades, limpiar=True, solo_catalogo=False):
     """Procesa las unidades (fuente, periodo) en STREAMING: descarga un ZIP →
     parsea sus .atom → upsert → libera el ZIP antes del siguiente, para no llenar
-    el disco del runner. Reanudable por checkpoint (unidad y .atom)."""
+    el disco del runner. Reanudable por checkpoint (unidad y .atom).
+
+    solo_catalogo=True escribe SOLO public.licitaciones: ni adjudicaciones, ni
+    automarcar, ni el rebuild de competidores, ni el bucle de desiertas. Es para
+    re-backfills que solo buscan rellenar columnas del catálogo (p. ej. el de
+    ccaa/lugar_ejecucion): reescribir 600.975 adjudicaciones ya verificadas no
+    aporta nada y es buena parte de las ~3 h que tarda un backfill completo.
+    """
     sesion, headers, endpoint, url_base = _preparar_upsert()
     unidades_ok, atoms_ok = _carga_estado()
 
@@ -983,6 +1002,9 @@ def carga(unidades, limpiar=True):
     print("CARGA a Supabase (upsert idempotente por licitacion_id, en streaming)")
     print(f"Unidades: {len(unidades)}  ·  ya completas: {len(unidades_ok)}  ·  "
           f"borrar ZIP tras procesar: {limpiar}")
+    if solo_catalogo:
+        print("MODO --solo-catalogo: se escribe SOLO public.licitaciones.")
+        print("  NO se tocan adjudicaciones, ni automarcar, ni competidores, ni desiertas.")
     print("=" * 78)
 
     # Dedup por EJECUCIÓN: como las unidades van de más nueva a más antigua, la
@@ -993,7 +1015,8 @@ def carga(unidades, limpiar=True):
     vistos_run = set()
     # ¿Está creada public.adjudicaciones? Si no, se ingiere el catálogo igual y solo
     # se salta la parte de adjudicaciones (defensa para el orden de despliegue).
-    escribir_adj = _tabla_adjudicaciones_lista(sesion, url_base, headers)
+    # Con --solo-catalogo ni siquiera se pregunta: no se van a escribir.
+    escribir_adj = (not solo_catalogo) and _tabla_adjudicaciones_lista(sesion, url_base, headers)
 
     total = 0
     total_adj = 0
@@ -1412,6 +1435,10 @@ def main():
                          "+ año en curso mensual). Sirve para trocear el job.")
     ap.add_argument("--solo", choices=list(FUENTES), default=None,
                     help="Procesar solo una fuente (por defecto: las dos). Sirve para trocear.")
+    ap.add_argument("--solo-catalogo", action="store_true",
+                    help="Escribir SOLO public.licitaciones: ni adjudicaciones, ni automarcar, "
+                         "ni competidores, ni desiertas. Para re-backfills que solo rellenan "
+                         "columnas del catalogo (p. ej. ccaa/lugar_ejecucion).")
     ap.add_argument("--conservar-zip", action="store_true",
                     help="No borrar los ZIP tras procesarlos (por defecto se borran en --cargar "
                          "para no llenar el disco del runner).")
@@ -1443,7 +1470,8 @@ def main():
     elif args.purgar:
         purgar(args.ventana_anios, args.simular, args.lote)
     elif args.cargar:
-        carga(construir_unidades(args.solo, args.periodos), limpiar=not args.conservar_zip)
+        carga(construir_unidades(args.solo, args.periodos),
+              limpiar=not args.conservar_zip, solo_catalogo=args.solo_catalogo)
     else:
         dry_run(anios, fuentes)
 

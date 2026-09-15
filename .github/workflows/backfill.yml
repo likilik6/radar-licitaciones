@@ -32,6 +32,11 @@ on:
         description: "Periodos sueltos para trocear (p.ej. '2024' o '202601 202602'). Vacío = ventana de 2 años."
         required: false
         default: ""
+      solo_catalogo:
+        description: "Escribir SOLO public.licitaciones (ni adjudicaciones, ni automarcar, ni competidores, ni desiertas)."
+        required: false
+        type: boolean
+        default: false
 
 # No se cancela un backfill en curso si se vuelve a lanzar.
 concurrency:
@@ -66,6 +71,7 @@ jobs:
           SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
           SOLO: ${{ inputs.solo }}
           PERIODOS: ${{ inputs.periodos }}
+          SOLO_CATALOGO: ${{ inputs.solo_catalogo }}
         run: |
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE" ]; then
             echo "Faltan los secrets SUPABASE_URL y/o SUPABASE_SERVICE_ROLE." >&2
@@ -74,5 +80,6 @@ jobs:
           args="--cargar"
           if [ -n "$SOLO" ]; then args="$args --solo $SOLO"; fi
           if [ -n "$PERIODOS" ]; then args="$args --periodos $PERIODOS"; fi
+          if [ "$SOLO_CATALOGO" = "true" ]; then args="$args --solo-catalogo"; fi
           echo "Ejecutando: python backfill_catalogo.py $args"
           python backfill_catalogo.py $args
