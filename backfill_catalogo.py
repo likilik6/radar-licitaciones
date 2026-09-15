@@ -63,6 +63,8 @@ from lxml import etree
 # ATOM para localizar las <entry> y el EXTRACTOR de campos CODICE (único punto de
 # extracción del proyecto). Nada de esto se duplica aquí.
 from feeds import CABECERAS, ATOM_NS, FEEDS, descarga_entradas, extrae_entrada, normaliza_cif
+# Traduce el código territorial del CODICE a (ccaa, lugar_ejecucion). Ver nuts.py.
+import nuts
 
 # Acentos y "ñ" correctos en la consola de Windows.
 sys.stdout.reconfigure(encoding="utf-8")
@@ -212,15 +214,25 @@ def anio_de(reg):
 def fila_para_tabla(reg):
     """Mapea el dict del extractor a las columnas de public.licitaciones.
 
-    - lugar_ejecucion y ccaa NO se incluyen: van null. El extractor aún NO los saca
-      (queda como iteración posterior; el código NUTS sí está en reg['region_codigo']
-      pero el mapeo a CCAA/lugar se hará cuando se aborde esa mejora).
+    - ccaa, lugar_ejecucion y nuts_codigo SE DERIVAN del código territorial del CODICE
+      (reg['region_codigo']) con nuts.traduce(). Antes iban null y el comentario decía
+      que «el extractor aún NO los saca»: era inexacto, feeds.py:414-416 lleva sacándolo
+      desde siempre; lo que faltaba era este mapeo. Se guarda también el código CRUDO
+      (nuts_codigo), misma lección que D1.1 con sistema_contratacion: el código es la
+      clave estable y los nombres son presentación, reetiquetables sin re-backfill.
+      OJO: nuts_codigo exige haber ejecutado ANTES ccaa_schema.sql.
+    - reg['region'] (el texto libre del feed) NO se usa: en las agregadas no viene nunca
+      (0% medido) y donde viene está sucio. Ver la cabecera de nuts.py.
     - tsv lo calcula el trigger de la tabla (no se envía).
     - primera_vez NO se envía: en INSERT toma el default now(); en UPDATE queda intacto.
     - ultima_vez = ahora (se actualiza siempre).
     """
+    ccaa, lugar_ejecucion, nuts_codigo = nuts.traduce(reg.get("region_codigo"))
     return {
         "licitacion_id": reg["id"],
+        "ccaa": ccaa,
+        "lugar_ejecucion": lugar_ejecucion,
+        "nuts_codigo": nuts_codigo,
         "titulo": reg["titulo"],
         "objeto": reg["objeto"],
         "num_expediente": reg["num_expediente"],
