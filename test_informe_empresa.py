@@ -139,6 +139,26 @@ for verbo in (".post(", ".patch(", ".delete(", ".put("):
 comprueba("solo hay GET", fuente.count("self.ses.get(") >= 1, True)
 
 # ---------------------------------------------------------------------------
+print("\n== filas() no admite un 'limit' de quien llama (el fallo de los 278 s) ==")
+# Pedir 1 fila con filas(..., '...&limit=1') metía DOS limit en la URL; PostgREST se
+# quedaba con el de filas() (1000), el bucle veía la página llena y recorría las 624.204
+# filas del catálogo. Dos veces = 1.248 peticiones de más. Ahora salta antes de la red.
+_sb = ie.Supabase("https://ejemplo.invalido", "clave-de-mentira")   # no hace red al crearse
+try:
+    _sb.filas("licitaciones", "select=fecha_publicacion&limit=1")
+    comprueba("filas() con limit -> debe lanzar ValueError", "no lanzó", "ValueError")
+except ValueError as err:
+    comprueba("filas() con limit -> ValueError", "limit" in str(err), True)
+    comprueba("filas() con limit -> no llegó a pedir nada", _sb.peticiones, 0)
+except Exception as err:  # noqa: BLE001
+    comprueba("filas() con limit -> ValueError", type(err).__name__, "ValueError")
+
+print("\n== resta_meses recorta el día (un 31 no pide '31 de febrero') ==")
+from datetime import datetime, timezone  # noqa: E402
+comprueba("31/03 - 1 mes", ie.resta_meses(datetime(2026, 3, 31, tzinfo=timezone.utc), 1).date().isoformat(), "2026-02-28")
+comprueba("15/09 - 24 meses", ie.resta_meses(datetime(2026, 9, 15, tzinfo=timezone.utc), 24).date().isoformat(), "2024-09-15")
+comprueba("15/09 - 18 meses", ie.resta_meses(datetime(2026, 9, 15, tzinfo=timezone.utc), 18).date().isoformat(), "2025-03-15")
+
 print("\n== la clave no se imprime ==")
 comprueba("la clave no aparece en ningún print",
           any("clave" in l and "print(" in l for l in fuente.splitlines()), False)

@@ -127,6 +127,7 @@ class Supabase:
             "Accept-Profile": "public",
         })
         self.peticiones = 0
+        self.por_tabla = defaultdict(int)
         self.segundos = 0.0
         self.mas_lenta = ("", 0.0)
 
@@ -139,6 +140,7 @@ class Supabase:
             sys.exit(f"ERROR de red consultando «{tabla}»: {err}")
         tardanza = time.time() - arranque
         self.peticiones += 1
+        self.por_tabla[tabla] += 1
         self.segundos += tardanza
         if tardanza > self.mas_lenta[1]:
             self.mas_lenta = (f"{tabla}?{params[:90]}", round(tardanza, 2))
@@ -148,8 +150,24 @@ class Supabase:
             sys.exit(f"ERROR {r.status_code} consultando «{tabla}»: {r.text[:300]}")
         return r
 
+    def una(self, tabla: str, params: str) -> dict | None:
+        """UNA fila, en UNA petición. No confundir con filas(): ésta no pagina.
+
+        Existe por un fallo que costó 278 s: pedir la primera/última fecha con
+        `filas(..., '...&limit=1')` metía DOS `limit` en la URL, PostgREST se quedaba
+        con el de filas() (1000), el bucle veía la página llena y se recorría las
+        624.204 filas del catálogo entero. Dos veces: 1.248 peticiones de más.
+        """
+        datos = self._pide(tabla, f"{params}&limit=1").json()
+        return datos[0] if datos else None
+
     def filas(self, tabla: str, params: str, tope: int | None = None) -> list[dict]:
         """Todas las filas que casen, paginando. `tope` corta y lo dice quien llama."""
+        if "limit=" in params:
+            # Guardia contra el fallo de arriba: si quien llama ya puso un limit, la
+            # paginación de aquí lo pisa y el resultado es un recorrido completo.
+            raise ValueError(f"filas() pagina sola: quita el 'limit' de los params "
+                             f"o usa una(). Recibido: {params[:120]}")
         salida, desde = [], 0
         while True:
             trozo = self._pide(tabla, f"{params}&limit={PAGINA}&offset={desde}").json()
@@ -577,10 +595,8 @@ def bloque7_oportunidades(sb: Supabase, cpvs: list[str]) -> list[dict]:
 
 def bloque8_metadatos(sb: Supabase, consulta_iso: str, meses: int, criba: dict,
                       expansion: list[dict], filas_por_bloque: dict, total: int) -> dict:
-    prim = sb.filas("licitaciones",
-                    "select=fecha_publicacion&order=fecha_publicacion.asc&limit=1")
-    ult = sb.filas("licitaciones",
-                   "select=fecha_publicacion&order=fecha_publicacion.desc.nullslast&limit=1")
+    prim = sb.una("licitaciones", "select=fecha_publicacion&order=fecha_publicacion.asc")
+    ult = sb.una("licitaciones", "select=fecha_publicacion&order=fecha_publicacion.desc.nullslast")
     # Distribución por año SIN traerse 624k filas: un conteo indexado por año.
     ahora_anno = datetime.now(timezone.utc).year
     por_anno = []
@@ -592,14 +608,15 @@ def bloque8_metadatos(sb: Supabase, consulta_iso: str, meses: int, criba: dict,
     return {
         "consultado_en": consulta_iso,
         "catalogo_total_filas": total,
-        "catalogo_ventana": {"desde": (prim[0]["fecha_publicacion"] if prim else None),
-                             "hasta": (ult[0]["fecha_publicacion"] if ult else None)},
+        "catalogo_ventana": {"desde": (prim["fecha_publicacion"] if prim else None),
+                             "hasta": (ult["fecha_publicacion"] if ult else None)},
         "catalogo_por_anno": por_anno,
         "ventana_informe_meses": meses,
         "cpv_expansion": expansion,
         "cpv_criba": criba,
         "filas_por_bloque": filas_por_bloque,
         "peticiones_http": sb.peticiones,
+        "peticiones_por_tabla": dict(sb.por_tabla),
         "segundos_en_consultas": round(sb.segundos, 2),
         "consulta_mas_lenta": {"que": sb.mas_lenta[0], "segundos": sb.mas_lenta[1]},
         "fuentes": {
