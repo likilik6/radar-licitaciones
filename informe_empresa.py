@@ -24,10 +24,12 @@ base real; si algo de esto cambia, el script hay que revisarlo):
 · `menores.cpv` NO tiene GIN: `cpv && ...` son 8,3 s de Seq Scan paralelo. La vía buena
   es `cpv_txt LIKE '% <codigo>%'`, que sí usa índice trigram (`menores_cpv_txt_trgm`):
   las MISMAS 395 filas en 409 ms. Es lo que ya hace menores_api.js.
-· `licitaciones.ccaa` y `licitaciones.lugar_ejecucion` están VACÍAS: NULL en las 624.204
-  filas. El extractor sí lee CountrySubentity (feeds.py:414-416) pero el mapeo está
-  pendiente a propósito (backfill_catalogo.py:215). Por eso el desglose NO es geográfico
-  sino POR ÓRGANO DE CONTRATACIÓN (poblado al 100%), y el informe lo dice por escrito.
+· `licitaciones.ccaa` YA está poblada (re-backfill del 15/09/2026, derivada del código
+  NUTS del CODICE; ver nuts.py). Antes era NULL en el 100% de las filas y el bloque 5
+  solo podía desglosar por órgano. Ahora desglosa por LAS DOS cosas, porque no se
+  sustituyen: hay 7.472 órganos y los que más licitan son entes estatales sin geografía
+  (TRAGSA, Renfe, ADIF, Correos). NO llega al 100% ni llegará —un ~1,3% son de ámbito
+  nacional o de código ambiguo— así que el informe declara SIEMPRE la cobertura.
 · Umbral de genericidad (2% del catálogo = 12.484 licitaciones): hoy solo lo superan 2
   CPV de todo el vocabulario, así que es una red de seguridad, no un recorte habitual.
 =============================================================================
@@ -349,7 +351,7 @@ def bloque2_adjudicaciones(sb: Supabase, cif: str) -> tuple[list[dict], dict]:
             "objeto": lic.get("objeto"),
             "organo_contratacion": lic.get("organo_contratacion"),
             "num_expediente": lic.get("num_expediente"),
-            "ccaa": lic.get("ccaa"),                       # hoy SIEMPRE null (ver cabecera)
+            "ccaa": lic.get("ccaa"),                       # derivada del NUTS (ver nuts.py)
             "lote": a.get("lote") or None,
             "resultado": a.get("resultado"),
             "resultado_code": a.get("resultado_code"),
@@ -486,19 +488,35 @@ def criba_cpv(sb: Supabase, candidatos: list[str], total_catalogo: int) -> dict:
 
 
 def bloque5_mercado(sb: Supabase, cpvs: list[str], desde_iso: str) -> dict:
-    """Mercado en esos CPV. El desglose es POR ÓRGANO DE CONTRATACIÓN, no geográfico:
-    ccaa y lugar_ejecucion están vacías en las 624.204 filas del catálogo."""
+    """Mercado en esos CPV, desglosado POR COMUNIDAD AUTÓNOMA y POR ÓRGANO.
+
+    Las dos dimensiones, porque no se sustituyen: hay 7.472 órganos distintos y los
+    que más licitan son entes estatales sin geografía (TRAGSA 21.046 licitaciones,
+    Renfe 10.658, Paradores, ADIF, Correos). El órgano dice A QUIÉN visitar; la
+    comunidad dice DÓNDE está el mercado.
+
+    Agregar por CCAA sale gratis: estas filas ya se traen para el resto del bloque, así
+    que es un contador más en el mismo bucle. Cero peticiones y cero índices extra.
+
+    HONESTIDAD: `ccaa` se pobló con el re-backfill del 15/09/2026 y no llega al 100% —
+    ni llegará: un ~1,3% de los contratos son de ámbito nacional («ES» a secas) o de
+    código ambiguo, y se quedan a NULL a propósito. Por eso se devuelve SIEMPRE la
+    cobertura (`pct_con_ccaa`): un desglose geográfico sobre una columna a medias
+    ocultaría mercado en silencio, que es justo lo que no queremos.
+    """
     if not cpvs:
         return {"n_licitaciones": 0, "importe_total_sin_iva": None, "abiertas_hoy": 0,
-                "desiertas": 0, "por_organo": [], "topado": False}
+                "desiertas": 0, "por_organo": [], "por_ccaa": [], "n_sin_ccaa": 0,
+                "pct_con_ccaa": None, "topado": False}
     ov = "%7B" + ",".join(cpvs) + "%7D"
     filtro = f"cpv=ov.{ov}&fecha_publicacion=gte.{quote(desde_iso)}"
     filas = sb.filas("licitaciones",
                      "select=licitacion_id,organo_contratacion,presupuesto_sin_iva,"
-                     f"fecha_fin_plazo,estado_adjudicacion&{filtro}", tope=TOPE_MERCADO)
+                     f"fecha_fin_plazo,estado_adjudicacion,ccaa&{filtro}", tope=TOPE_MERCADO)
     ahora = datetime.now(timezone.utc).isoformat()
     por_organo = defaultdict(lambda: {"n": 0, "importe": 0.0})
-    total_importe, abiertas, desiertas = 0.0, 0, 0
+    por_ccaa = defaultdict(lambda: {"n": 0, "importe": 0.0})
+    total_importe, abiertas, desiertas, sin_ccaa = 0.0, 0, 0, 0
     for f in filas:
         imp = num(f.get("presupuesto_sin_iva")) or 0
         total_importe += imp
@@ -509,18 +527,33 @@ def bloque5_mercado(sb: Supabase, cpvs: list[str], desde_iso: str) -> dict:
         clave = f.get("organo_contratacion") or "(sin órgano)"
         por_organo[clave]["n"] += 1
         por_organo[clave]["importe"] += imp
+        comunidad = f.get("ccaa")
+        if comunidad:
+            por_ccaa[comunidad]["n"] += 1
+            por_ccaa[comunidad]["importe"] += imp
+        else:
+            sin_ccaa += 1
     desglose = sorted(({"organo_contratacion": k, "n_licitaciones": v["n"],
                         "importe_sin_iva": round(v["importe"], 2)}
                        for k, v in por_organo.items()),
                       key=lambda x: x["importe_sin_iva"], reverse=True)
+    geografico = sorted(({"ccaa": k, "n_licitaciones": v["n"],
+                          "importe_sin_iva": round(v["importe"], 2)}
+                         for k, v in por_ccaa.items()),
+                        key=lambda x: x["importe_sin_iva"], reverse=True)
+    con_ccaa = len(filas) - sin_ccaa
+    pct = round(100.0 * con_ccaa / len(filas), 1) if filas else None
     return {"n_licitaciones": len(filas), "importe_total_sin_iva": round(total_importe, 2),
             "abiertas_hoy": abiertas, "desiertas": desiertas,
             "por_organo": desglose[:30], "n_organos": len(desglose),
+            "por_ccaa": geografico, "n_sin_ccaa": sin_ccaa, "pct_con_ccaa": pct,
             "topado": len(filas) >= TOPE_MERCADO,
-            "aviso_desglose": ("El desglose es POR ÓRGANO DE CONTRATACIÓN, NO geográfico: "
-                               "las columnas ccaa y lugar_ejecucion del catálogo están vacías "
-                               "en el 100% de las filas (el extractor lee la región del CODICE "
-                               "pero el mapeo está pendiente)."),
+            "aviso_desglose": (
+                f"El desglose por comunidad cubre el {pct}% de estas licitaciones "
+                f"({con_ccaa} de {len(filas)}). El resto no lleva comunidad en la fuente: "
+                "son contratos de ámbito nacional o con un código territorial que no "
+                "identifica una sola comunidad, y se dejan fuera a propósito en vez de "
+                "asignarles una inventada."),
             "ids": [f["licitacion_id"] for f in filas]}
 
 
@@ -671,10 +704,10 @@ def escribe_md(informe: dict) -> str:
 
     p += ["", "## 2 · Todas sus adjudicaciones", ""]
     p.append(tabla_md(
-        ["Fecha", "Título", "Órgano", "Expediente", "Lote", "Resultado",
+        ["Fecha", "Título", "Órgano", "Comunidad", "Expediente", "Lote", "Resultado",
          "Importe s/IVA", "Presup. base", "% baja", "Ofertas", "Enlace"],
         [[a["fecha_adjudicacion"], (a["titulo"] or "")[:70], (a["organo_contratacion"] or "")[:50],
-          a["num_expediente"], a["lote"], a["resultado"], eur(a["importe_sin_iva"]),
+          a["ccaa"], a["num_expediente"], a["lote"], a["resultado"], eur(a["importe_sin_iva"]),
           eur(a["baja_base"]), ("—" if a["pct_baja"] is None else f"{a['pct_baja']:.1f} %"),
           a["n_ofertas"], a["enlace"]] for a in informe["adjudicaciones"]]))
 
@@ -710,7 +743,15 @@ def escribe_md(informe: dict) -> str:
     p.append(tabla_md(["Licitaciones", "Importe s/IVA", "Abiertas hoy", "Desiertas"],
                       [[b5["n_licitaciones"], eur(b5["importe_total_sin_iva"]),
                         b5["abiertas_hoy"], b5["desiertas"]]]))
-    p += ["", "**Desglose por órgano de contratación** (no geográfico):", ""]
+    p += ["", "**Dónde está el mercado** (por comunidad autónoma):", ""]
+    p.append(tabla_md(["Comunidad", "Licitaciones", "Importe s/IVA", "% del importe"],
+                      [[c["ccaa"], c["n_licitaciones"], eur(c["importe_sin_iva"]),
+                        (f"{100.0 * c['importe_sin_iva'] / b5['importe_total_sin_iva']:.1f} %"
+                         if b5.get("importe_total_sin_iva") else "—")]
+                       for c in b5.get("por_ccaa", [])]))
+    if b5.get("n_sin_ccaa"):
+        p.append(f"\n> {b5['aviso_desglose']}\n")
+    p += ["", "**A quién visitar** (por órgano de contratación):", ""]
     p.append(tabla_md(["Órgano", "Licitaciones", "Importe s/IVA"],
                       [[o["organo_contratacion"][:60], o["n_licitaciones"], eur(o["importe_sin_iva"])]
                        for o in b5["por_organo"]]))

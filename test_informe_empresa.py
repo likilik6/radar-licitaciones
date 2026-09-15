@@ -132,6 +132,59 @@ comprueba("tiene miles de códigos", len(voc) > 9000, True)
 comprueba("todas las claves son de 8 dígitos", all(len(k) == 8 for k in voc), True)
 
 # ---------------------------------------------------------------------------
+print("\n== bloque 5: desglose por COMUNIDAD además de por órgano ==")
+
+
+class SupabaseDeMentira:
+    """Devuelve filas fijas: prueba la AGREGACIÓN, no la red."""
+
+    def __init__(self, filas):
+        self._filas = filas
+
+    def filas(self, tabla, params, tope=None):
+        return list(self._filas)
+
+
+# Caso pensado a propósito: el órgano que más licita (TRAGSA) es estatal y reparte por
+# tres comunidades. Es justo el motivo por el que el desglose por órgano NO sustituye al
+# geográfico, y por el que se dan los dos.
+FILAS = [
+    {"licitacion_id": "1", "organo_contratacion": "TRAGSA", "presupuesto_sin_iva": 100,
+     "fecha_fin_plazo": None, "estado_adjudicacion": None, "ccaa": "Andalucía"},
+    {"licitacion_id": "2", "organo_contratacion": "TRAGSA", "presupuesto_sin_iva": 200,
+     "fecha_fin_plazo": None, "estado_adjudicacion": None, "ccaa": "Galicia"},
+    {"licitacion_id": "3", "organo_contratacion": "TRAGSA", "presupuesto_sin_iva": 300,
+     "fecha_fin_plazo": None, "estado_adjudicacion": "desierta_total", "ccaa": "Andalucía"},
+    {"licitacion_id": "4", "organo_contratacion": "Ajuntament de Barcelona",
+     "presupuesto_sin_iva": 50, "fecha_fin_plazo": None, "estado_adjudicacion": None,
+     "ccaa": "Cataluña"},
+    # Ámbito nacional: sin comunidad. NO debe inventarse ni colarse en ningún grupo.
+    {"licitacion_id": "5", "organo_contratacion": "ADIF", "presupuesto_sin_iva": 999,
+     "fecha_fin_plazo": None, "estado_adjudicacion": None, "ccaa": None},
+]
+b5 = ie.bloque5_mercado(SupabaseDeMentira(FILAS), ["45321000"], "2024-01-01T00:00:00+00:00")
+
+comprueba("cuenta todas las licitaciones", b5["n_licitaciones"], 5)
+comprueba("importe total incluye las que no tienen comunidad",
+          b5["importe_total_sin_iva"], 1649.0)
+comprueba("desiertas", b5["desiertas"], 1)
+por_ccaa = {c["ccaa"]: c for c in b5["por_ccaa"]}
+comprueba("tres comunidades", sorted(por_ccaa), ["Andalucía", "Cataluña", "Galicia"])
+comprueba("Andalucía agrega sus dos filas", por_ccaa["Andalucía"]["n_licitaciones"], 2)
+comprueba("Andalucía suma importes", por_ccaa["Andalucía"]["importe_sin_iva"], 400.0)
+comprueba("ordenado por importe descendente", b5["por_ccaa"][0]["ccaa"], "Andalucía")
+comprueba("la fila sin comunidad NO entra en ningún grupo",
+          sum(c["n_licitaciones"] for c in b5["por_ccaa"]), 4)
+comprueba("se declara cuántas no tienen comunidad", b5["n_sin_ccaa"], 1)
+comprueba("se declara la cobertura", b5["pct_con_ccaa"], 80.0)
+comprueba("el aviso dice la cobertura real", "80.0%" in b5["aviso_desglose"], True)
+comprueba("sigue habiendo desglose por órgano", len(b5["por_organo"]), 3)
+comprueba("se piden las filas con la columna ccaa", "ccaa" in FILAS[0], True)
+
+vacio = ie.bloque5_mercado(SupabaseDeMentira([]), [], "2024-01-01T00:00:00+00:00")
+comprueba("sin CPV -> desglose vacío, no excepción", vacio["por_ccaa"], [])
+comprueba("sin CPV -> cobertura None", vacio["pct_con_ccaa"], None)
+
 print("\n== el script no escribe NUNCA en la base ==")
 fuente = (Path(__file__).resolve().parent / "informe_empresa.py").read_text(encoding="utf-8")
 for verbo in (".post(", ".patch(", ".delete(", ".put("):
