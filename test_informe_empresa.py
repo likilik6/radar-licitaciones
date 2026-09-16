@@ -185,6 +185,70 @@ vacio = ie.bloque5_mercado(SupabaseDeMentira([]), [], "2024-01-01T00:00:00+00:00
 comprueba("sin CPV -> desglose vacío, no excepción", vacio["por_ccaa"], [])
 comprueba("sin CPV -> cobertura None", vacio["pct_con_ccaa"], None)
 
+print("\n== variantes acentuadas (mejora 1: ilike NO ignora tildes) ==")
+# Medido sobre los menores del nicho: «purificación» sale CON tilde en 19 de 20 casos y
+# «desinfección» en 60 de 62. Un ilike con el término sin tilde perdería el 95% SIN AVISAR,
+# que es la peor clase de fallo: el informe saldría, con un número menor y creíble.
+v = ie.variantes_acentuadas("purificacion")
+comprueba("incluye el término tal cual", "purificacion" in v, True)
+comprueba("incluye la forma real, con tilde", "purificación" in v, True)
+comprueba("una vocal acentuada por variante, sin explosión combinatoria", len(v), 7)
+comprueba("fotocatalit -> fotocatalít (la que casa «fotocatalítico»)",
+          "fotocatalít" in ie.variantes_acentuadas("fotocatalit"), True)
+comprueba("formaldehido -> formaldehído",
+          "formaldehído" in ie.variantes_acentuadas("formaldehido"), True)
+comprueba("respeta los espacios de las frases",
+          "calidad del aire" in ie.variantes_acentuadas("calidad del aire"), True)
+comprueba("vacío -> []", ie.variantes_acentuadas(""), [])
+comprueba("None -> []", ie.variantes_acentuadas(None), [])
+comprueba("sin vocales -> solo él mismo", ie.variantes_acentuadas("xyz"), ["xyz"])
+
+print("\n== trocea_terminos ==")
+comprueba("separa por comas y limpia", ie.trocea_terminos(" a , b ,, c "), ["a", "b", "c"])
+comprueba("vacío -> []", ie.trocea_terminos(""), [])
+
+print("\n== criba de CPV por NIVEL (mejora 2) ==")
+# Con LODEPA se colaron 50000000 y 51000000 —divisiones enteras del árbol CPV— y
+# arrastraron 5.472 licitaciones por 3.408 M€ que son el mercado de mantenimiento
+# integral de edificios, no el suyo. El criterio de FRECUENCIA no los cazaba: ninguno
+# llegaba al 2% del catálogo. Son genéricos por lo que SIGNIFICAN, no por lo que aparecen.
+comprueba("50000000 -> 7 ceros", ie.ceros_finales("50000000"), 7)
+comprueba("51000000 -> 6 ceros", ie.ceros_finales("51000000"), 6)
+comprueba("71700000 -> 5 ceros", ie.ceros_finales("71700000"), 5)
+comprueba("50730000 -> 4 ceros", ie.ceros_finales("50730000"), 4)
+comprueba("90731100 -> 2 ceros", ie.ceros_finales("90731100"), 2)
+comprueba("el umbral deja fuera las divisiones",
+          ie.ceros_finales("50000000") >= ie.CEROS_GENERICO, True)
+comprueba("y NO toca las clases del nicho",
+          ie.ceros_finales("90731100") >= ie.CEROS_GENERICO, False)
+comprueba("71700000, con 5 ceros, se queda",
+          ie.ceros_finales("71700000") >= ie.CEROS_GENERICO, False)
+
+
+class SupabaseCriba:
+    """Cuenta las consultas: sirve para probar que el criterio de nivel no gasta ninguna."""
+
+    def __init__(self):
+        self.consultas = 0
+
+    def cuenta(self, tabla, params):
+        self.consultas += 1
+        return 10          # muy por debajo del umbral de frecuencia
+
+
+sb_c = SupabaseCriba()
+cr = ie.criba_cpv(sb_c, ["50000000", "51000000", "90731100", "71700000"], 624204)
+comprueba("las divisiones quedan fuera",
+          sorted(g["cpv"] for g in cr["descartados_genericos"]), ["50000000", "51000000"])
+comprueba("el motivo se declara (nada de recortes silenciosos)",
+          {g["motivo"] for g in cr["descartados_genericos"]}, {"nivel"})
+comprueba("los específicos se usan", cr["usados"], ["90731100", "71700000"])
+comprueba("el criterio de nivel NO gasta una consulta", sb_c.consultas, 2)
+
+print("\n== bloque_competidores (mejora 3) ==")
+comprueba("lista vacía -> []", ie.bloque_competidores(None, []), [])
+comprueba("un CIF vacío se ignora sin romper", ie.bloque_competidores(None, ["", "  "]), [])
+
 print("\n== el script no escribe NUNCA en la base ==")
 fuente = (Path(__file__).resolve().parent / "informe_empresa.py").read_text(encoding="utf-8")
 for verbo in (".post(", ".patch(", ".delete(", ".put("):

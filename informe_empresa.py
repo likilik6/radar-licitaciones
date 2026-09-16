@@ -72,6 +72,7 @@ PAGINA = 1000                # filas por página de PostgREST
 TROZO_IDS = 100              # ids por lote en los filtros in.(...)  (URLs cortas)
 MAX_CPV = 15                 # CPV que entran en los bloques de mercado (tope del encargo)
 PCT_GENERICO = 0.02          # CPV presente en >2% del catálogo = no describe nicho
+CEROS_GENERICO = 6           # 6+ ceros finales = división/grupo del árbol CPV, no un nicho
 TOPE_MERCADO = 20000         # filas de licitaciones que se traen para agregar (bloque 5)
 TOPE_MENORES_NICHO = 3000    # filas de menores del nicho (bloque 3b)
 TOP_ADJUDICATARIOS = 15
@@ -404,23 +405,80 @@ def bloque3_menores_cif(sb: Supabase, cif: str) -> dict:
     }
 
 
-def bloque3b_menores_nicho(sb: Supabase, cpvs: list[str]) -> dict:
+TILDES = {"a": "á", "e": "é", "i": "í", "o": "ó", "u": "ú"}
+
+
+def variantes_acentuadas(termino: str) -> list[str]:
+    """Un término escrito SIN tildes -> él mismo más una variante por cada vocal
+    acentuada. «purificacion» -> purificacion, purificación, purifícacion...
+
+    POR QUÉ HACE FALTA: `ilike` NO ignora los acentos, y los objetos reales sí los
+    llevan. Medido sobre los menores del nicho: «purificación» aparece con tilde en 19
+    de 20 casos y «desinfección» en 60 de 62. Un ilike con el término sin tilde
+    perdería el 95% SIN AVISAR, que es la peor clase de fallo.
+
+    Se genera UNA vocal acentuada por variante, no el producto cartesiano: en español
+    la tilde cae en una sola vocal, así que con esto se cubren los casos reales sin
+    que la lista explote (8 términos -> 58 condiciones, no miles).
+    """
+    t = str(termino or "").strip().lower()
+    if not t:
+        return []
+    salida = {t}
+    for i, ch in enumerate(t):
+        if ch in TILDES:
+            salida.add(t[:i] + TILDES[ch] + t[i + 1:])
+    return sorted(salida)
+
+
+def trocea_terminos(texto: str) -> list[str]:
+    return [p.strip() for p in str(texto or "").split(",") if p.strip()]
+
+
+def bloque3b_menores_nicho(sb: Supabase, cpvs: list[str],
+                           incluye: list[str] | None = None,
+                           excluye: list[str] | None = None) -> dict:
     """Menores de esos CPV: quién compra esto por adjudicación directa.
 
     Va por `cpv_txt LIKE '% <codigo>%'` y NO por `cpv && [...]`: menores.cpv no tiene
     GIN (8,3 s de Seq Scan) y cpv_txt sí lo tiene (trigram) -> mismas filas en 0,4 s.
     El espacio delante ancla el inicio del código; todos los CPV son de 8 dígitos, así
     que ningún código es prefijo de otro.
+
+    CRIBA POR TEXTO (incluye/excluye), APLICADA EN LA CONSULTA. El código CPV solo no
+    basta: este nicho comparte vocabulario con otros mercados y se colaban contratos de
+    legionela, plagas, termitas y piscinas por compartir palabras como «desinfección».
+    Y filtrar en Python DESPUÉS no serviría: el bloque topa en TOPE_MENORES_NICHO filas,
+    así que se cribaría sobre una muestra truncada y el universo real quedaría sin medir
+    (con LODEPA el universo son 22.854 menores, no los 3.000 del tope).
     """
     if not cpvs:
-        return {"filas": [], "n": 0, "topado": False, "importe_total_sin_iva": None}
-    condiciones = ",".join(f"cpv_txt.ilike.*%20{c}*" for c in cpvs)
-    filtro = f"or=({condiciones})"
-    filas = sb.filas("menores",
-                     "select=licitacion_id,objeto,organo_contratacion,adjudicatario,"
-                     "cif_adjudicatario,importe_sin_iva,fecha_adjudicacion,cpv,enlace"
-                     f"&{filtro}&order=fecha_adjudicacion.desc.nullslast",
+        return {"filas": [], "n": 0, "topado": False, "importe_total_sin_iva": None,
+                "criba": None}
+    incluye = [t for t in (incluye or []) if t]
+    excluye = [t for t in (excluye or []) if t]
+
+    base = "or=(" + ",".join(f"cpv_txt.ilike.*%20{c}*" for c in cpvs) + ")"
+    partes = [base]
+    inc_v = [v for t in incluye for v in variantes_acentuadas(t)]
+    exc_v = [v for t in excluye for v in variantes_acentuadas(t)]
+    if inc_v:
+        # Segundo grupo or=(...): PostgREST combina los grupos repetidos con AND.
+        partes.append("or=(" + ",".join(f"objeto.ilike.*{quote(v)}*" for v in inc_v) + ")")
+    for v in exc_v:
+        # Filtros repetidos sobre la misma columna -> AND. Cada término, uno.
+        partes.append(f"objeto=not.ilike.*{quote(v)}*")
+    filtro = "&".join(partes)
+
+    campos = ("select=licitacion_id,objeto,organo_contratacion,adjudicatario,"
+              "cif_adjudicatario,importe_sin_iva,fecha_adjudicacion,cpv,enlace")
+    filas = sb.filas("menores", f"{campos}&{filtro}&order=fecha_adjudicacion.desc.nullslast",
                      tope=TOPE_MENORES_NICHO)
+    # Cuántos había ANTES de cribar, para poder declarar el efecto de cada lista. Son
+    # conteos, no filas: no traen datos por el cable.
+    n_por_codigo = sb.cuenta("menores", base)
+    n_tras_incluir = (sb.cuenta("menores", "&".join(partes[:2])) if inc_v else n_por_codigo)
+
     total = sum(num(f.get("importe_sin_iva")) or 0 for f in filas)
     compradores = defaultdict(lambda: {"n": 0, "importe": 0.0})
     for f in filas:
@@ -431,9 +489,51 @@ def bloque3b_menores_nicho(sb: Supabase, cpvs: list[str]) -> dict:
                    "importe_sin_iva": round(v["importe"], 2)}
                   for k, v in compradores.items()),
                  key=lambda x: x["importe_sin_iva"], reverse=True)[:20]
-    return {"filas": filas, "n": len(filas), "topado": len(filas) >= TOPE_MENORES_NICHO,
+    topado = len(filas) >= TOPE_MENORES_NICHO
+    return {"filas": filas, "n": len(filas), "topado": topado,
             "importe_total_sin_iva": round(total, 2) if filas else None,
-            "top_organos_compradores": top}
+            "top_organos_compradores": top,
+            "criba": {
+                "incluye": incluye, "excluye": excluye,
+                "variantes_incluye": len(inc_v), "variantes_excluye": len(exc_v),
+                "n_solo_por_codigo": n_por_codigo,
+                "n_tras_incluir": n_tras_incluir,
+                "n_tras_excluir": len(filas),
+                "tope": TOPE_MENORES_NICHO, "topado": topado,
+                "nota": ("La criba se aplica EN LA CONSULTA, no sobre las filas traídas: "
+                         "si no, se cribaría sobre la muestra truncada por el tope. Los "
+                         "términos se expanden a sus variantes acentuadas porque ilike no "
+                         "ignora las tildes y los objetos reales sí las llevan."),
+            }}
+
+
+
+def bloque_competidores(sb: Supabase, cifs: list[str]) -> list[dict]:
+    """Identidad y adjudicaciones de VARIOS rivales en la misma ejecución.
+
+    Antes había que lanzar el script una vez por competidor, así que comparar cinco
+    rivales eran cinco informes sueltos que alguien tenía que cuadrar a mano.
+
+    NO duplica lógica: llama a las MISMAS bloque1_identidad y bloque2_adjudicaciones
+    que usa el CIF principal, así que el % de baja, el rótulo de acuerdo marco y el
+    resto de reglas son por construcción idénticos. Si mañana cambia la regla de la
+    baja, cambia a la vez para el principal y para los rivales.
+    """
+    salida = []
+    for bruto in cifs:
+        cif = normaliza_cif(bruto)
+        if not cif:
+            continue
+        identidad = bloque1_identidad(sb, cif)
+        adjudicaciones, _catalogo = bloque2_adjudicaciones(sb, cif)
+        salida.append({
+            "cif": cif,
+            "identidad": identidad,
+            "adjudicaciones": adjudicaciones,
+            "n_adjudicaciones": len(adjudicaciones),
+            "en_competidores": identidad is not None,
+        })
+    return salida
 
 
 def bloque4_cpv(adjudicaciones: list[dict], catalogo: dict, menores: list[dict]) -> dict:
@@ -465,26 +565,51 @@ def bloque4_cpv(adjudicaciones: list[dict], catalogo: dict, menores: list[dict])
                      "títulos y objetos en crudo, que es la materia prima para escribirlas.")}
 
 
+def ceros_finales(cpv: str) -> int:
+    """Ceros al final del código. Es la medida del NIVEL en el árbol CPV: 45000000 es
+    una división entera (7 ceros), 45440000 un grupo (4), 45441000 una clase (3)."""
+    limpio = str(cpv or "").strip()
+    return len(limpio) - len(limpio.rstrip("0"))
+
+
 def criba_cpv(sb: Supabase, candidatos: list[str], total_catalogo: int) -> dict:
-    """Deja los CPV que describen nicho: descarta los genéricos (presentes en más del
-    2% del catálogo) y se queda con los MAX_CPV primeros. Todo recorte se declara:
-    un tope silencioso se lee como «esto es todo» cuando no lo es."""
+    """Deja los CPV que describen un NICHO. Descarta por dos criterios distintos, y
+    declara los dos: un tope silencioso se lee como «esto es todo» cuando no lo es.
+
+    1) NIVEL (nuevo). Un código con 6 o más ceros finales es una división o un grupo
+       del árbol CPV, nunca un nicho. El criterio de frecuencia NO los cazaba: con
+       LODEPA se colaron 50000000 y 51000000 —divisiones enteras— y arrastraron 5.472
+       licitaciones por 3.408 M€ que son el mercado de mantenimiento integral de
+       edificios, no el suyo. Y `descartados_genericos` salía VACÍO, porque ninguno
+       llegaba al 2% del catálogo: son genéricos por lo que SIGNIFICAN, no por lo que
+       aparecen. Este criterio va PRIMERO porque no cuesta una consulta.
+    2) FRECUENCIA. Presente en más del 2% del catálogo. Red de seguridad para códigos
+       específicos pero omnipresentes (hoy solo 2 de los 9.454 del vocabulario).
+    """
     umbral = int(total_catalogo * PCT_GENERICO)
-    usados, genericos = [], []
+    usados, descartados = [], []
     for c in candidatos:
+        ceros = ceros_finales(c)
+        if ceros >= CEROS_GENERICO:
+            descartados.append({"cpv": c, "motivo": "nivel", "ceros_finales": ceros,
+                                "detalle": ("división o grupo del árbol CPV: describe un "
+                                            "sector entero, no un nicho")})
+            continue
         n = sb.cuenta("licitaciones", f"cpv=ov.%7B{c}%7D")
         if n > umbral:
-            genericos.append({"cpv": c, "n_licitaciones": n,
-                              "pct_catalogo": round(100.0 * n / total_catalogo, 2)})
+            descartados.append({"cpv": c, "motivo": "frecuencia", "n_licitaciones": n,
+                                "pct_catalogo": round(100.0 * n / total_catalogo, 2),
+                                "detalle": f"aparece en más del {PCT_GENERICO * 100}% del catálogo"})
         else:
             usados.append(c)
         if len(usados) >= MAX_CPV:
             break
-    fuera_por_tope = [c for c in candidatos
-                      if c not in usados and c not in [g["cpv"] for g in genericos]]
-    return {"usados": usados, "descartados_genericos": genericos,
+    fuera = {d["cpv"] for d in descartados}
+    fuera_por_tope = [c for c in candidatos if c not in usados and c not in fuera]
+    return {"usados": usados, "descartados_genericos": descartados,
             "descartados_por_tope": fuera_por_tope, "umbral_generico": umbral,
-            "pct_generico": PCT_GENERICO * 100, "max_cpv": MAX_CPV}
+            "pct_generico": PCT_GENERICO * 100, "ceros_generico": CEROS_GENERICO,
+            "max_cpv": MAX_CPV}
 
 
 def bloque5_mercado(sb: Supabase, cpvs: list[str], desde_iso: str) -> dict:
@@ -729,8 +854,17 @@ def escribe_md(informe: dict) -> str:
     p.append(tabla_md(["Órgano comprador", "Nº menores", "Importe s/IVA"],
                       [[o["organo_contratacion"][:60], o["n_menores"], eur(o["importe_sin_iva"])]
                        for o in mn.get("top_organos_compradores", [])]))
+    cr_men = mn.get("criba") or {}
+    if cr_men.get("incluye") or cr_men.get("excluye"):
+        p.append("\n> **Criba por texto, aplicada en la consulta.** De "
+                 f"{cr_men['n_solo_por_codigo']:,} menores que casan por código CPV, "
+                 f"{cr_men['n_tras_incluir']:,} contienen alguna palabra de «incluye» y "
+                 f"{cr_men['n_tras_excluir']:,} quedan tras descartar las de «excluye».  \n"
+                 f"> Incluye: _{', '.join(cr_men['incluye']) or '—'}_.  \n"
+                 f"> Excluye: _{', '.join(cr_men['excluye']) or '—'}_.\n")
     if mn.get("topado"):
-        p.append(f"\n> Topado en {TOPE_MENORES_NICHO} filas: hay más.\n")
+        p.append(f"\n> ⚠️ Topado en {TOPE_MENORES_NICHO} filas: hay MÁS de los que se ven, "
+                 "así que los totales de este bloque son un suelo, no el universo.\n")
 
     p += ["", "## 4 · CPV deducidos", ""]
     p.append(tabla_md(["CPV", "Nº contratos", "Importe s/IVA", "Origen"],
@@ -771,6 +905,28 @@ def escribe_md(informe: dict) -> str:
                         eur(num(o.get("presupuesto_sin_iva"))), o.get("enlace")]
                        for o in informe["oportunidades"]]))
 
+    comps = informe.get("competidores") or []
+    if comps:
+        p += ["", "## 9 · Competidores comparados", ""]
+        p.append(tabla_md(["Empresa", "CIF", "Expedientes", "Lotes", "Importe s/IVA", "% 1 oferta"],
+                          [[((c["identidad"] or {}).get("nombre_canonico") or "(sin adjudicaciones registradas)")[:40],
+                            c["cif"],
+                            (c["identidad"] or {}).get("n_expedientes"),
+                            (c["identidad"] or {}).get("n_lotes"),
+                            eur(num((c["identidad"] or {}).get("importe_total_sin_iva"))),
+                            (c["identidad"] or {}).get("pct_una_oferta")] for c in comps]))
+        for c in comps:
+            nombre = (c["identidad"] or {}).get("nombre_canonico") or c["cif"]
+            p += ["", f"**{nombre}** · {c['n_adjudicaciones']} adjudicaciones", ""]
+            p.append(tabla_md(["Fecha", "Título", "Órgano", "Importe s/IVA", "% baja", "Ofertas"],
+                              [[a["fecha_adjudicacion"], (a["titulo"] or "")[:55],
+                                (a["organo_contratacion"] or "")[:40], eur(a["importe_sin_iva"]),
+                                ("—" if a["pct_baja"] is None else f"{a['pct_baja']:.1f} %"),
+                                a["n_ofertas"]] for a in c["adjudicaciones"][:25]]))
+            if c["n_adjudicaciones"] > 25:
+                p.append(f"\n_(se muestran 25 de {c['n_adjudicaciones']} en el MD; "
+                         "el JSON las trae todas)_\n")
+
     p += ["", "## 8 · Nota de fuentes", ""]
     p.append(tabla_md(["Dato", "Valor"], [
         ["Consultado", m["consultado_en"]],
@@ -790,10 +946,17 @@ def escribe_md(informe: dict) -> str:
     cr = m["cpv_criba"]
     if cr.get("descartados_genericos") or cr.get("descartados_por_tope"):
         p += ["", "**CPV dejados fuera** (nada de recortes silenciosos)", ""]
+        # Dos motivos con formas distintas: «nivel» no tiene conteo (se descarta sin
+        # consultar) y «frecuencia» sí. Se pintan los dos, cada uno con lo suyo.
+        def _fila_descarte(g):
+            if g.get("motivo") == "nivel":
+                return [g["cpv"], "genérico por NIVEL",
+                        f"{g['ceros_finales']} ceros finales · {g.get('detalle', '')}"]
+            return [g["cpv"], "genérico por FRECUENCIA",
+                    f"{g.get('n_licitaciones', '?')} licitaciones ({g.get('pct_catalogo', '?')} %)"]
+
         p.append(tabla_md(["CPV", "Motivo", "Detalle"],
-                          [[g["cpv"], f"genérico (>{cr['pct_generico']}% del catálogo)",
-                            f"{g['n_licitaciones']} licitaciones ({g['pct_catalogo']} %)"]
-                           for g in cr["descartados_genericos"]] +
+                          [_fila_descarte(g) for g in cr["descartados_genericos"]] +
                           [[c, f"fuera del tope de {cr['max_cpv']}", ""]
                            for c in cr["descartados_por_tope"]]))
     for e in m["cpv_expansion"]:
@@ -813,6 +976,16 @@ def main() -> None:
                     help="CPV separados por comas. Admite códigos exactos (45441000) y "
                          "PREFIJOS (4544), que se expanden con el vocabulario del repo. "
                          "Si no se pasa, se deducen de lo que la empresa ha ganado.")
+    ap.add_argument("--nicho-incluye", default="",
+                    help="palabras separadas por comas: el menor del nicho debe contener "
+                         "ALGUNA en su objeto. Se aplica EN LA CONSULTA e ignora mayúsculas "
+                         "y tildes. Vacío = sin criba (comportamiento de siempre).")
+    ap.add_argument("--nicho-excluye", default="",
+                    help="palabras separadas por comas: el menor del nicho NO debe contener "
+                         "NINGUNA en su objeto. Mismas reglas que --nicho-incluye.")
+    ap.add_argument("--competidores", default="",
+                    help="CIFs separados por comas: añade identidad y adjudicaciones de cada "
+                         "uno en la clave «competidores» del JSON, además del CIF principal.")
     ap.add_argument("--salida", default="", help="carpeta de salida (por defecto, la del proyecto)")
     args = ap.parse_args()
 
@@ -849,12 +1022,17 @@ def main() -> None:
           (f" ({len(criba['descartados_genericos'])} genéricos fuera)"
            if criba["descartados_genericos"] else ""))
 
-    menores_nicho = bloque3b_menores_nicho(sb, cpvs)
+    menores_nicho = bloque3b_menores_nicho(
+        sb, cpvs, trocea_terminos(args.nicho_incluye), trocea_terminos(args.nicho_excluye))
     mercado = bloque5_mercado(sb, cpvs, desde_iso)
     quien_gana = bloque6_quien_gana(sb, mercado.pop("ids", []))
     oportunidades = bloque7_oportunidades(sb, cpvs)
     print(f"· mercado {mercado['n_licitaciones']} licitaciones · "
           f"{len(quien_gana)} adjudicatarios · {len(oportunidades)} oportunidades vivas")
+
+    competidores = bloque_competidores(sb, trocea_terminos(args.competidores))
+    if competidores:
+        print(f"· {len(competidores)} competidores comparados")
 
     filas_por_bloque = {
         "1_identidad": 1 if identidad else 0,
@@ -865,6 +1043,7 @@ def main() -> None:
         "5_mercado_licitaciones": mercado["n_licitaciones"],
         "6_quien_gana": len(quien_gana),
         "7_oportunidades": len(oportunidades),
+        "competidores": sum(c["n_adjudicaciones"] for c in competidores),
     }
     metadatos = bloque8_metadatos(sb, consulta_iso, args.meses, criba, expansion,
                                   filas_por_bloque, total_catalogo)
@@ -873,7 +1052,8 @@ def main() -> None:
         "cif": cif, "identidad": identidad, "adjudicaciones": adjudicaciones,
         "menores_empresa": menores_emp, "menores_nicho": menores_nicho,
         "cpv": cpv_info, "cpv_mercado": cpvs, "mercado": mercado,
-        "quien_gana": quien_gana, "oportunidades": oportunidades, "metadatos": metadatos,
+        "quien_gana": quien_gana, "oportunidades": oportunidades,
+        "competidores": competidores, "metadatos": metadatos,
     }
 
     destino = Path(args.salida) if args.salida else (
