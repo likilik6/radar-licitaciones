@@ -8,9 +8,10 @@
 --        estatal   último menor 16/09/2026   ·  andalucía  último menor 30/06/2026
 --      Y los menores por mes de los últimos 6 CON EL MISMO MES DEL AÑO ANTERIOR al lado,
 --      que es lo que deja ver el retraso (el % es de esta pasada, 17/09/2026):
---        estatal    abr 37.978 (92%) · may 37.653 (78%) · jun 35.460 (76%) · jul 28.776 (60%)
+--        estatal    abr 37.978 (92%) · may 37.653 (78%) · jun 35.460 (77%) · jul 28.776 (60%)
 --                   · ago 11.067 (41%) · sep 4.681 (11%)
---        andalucía  abr 2.181 (21%) · may 2.059 (19%) · jun 1.965 (19%) · jul 0 · ago 0 · sep 0
+--        andalucía  abr 2.181 (21%) · may 2.059 (19%) · jun 1.965 (19%) · jul 0 (0%) · ago 0 (0%)
+--                   · sep 0 (0%)
 --      O sea: NINGÚN mes reciente está cerrado, ni siquiera abril. En Andalucía el escalón es
 --      otra cosa: el SAS (79% de la fuente) dejó de publicar el 27/04/2026.
 --      NO se guarda ninguna regla de «último mes completo» (descartada el 17/09): se guarda
@@ -32,7 +33,12 @@
 --   filas por órgano y fuente (un recorrido del índice órgano+fuente) ....... 0,40 s
 --   menores por mes de los últimos 6 (índice de fecha) .................. 0,24-3,71 s
 --   los mismos 6 meses del año anterior ................ 0 s (reaprovechados de la foto
---       anterior; 23 s la primera vez y ~4 s cuando entra un mes nuevo o una fuente nueva)
+--       anterior). Se recalcula el tramo que falte: ~25 s la PRIMERA vez y cuando entra una
+--       FUENTE nueva (le faltan los 6 meses), ~9 s el primer refresco de cada mes (un mes).
+--       Un previo a 0 se recalcula siempre (ver el bloque b2): así se cura solo cuando llega
+--       el histórico de una fuente nueva. Para forzarlo todo a mano, con service_role:
+--         update public.menores_cobertura set meses = '[]'::jsonb where ambito = 'fuente';
+--       y volver a llamar a la función.
 --   última fecha de cada fuente (índice de fecha) ........................... 1,36 s
 --   TOTAL 4-10 s según caché (medido entero con datos reales: 9,6 s en frío; con los meses
 --   del año anterior, ver abajo). La llaman DOS sitios: la ingesta diaria de menores
@@ -141,10 +147,14 @@ begin
   --      junio del año pasado. Son meses CERRADOS, así que se reaprovecha lo ya guardado:
   --      calcular los 6 cuesta 23 s medidos, y reaprovechando sale gratis salvo cuando entra
   --      un mes nuevo (o una fuente nueva), que cuesta el tramo que falte.
+  --      OJO con los CEROS: un previo a 0 (fuente cuyo histórico aún no estaba cargado) NO se
+  --      reaprovecha. Si se reaprovechara, ese 0 bloquearía su propio recálculo y esa fuente
+  --      se quedaría sin % hasta que el mes se cayera de la ventana (6 meses). Recalcular un
+  --      mes a 0 es barato y así se auto-cura en cuanto llega el histórico.
   create temporary table _cob_prev on commit drop as
     select c.clave as fuente, (m->>'mes') as mes, ((m->>'previo')::bigint) as n
       from public.menores_cobertura c, jsonb_array_elements(c.meses) m
-     where c.ambito = 'fuente' and (m ? 'previo');
+     where c.ambito = 'fuente' and (m ? 'previo') and (m->>'previo')::bigint > 0;
 
   select min(g.m), max(g.m) into v_falta_d, v_falta_h
     from (select distinct fuente from pg_temp._cob_n) f

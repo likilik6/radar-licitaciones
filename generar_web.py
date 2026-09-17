@@ -210,6 +210,9 @@ CSS = """
   .mn-cobertura { font-size:.82rem; color:var(--suave); margin:-4px 0 12px; line-height:1.55; }
   .mn-cobertura[hidden] { display:none; }
   .mn-cobertura span { display:block; }
+  /* El display de AUTOR gana al [hidden] de la hoja del navegador: sin esta regla, ocultar
+     un span con .hidden = true no haría nada. */
+  .mn-cobertura span[hidden] { display:none; }
   .mn-cob-organo { font-weight:600; color:var(--texto); }
   .mn-aviso-orden { font-size:.88rem; background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; border-radius:10px; padding:8px 12px; margin:0 0 12px; }
   .mn-aviso-orden[hidden] { display:none; }
@@ -4331,7 +4334,7 @@ JS_MENORES_UI = r"""
   // «más de 10.000 menores, no se pueden ordenar por importe» sale al instante en vez de
   // tardar 3 s en ir a por la fila nº 10.001.
   const MN_MESES_CORTOS = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-  let mnCoberturaPedida = false, mnCoberturaTexto = '', mnCoberturaOrgano = '';
+  let mnCoberturaPedida = false, mnCoberturaTexto = '', mnCoberturaOrgano = '', mnCoberturaMeses = [];
 
   function mnFechaCorta(iso){
     const t = String(iso || '').slice(0,10).split('-');
@@ -4348,24 +4351,28 @@ JS_MENORES_UI = r"""
     const t = String(mes || '').split('-');
     return (MN_MESES_CORTOS[Number(t[1]) - 1] || t[1] || '?') + '-' + String(t[0] || '').slice(2);
   }
+  // Una línea por cosa, en este orden: el órgano filtrado (lo más útil), hasta dónde llega
+  // cada fuente, y el desglose por meses (una línea por fuente).
   function mnPintaCobertura(){
     if(!mnCobertura) return;
-    if(!mnCobertura.firstChild){                     // dos líneas: órgano arriba, fuentes abajo
-      const a = document.createElement('span'); a.className = 'mn-cob-organo';
-      mnCobertura.appendChild(a); mnCobertura.appendChild(document.createElement('span'));
-    }
-    const linea1 = mnCobertura.firstChild, linea2 = mnCobertura.lastChild;
-    linea1.textContent = mnCoberturaOrgano || '';
-    linea1.hidden = !mnCoberturaOrgano;
-    linea2.textContent = mnCoberturaTexto || '';
-    linea2.hidden = !mnCoberturaTexto;
-    mnCobertura.hidden = !(mnCoberturaOrgano || mnCoberturaTexto);
+    const lineas = [mnCoberturaOrgano, mnCoberturaTexto].concat(mnCoberturaMeses).filter(Boolean);
+    while(mnCobertura.firstChild) mnCobertura.removeChild(mnCobertura.firstChild);
+    lineas.forEach(function(t, i){
+      const sp = document.createElement('span');
+      if(i === 0 && mnCoberturaOrgano) sp.className = 'mn-cob-organo';
+      sp.textContent = t;                            // textContent: nada de HTML
+      mnCobertura.appendChild(sp);
+    });
+    mnCobertura.hidden = !lineas.length;
   }
   const MN_COBERTURA_DIAS = 45;        // más vieja que esto, no se usa para decidir nada
   async function mnCargaCobertura(){
     if(mnCoberturaPedida) return;
     mnCoberturaPedida = true;
     let datos = null;
+    // Si la lectura falla (un timeout suelto, el token caducando), se vuelve a intentar en la
+    // siguiente búsqueda: si no, un fallo de un segundo dejaba la sesión entera sin línea y,
+    // peor, sin los tamaños por órgano que hacen instantáneo el aviso.
     try {
       // Las filas de fuente primero ('fuente' < 'organo') por si algún día hubiera más de
       // 1.000 órganos: PostgREST corta ahí y lo primero que se pierde no puede ser la fecha.
@@ -4373,7 +4380,7 @@ JS_MENORES_UI = r"""
         .order('ambito', { ascending: true }).order('filas', { ascending: false }).limit(1000);
       if(!r.error) datos = r.data || [];
     } catch(e){ datos = null; }
-    if(!datos || !datos.length) return;
+    if(!datos || !datos.length){ mnCoberturaPedida = false; return; }
     // La pista solo vale si la cobertura es RECIENTE: si el cargador lleva meses parado (o
     // hubo una purga), el tamaño guardado puede no tener nada que ver con lo que hay.
     const fresca = function(f){
@@ -4387,11 +4394,15 @@ JS_MENORES_UI = r"""
                          .sort(function(a,b){ return (Number(b.filas)||0) - (Number(a.filas)||0); });
     if(!fuentes.length) return;
     const hasta = fuentes.map(function(f){ return mnFuente(f.clave).etiqueta + ' ' + mnFechaCorta(f.ultima); }).join(' · ');
-    const enCurso = new Date().toISOString().slice(0, 7);
-    const porMes = fuentes.map(function(f){
+    const enCurso = String(fuentes[0].actualizado || '').slice(0, 7);   // el mes de la FOTO, no el del reloj
+    const hayPrevio = fuentes.some(function(f){
+      return (Array.isArray(f.meses) ? f.meses : []).some(function(m){ return Number(m && m.previo) > 0; });
+    });
+    // Una línea por fuente: en el móvil, las 12 cifras seguidas eran un muro.
+    mnCoberturaMeses = fuentes.map(function(f){
       const ms = Array.isArray(f.meses) ? f.meses : [];
       if(!ms.length) return '';
-      return mnFuente(f.clave).etiqueta + ' ' + ms.map(function(m){
+      return mnFuente(f.clave).etiqueta + ': ' + ms.map(function(m){
         const n = Number((m && m.n) || 0), previo = Number((m && m.previo) || 0);
         // El % es la única manera de ver que un mes NO está cerrado: «jun 35.460» parece
         // completo y va por el 77% de lo que fue junio del año pasado.
@@ -4399,10 +4410,14 @@ JS_MENORES_UI = r"""
           + (previo ? ' (' + Math.round(100 * n / previo) + '%)' : '')
           + (m && m.mes === enCurso ? ' [mes en curso]' : '');
       }).join(' · ');
-    }).filter(Boolean).join(' | ');
+    }).filter(Boolean);
+    if(mnCoberturaMeses.length){
+      mnCoberturaMeses.unshift(hayPrevio
+        ? 'Menores por mes (el % es sobre el mismo mes del año anterior):'
+        : 'Menores por mes:');
+    }
     mnCoberturaTexto = 'Datos hasta: ' + hasta + ' — foto del ' + mnFechaCorta(fuentes[0].actualizado)
-      + '. Lo más reciente está INCOMPLETO: los órganos tardan semanas en publicar'
-      + (porMes ? ' — menores por mes, con el % sobre el mismo mes del año anterior: ' + porMes : '') + '.';
+      + '. Lo más reciente está INCOMPLETO: los órganos tardan semanas en publicar.';
     mnPintaCobertura();
   }
   // Fecha del último menor del ÓRGANO filtrado. Se pregunta en vivo (49 ms por el índice
