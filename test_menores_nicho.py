@@ -106,5 +106,28 @@ comprueba("real: 'cardiorespiratoria' excluye la ventilación clínica",
           any("cardiorespiratoria" in x for e in real["excl"] if e["kw"] == "ventilacion" for x in e["excluye"]))
 comprueba("real: 'tubuladura' ya no está", not any("tubuladura" in x for e in real["excl"] for x in e["excluye"]))
 
+# === REGRESIÓN (17/09/2026) ==================================================
+# FALLO: un término de exclusión que empieza por «-» (o la palabra «or») entraba en
+# websearch_to_tsquery como OPERADOR. «-cpap» no excluía el CPAP: negaba dentro de la
+# exclusión, o sea que la exclusión dejaba pasar justo lo que tenía que quitar.
+# ARREGLO: cadena_websearch entrecomilla TODOS los términos. Estas pruebas vigilan que
+# ningún término pueda volver a colarse como operador en la cadena NI en el SQL.
+PELIGROSOS = ["-cpap", "or", "OR", "-ventilacion mecanica", "<->", "!cpap", "cpap:*"]
+cadena = mn.cadena_websearch(PELIGROSOS)
+comprueba("regresión: ningún término suelto fuera de comillas",
+          all(t.count('"') == 2 and t.startswith('"') and t.endswith('"') for t in cadena.split(" or ")), cadena)
+comprueba("regresión: el guion viaja DENTRO de las comillas", '"-cpap"' in cadena, cadena)
+
+import tempfile as _tmp, os as _os
+_fd, _ruta = _tmp.mkstemp(suffix=".json")
+with _os.fdopen(_fd, "w", encoding="utf-8") as _f:
+    json.dump({"grupos": [{"nombre": "peligroso", "activo": True, "aplica_a": ["ventilacion"],
+                           "terminos": ["-cpap", "or", "ventilación no invasiva"]}]}, _f, ensure_ascii=False)
+_n = mn.nicho({"criticas": {"palabras_clave": ["ventilación"]}}, ruta_exclusiones=_ruta)
+_cond, _params = mn.sql_condicion(_n)
+comprueba("regresión: en el SQL la exclusión niega la frase entera, no un operador",
+          _params[-1] == '"-cpap" or "or" or "ventilacion no invasiva"' and " and not tsv" in _cond, _params)
+_os.unlink(_ruta)
+
 print(f"\n{'TODO OK ✔' if not FALLOS else 'HAY FALLOS ✘'} ({OK} de {OK + len(FALLOS)})")
 sys.exit(1 if FALLOS else 0)

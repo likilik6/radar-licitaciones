@@ -173,7 +173,7 @@ const esSonda = (q) => q.rango && q.rango[0] === 10000;
   const t0 = Date.now();
   const rC = await crearMenores(sbC).buscar({ organo: 'SAS', ordenCampo: 'importe_sin_iva' });
   const ms = Date.now() - t0;
-  comprueba('sonda colgada: se corta por presupuesto (~3 s) y sale con aviso', !rC.error && rC.motivoOrden === 'costosa' && ms >= 2900 && ms < 4500, { ms, rC });
+  comprueba('sonda colgada: se corta por presupuesto (~4,5 s) y sale con aviso', !rC.error && rC.motivoOrden === 'costosa' && ms >= 4400 && ms < 6000, { ms, rC });
 }
 
 // 6) Orden por importe SIN filtros (o solo importe): en el servidor, sin sonda
@@ -261,6 +261,107 @@ const esSonda = (q) => q.rango && q.rango[0] === 10000;
   const r = await api.buscar({ organo: 'SAS' });
   const c = await api.contar({ organo: 'SAS' }, r.estimado);
   comprueba('contar(): una sola sonda en total y recuento correcto', sb.registro.filter(esSonda).length === 1 && c.total === 1, { sondas: sb.registro.filter(esSonda).length, c });
+}
+
+// === REGRESIÓN (17/09/2026) ==============================================================
+// 13) FALLO: la lista de claves se pedía ordenada SOLO por licitacion_id. Cuando el planner
+//     sobrestimaba el filtro («salud» desde abril: estimaba 26.737 y había 4.636), Postgres
+//     recorría la clave primaria entera y la consulta se iba a los 8 s del rol: peor que
+//     antes del cambio. ARREGLO: ordenar por (fuente, licitacion_id) —ningún índice empieza
+//     por fuente, así que entra por el índice del filtro— y paginar por clave, sin offset.
+{
+  const muchas = [];
+  for (let i = 1; i <= 1500; i++) muchas.push(fila(i, i, '2026-01-01', i % 2 ? 'andalucia' : 'estatal'));
+  const sb = clienteFalso(muchas);
+  const r = await crearMenores(sb).buscar({ organo: 'SAS', ordenCampo: 'importe_sin_iva', ordenAsc: true });
+  const listas = sb.registro.filter(esLista);
+  comprueba('regresión: ninguna tanda de la lista ordena solo por clave',
+    listas.length >= 2 && listas.every((q) => q.orden.length === 2 && q.orden[0][0] === 'fuente' && q.orden[1][0] === 'licitacion_id'),
+    listas.map((q) => q.orden));
+  comprueba('regresión: ninguna tanda de la lista usa offset', listas.every((q) => q.rango === null), listas.map((q) => q.rango));
+  comprueba('regresión: la lista completa se ordena aquí', !r.error && r.total === 1500 && r.filas[0].importe_sin_iva === 1, r.total);
+}
+
+// 14) FALLO: si la sonda de la fila 10.001 se eternizaba, se llevaba por delante la búsqueda
+//     entera (error en pantalla). ARREGLO: presupuesto de tiempo y plan B por fecha con
+//     aviso; la decisión se guarda para no repetir la consulta cara en cada página.
+{
+  const filas = [fila(1, 5, '2026-01-01'), fila(2, 6, '2026-01-02')];
+  const sb = clienteFalso(filas, { cuelga: esSonda });
+  const api = crearMenores(sb);
+  const r = await api.buscar({ organo: 'SAS', texto: 'salud', ordenCampo: 'importe_sin_iva' });
+  comprueba('regresión: sonda eterna -> resultado por fecha, con aviso y SIN error',
+    !r.error && r.filas.length === 2 && r.ordenImporteDesactivado && r.motivoOrden === 'costosa' && r.sinRecuento, r);
+  const sondas = sb.registro.filter(esSonda).length;
+  await api.buscar({ organo: 'SAS', texto: 'salud', ordenCampo: 'importe_sin_iva', pagina: 2 });
+  const c = await api.contar({ organo: 'SAS', texto: 'salud' });
+  comprueba('regresión: la sonda cara no se repite ni al pasar página ni al contar',
+    sb.registro.filter(esSonda).length === sondas && c.error, { sondas, c });
+}
+
+// 15) Tamaño del órgano ya sabido (public.menores_cobertura): el aviso sale SIN sonda.
+{
+  const filas = [fila(1, 5, '2026-01-01'), fila(2, 6, '2026-01-02')];
+  const sb = clienteFalso(filas);
+  const api = crearMenores(sb);
+  api.pistas({ SAS: 230610 });
+  const r = await api.buscar({ organo: 'SAS', ordenCampo: 'importe_sin_iva' });
+  comprueba('pista: órgano grande -> aviso al instante, sin sonda ni lista',
+    !r.error && r.ordenImporteDesactivado && r.motivoOrden === 'grande' && r.topado && r.total === 10000
+    && !sb.registro.some(esSonda) && !sb.registro.some(esLista), { registro: sb.registro.map((q) => q.select), r });
+  const c = await api.contar({ organo: 'SAS' });
+  comprueba('pista: contar() tampoco pregunta', c.topado && c.total === 10000 && !sb.registro.some(esSonda), c);
+}
+
+// 16) La pista NO se usa si hay cualquier otro filtro: el resultado ya no es el órgano entero.
+{
+  const filas = [fila(1, 5, '2026-01-01'), fila(2, 6, '2026-01-02')];
+  const sb = clienteFalso(filas);
+  const api = crearMenores(sb);
+  api.pistas({ SAS: 230610 });
+  const r = await api.buscar({ organo: 'SAS', texto: 'mascarilla', ordenCampo: 'importe_sin_iva' });
+  comprueba('pista: con otro filtro se sondea igual y sale el total exacto',
+    !r.error && !r.ordenImporteDesactivado && r.total === 2 && sb.registro.some(esSonda), r);
+  // Cualquier otro filtro recorta el resultado: la pista NO puede valer con ninguno.
+  const otros = [
+    ['fechas', { fechaDesde: '2026-01-02' }],
+    ['importe mínimo', { importeMin: 6 }],
+    ['importe máximo', { importeMax: 5 }],
+    ['CPV', { cpvPrefijo: ['33'] }],
+    ['nicho', { modo: 'nicho', nichoKw: 'x' }],
+    ['CIF', { modo: 'cifs', cifsSeguidos: ['B86833753'] }],
+  ];
+  for (const [nombre, extra] of otros) {
+    const sbX = clienteFalso(filas);
+    const apiX = crearMenores(sbX);
+    apiX.pistas({ SAS: 230610 });
+    const rX = await apiX.buscar(Object.assign({ organo: 'SAS', ordenCampo: 'importe_sin_iva' }, extra));
+    comprueba('pista: con ' + nombre + ' tampoco vale (se sondea)', sbX.registro.some(esSonda) && !rX.topado,
+      { nombre, selects: sbX.registro.map((q) => q.select), rX });
+  }
+}
+
+// 16b) Coherencia buscar/contar: lo MEDIDO manda sobre la pista.
+{
+  const filas = [fila(1, 5, '2026-01-01'), fila(2, 6, '2026-01-02')];
+  const sb = clienteFalso(filas);
+  const api = crearMenores(sb);
+  const r1 = await api.buscar({ organo: 'SAS', ordenCampo: 'importe_sin_iva' });   // mide: 2 filas
+  api.pistas({ SAS: 230610 });                                                     // pista vieja y grande
+  const c = await api.contar({ organo: 'SAS' });
+  comprueba('pista: contar() respeta la lista ya medida en vez de la pista',
+    r1.total === 2 && c.total === 2 && !c.topado, { r1: r1.total, c });
+}
+
+// 17) Por IMPORTE con resultado pequeño no se pide la página del servidor: esa consulta es
+//     la cara (ordena por fecha el filtro entero) y cortarla en el navegador no la para en
+//     el servidor, donde seguía viva hasta los 8 s del rol.
+{
+  const filas = [fila(1, 5, '2026-01-01'), fila(2, 6, '2026-01-02')];
+  const sb = clienteFalso(filas);
+  const r = await crearMenores(sb).buscar({ organo: 'SAS', ordenCampo: 'importe_sin_iva', ordenAsc: true });
+  comprueba('por importe pequeño: cero páginas del servidor',
+    !r.error && r.total === 2 && !sb.registro.some(esPaginaServidor), sb.registro.map((q) => q.select));
 }
 
 console.log(`\n${fallos.length ? 'HAY FALLOS ✘' : 'TODO OK ✔'} (${ok} de ${ok + fallos.length})`);

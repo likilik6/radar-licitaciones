@@ -59,7 +59,11 @@ const M_TANDA = 1000;                  // tope de filas por petición de PostgRE
 // ≥ 10.000 €) lee decenas de miles de páginas y pasa de 8 s, y la lista de un filtro que el
 // planner sobrestima también puede. Si una petición agota su presupuesto, NO se devuelve un
 // error: la página sale por fecha (medido: 54-177 ms en esos casos) con el aviso.
-const M_PRESUPUESTO_SONDA_MS = 3000;   // sondas medidas en frío: 60 ms-2,3 s
+const M_PRESUPUESTO_SONDA_MS = 4500;   // sondas medidas: 60 ms-3,7 s (en frío, 17/09/2026)
+// OJO con bajarlo: con 3.000 ms, «Servicio Andaluz de Salud» por importe salía unas veces
+// con «más de 10.000» (sonda 2,1 s) y otras con «No se pudo contar» (sonda 3,0 s), según
+// la caché del servidor. Contar exacto no sirve de atajo general: mide 894 ms con el SAS
+// pero 14,9 s con el texto «salud», donde la sonda tarda 195 ms.
 const M_PRESUPUESTO_TANDA_MS = 7000;   // por petición de la lista (bajo los 8 s del rol)
 const M_PRESUPUESTO_LISTA_MS = 15000;  // la lista entera (hasta 11 tandas)
 const M_PRESUPUESTO_CONTEO_MS = 7000;
@@ -69,6 +73,13 @@ const M_PRESUPUESTO_PAGINA_MS = 7000;  // la página del servidor (bajo los 8 s 
 // así no se lanza una consulta que no hace falta.
 const M_RETRASO_SONDA_MS = 400;
 const M_CADUCIDAD_ORDEN_MS = 5 * 60 * 1000;   // la lista ordenada se reutiliza 5 min como mucho
+// TAMAÑOS YA SABIDOS (tabla public.menores_cobertura, ver menores_cobertura.sql): cuántos
+// menores tiene cada órgano grande. Con eso, «Servicio Andaluz de Salud» ordenado por
+// importe enseña el aviso al instante, en vez de tardar 3 s en ir a por la fila nº 10.001.
+// Solo sirve para decir «pasa del tope», NUNCA «cabe»: la tabla se refresca al cargar (no
+// al minuto) y dar por buena una lista completa con un dato viejo la dejaría coja. El
+// margen evita que un órgano justo en el filo baile entre aviso y no aviso.
+const M_PISTA_MARGEN = 1.1;
 const M_ORDEN_PERMITIDO = new Set(['fecha_adjudicacion', 'importe_sin_iva']);
 const M_MODOS = new Set(['todo', 'nicho', 'cifs']);
 
@@ -274,6 +285,35 @@ export function crearMenores(supabase) {
 
   // ¿Hay MÁS de M_UMBRAL filas con estos filtros? Se pide la fila nº M_UMBRAL + 1 SIN
   // ORDER BY, para que Postgres use el plan más barato. -> { supera } o { error, agotado }.
+  // Tamaños por órgano que la UI trae de menores_cobertura al abrir la vista.
+  let mTamanosOrgano = null;
+  function pistas(tamanosPorOrgano) {
+    mTamanosOrgano = (tamanosPorOrgano && typeof tamanosPorOrgano === 'object' && !Array.isArray(tamanosPorOrgano))
+      ? tamanosPorOrgano : null;
+    return !!mTamanosOrgano;
+  }
+
+  // ¿Se SABE, sin preguntar a la base, que esto da más de M_UMBRAL menores? Solo cuando el
+  // ÚNICO filtro es el órgano: cualquier otro (texto, nicho, CPV, fechas, importe) recorta el
+  // resultado y el tamaño del órgano dejaría de valer. En vez de enumerar los filtros a mano
+  // —que se quedaría viejo en cuanto se añada uno nuevo— se comprueba que TODO lo demás está
+  // vacío: un filtro nuevo apaga la pista solo, que es el lado seguro.
+  const M_NO_FILTRAN = new Set(['porPagina', 'pagina', 'ordenCampo', 'ordenAsc', 'organo', 'modo']);
+  function soloFiltraOrgano(n) {
+    if (n.modo !== 'todo' || !n.organo) return false;
+    return Object.keys(n).every((k) => {
+      if (M_NO_FILTRAN.has(k)) return true;
+      const v = n[k];
+      return Array.isArray(v) ? v.length === 0 : (v === null || v === undefined || v === '');
+    });
+  }
+  function pistaGrande(n) {
+    if (!mTamanosOrgano || !soloFiltraOrgano(n)) return false;
+    if (!Object.prototype.hasOwnProperty.call(mTamanosOrgano, n.organo)) return false;
+    const filas = mTamanosOrgano[n.organo];
+    return typeof filas === 'number' && filas > M_UMBRAL * M_PISTA_MARGEN;
+  }
+
   async function superaUmbral(n) {
     const r = await mConPresupuesto(
       aplicar(supabase.from('menores').select('licitacion_id'), n).range(M_UMBRAL, M_UMBRAL),
@@ -299,9 +339,12 @@ export function crearMenores(supabase) {
         q = q.or('fuente.gt.' + mValorOr(ultimo.fuente) + ',and(fuente.eq.' + mValorOr(ultimo.fuente)
           + ',licitacion_id.gt.' + mValorOr(ultimo.licitacion_id) + ')');
       }
+      // Cada tanda se acota a lo que QUEDA de la lista entera: si no, una tanda que arranca
+      // en el segundo 14,9 corre sus 7 s por encima y la espera real se va a 22 s.
+      const queda = M_PRESUPUESTO_LISTA_MS - (Date.now() - inicio);
       const r = await mConPresupuesto(
         q.order('fuente', { ascending: true }).order('licitacion_id', { ascending: true }).limit(M_TANDA),
-        M_PRESUPUESTO_TANDA_MS);
+        Math.min(M_PRESUPUESTO_TANDA_MS, queda));
       if (r.error) return { error: r.error, agotado: r.agotado };
       const tanda = r.data || [];
       lista.push(...tanda);
@@ -320,7 +363,12 @@ export function crearMenores(supabase) {
     const n = normaliza(params);
     const d = mDecision.clave === claveFiltros(n) ? mDecision : null;
     if (d && d.sonda && d.supera === null && !d.costosa) await d.sonda;
+    // Lo MEDIDO manda sobre la pista, igual que en buscar(): si ya hay lista o sonda de estos
+    // filtros, ese número es de ahora; la pista viene de la última carga.
     if (d && d.lista) return { total: d.lista.length, topado: false, error: null };
+    if (!d || (d.supera === null && !d.costosa)) {
+      if (pistaGrande(n)) return { total: M_UMBRAL, topado: true, error: null };
+    }
     if (d && d.costosa) return { total: null, topado: false, error: new Error('recuento demasiado costoso') };
     if (d && d.supera === true) return { total: M_UMBRAL, topado: true, error: null };
     const pequeno = (d && d.supera === false) || (estimado !== null && estimado < M_UMBRAL);
@@ -356,13 +404,17 @@ export function crearMenores(supabase) {
   //   clave             identifica los filtros (sin página ni orden): la UI guarda con ella
   //                     el recuento para no repetirlo al cambiar de página.
   //
-  // CON FILTROS, la página del servidor y la sonda salen A LA VEZ:
+  // COSTE de una búsqueda con filtros: hasta 13 peticiones y ~1 MB por el cable en el peor
+  // caso (página + sonda + 10 tandas de 1.000 claves + hidratación de 25 filas). Cambiar de
+  // página con la lista ya en memoria son 1-2 peticiones.
+  //
+  // CON FILTROS:
   //   · por FECHA la sonda solo sale si la página del servidor tarda más de 400 ms. Si la
   //     sonda dice «10.000 o menos», se trae la lista y se ordena aquí: el servidor podía
   //     tardar mucho («SAS + nicho» por fecha: 12 s en frío recorriendo las 230.608 filas del
   //     SAS por el índice órgano+fecha para encontrar 3).
-  //   · por IMPORTE manda la sonda: 10.000 o menos -> lista ordenada aquí; si no, la página
-  //     por fecha (que ya estaba en marcha) con el aviso.
+  //   · por IMPORTE manda la sonda: 10.000 o menos -> lista ordenada aquí; si no, se pide
+  //     entonces la página por fecha y sale el aviso.
   async function buscar(params = {}) {
     const n = normaliza(params);
     const { pagina, porPagina } = n;
@@ -388,6 +440,8 @@ export function crearMenores(supabase) {
 
     // ---- CON FILTROS ---------------------------------------------------------
     const d = decisionDe(clave);
+    // Tamaño ya sabido del órgano: aviso al instante, sin sonda (ver pistaGrande).
+    if (d.supera === null && !d.costosa && pistaGrande(n)) d.supera = true;
     const porImporte = n.ordenCampo === 'importe_sin_iva';
     const nServidor = porImporte ? Object.assign({}, n, { ordenCampo: 'fecha_adjudicacion', ordenAsc: false }) : n;
 
@@ -422,12 +476,15 @@ export function crearMenores(supabase) {
       return deServidor(await pideServidor());
     }
 
-    // 2) Primera vez.
-    const pPagina = pideServidor().then((p) => ({ tipo: 'pagina', p }));
+    // 2) Primera vez. La página del servidor se pide UNA vez y solo cuando hace falta:
+    // cortarla en el navegador no la para en el servidor (seguía viva hasta los 8 s del rol),
+    // y ordenando por importe casi siempre se acaba usando la lista.
+    let pPaginaUna = null;
+    const pPaginaFn = () => (pPaginaUna || (pPaginaUna = pideServidor().then((p) => ({ tipo: 'pagina', p }))));
     if (!porImporte) {
       // Por fecha, primero se le deja un momento a la página del servidor: si contesta, ya
       // está (y no se lanza la sonda). El recuento lo pedirá luego la UI con contar().
-      const primero = await Promise.race([pPagina, new Promise((res) => setTimeout(res, M_RETRASO_SONDA_MS, { tipo: 'espera' }))]);
+      const primero = await Promise.race([pPaginaFn(), new Promise((res) => setTimeout(res, M_RETRASO_SONDA_MS, { tipo: 'espera' }))]);
       if (primero.tipo === 'pagina') {
         if (!primero.p.error) { d.servidor = true; return deServidor(primero.p); }
       }
@@ -440,15 +497,10 @@ export function crearMenores(supabase) {
     }
     const pSonda = d.sonda.then((s) => ({ tipo: 'sonda', s }));
 
-    if (!porImporte) {
-      const { s } = await pSonda;
-      if (!s.error && !s.supera && await trataLista()) return paginaAqui();
-      return deServidor((await pPagina).p);
-    }
     const { s } = await pSonda;
     if (!s.error && !s.supera && await trataLista()) return paginaAqui();
-    return deServidor((await pPagina).p);
+    return deServidor((await pPaginaFn()).p);
   }
 
-  return { buscar, contar };
+  return { buscar, contar, pistas };
 }
