@@ -1,7 +1,7 @@
 {
   "_nota": "Exclusiones del modo «Solo mi nicho» de la vista Menores. NO va en intereses.yaml (filtrar.py trata cada clave de primer nivel como categoría del Radar). Semántica ACOTADA: un grupo solo quita filas que entran al nicho por alguno de sus términos 'aplica_a' (palabras de intereses.yaml, sin tildes). Lo que entra por CPV o por otra palabra del nicho no se toca. 'terminos': sin tildes y en minúsculas. Con espacio son FRASE (van entre comillas en el websearch: 'equipo de anestesia' = equip <2> anestesi). Sin espacio son lexema (se stemiza con el diccionario spanish: comprobar con to_tsvector antes de añadir). Un grupo cuyo 'aplica_a' no esté en el nicho se ignora.",
   "version": 1,
-  "medido_sobre": "public.menores el 17/09/2026. Nicho actual: 2.947 filas (2.396 estatales + 551 andaluzas). Con los grupos activos: 2.364 (2.253 + 111), sin perder ninguna de las 29 reales, las 7 adyacentes ni la indeterminada.",
+  "medido_sobre": "public.menores el 17/09/2026. Nicho sin exclusiones: 2.947 filas (2.396 estatales + 551 andaluzas). Con los grupos activos (tras la revisión): 2.361 (2.250 + 111), sin perder ninguna de las 29 reales, las 7 adyacentes ni la indeterminada.",
   "grupos": [
     {
       "nombre": "ventilacion_clinica",
@@ -103,7 +103,7 @@
       "medido_2026_09_17": {
         "andalucia_quita_filas": 8,
         "andalucia_quita_eur": 66027.0,
-        "estatal_quita_filas": 16,
+        "estatal_quita_filas": 17,
         "estatal_quita_eur": 131757.42,
         "reales_o_adyacentes_perdidos": 0,
         "estatales_dudosas_perdidas": 0
@@ -165,7 +165,7 @@
       "medido_2026_09_17": {
         "andalucia_quita_filas": 0,
         "andalucia_quita_eur": 0,
-        "estatal_quita_filas": 44,
+        "estatal_quita_filas": 46,
         "estatal_quita_eur": 195406.4,
         "reales_o_adyacentes_perdidos": 0,
         "estatales_dudosas_perdidas": 0

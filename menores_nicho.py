@@ -13,7 +13,7 @@ andaluces que entraban en «Solo mi nicho», 514 eran falsos positivos. 389 eran
 de ventilación CLÍNICA del Servicio Andaluz de Salud, que entraba por la palabra suelta
 «ventilación»; los demás, formol de laboratorio, cámaras de ionización, purificadores de
 agua o material de infusión. Con los grupos activos quedan 111, sin perder ninguno de los
-29 menores reales del nicho, y en la parte estatal se quitan 143, todos falsos positivos
+29 menores reales del nicho, y en la parte estatal se quitan 146, todos falsos positivos
 revisados a mano. No se sustituye «ventilación» por frases: se perderían contratos como
 «limpieza de conductos de ventilación».
 
@@ -54,23 +54,44 @@ def nicho_de_criterios(criterios: dict | None) -> tuple[list[str], list[str]]:
     return cpv, palabras
 
 
-def lee_grupos_activos(ruta: Path = EXCLUSIONES_JSON) -> list[dict]:
-    """Grupos con activo = true. Si el fichero falta o está mal, lista vacía: la web se
-    queda con el nicho sin exclusiones (el de antes), no se cae la publicación."""
+def lee_grupos_activos(ruta: Path = EXCLUSIONES_JSON) -> tuple[list[dict], list[str]]:
+    """(grupos con activo = true y bien formados, avisos).
+
+    Lanza OSError / ValueError si el fichero falta, no es JSON o no tiene la forma
+    {"grupos": [...]}: nicho() lo convierte en aviso y deja el nicho sin exclusiones, sin
+    tumbar la publicación. Un grupo mal escrito (aplica_a o terminos que no son listas de
+    texto, activo que no es true/false) se DESCARTA con aviso: recorrer una cadena letra a
+    letra excluiría «c or p or a or p» en silencio (visto en la revisión)."""
     datos = json.loads(Path(ruta).read_text(encoding="utf-8-sig"))
-    return [g for g in (datos.get("grupos") or []) if isinstance(g, dict) and g.get("activo") is True]
+    if not isinstance(datos, dict):
+        raise ValueError("la raíz no es un objeto")
+    grupos = datos.get("grupos") or []
+    if not isinstance(grupos, list):
+        raise ValueError("'grupos' no es una lista")
+    buenos, avisos = [], []
+    es_lista_texto = lambda v: isinstance(v, list) and all(isinstance(x, str) for x in v)
+    for i, g in enumerate(grupos):
+        nombre = g.get("nombre", f"#{i}") if isinstance(g, dict) else f"#{i}"
+        if not isinstance(g, dict) or not isinstance(g.get("activo"), bool) \
+                or not es_lista_texto(g.get("aplica_a")) or not es_lista_texto(g.get("terminos")):
+            avisos.append(f"grupo {nombre} mal escrito (activo true/false; aplica_a y terminos, listas de texto): se ignora")
+            continue
+        if g["activo"]:
+            buenos.append(g)
+    return buenos, avisos
 
 
 def cadena_websearch(terminos) -> str:
-    """Términos -> consulta websearch_to_tsquery: los que llevan espacio van entre comillas
-    (FRASE); los demás, como lexema. Sin tildes, sin comillas sueltas."""
+    """Términos -> consulta websearch_to_tsquery. TODOS van entre comillas: con varias
+    palabras son una FRASE; con una sola, las comillas no cambian nada, pero impiden que
+    un término que empiece por «-» o que sea «or» funcione como operador (un «-cpap» sin
+    comillas invertía la exclusión). Sin tildes, sin comillas sueltas."""
     partes = []
     for t in terminos or []:
         s = sin_tildes(t).replace('"', " ").strip()
         s = " ".join(s.split())
-        if not s:
-            continue
-        partes.append(f'"{s}"' if " " in s else s)
+        if s:
+            partes.append(f'"{s}"')
     return " or ".join(partes)
 
 
@@ -99,13 +120,14 @@ def nicho(criterios: dict | None, ruta_exclusiones: Path = EXCLUSIONES_JSON) -> 
 
     "palabras" son las libres unidas con « or » (lo que antes era todo el nicho de texto)."""
     cpv, palabras = nicho_de_criterios(criterios)
-    aviso = None
+    avisos = []
     try:
-        grupos = lee_grupos_activos(ruta_exclusiones)
+        grupos, avisos = lee_grupos_activos(ruta_exclusiones)
     except (OSError, ValueError) as e:
-        grupos, aviso = [], f"no se pudo leer {Path(ruta_exclusiones).name} ({e}); nicho sin exclusiones"
+        grupos, avisos = [], [f"no se pudo leer {Path(ruta_exclusiones).name} ({e}); nicho sin exclusiones"]
     libres, excl = aplica_exclusiones(palabras, grupos)
-    return {"cpv": cpv, "palabras": " or ".join(libres), "excl": excl, "aviso": aviso}
+    return {"cpv": cpv, "palabras": " or ".join(libres), "excl": excl,
+            "aviso": "; ".join(avisos) if avisos else None}
 
 
 def sql_condicion(n: dict) -> tuple[str, list]:

@@ -11,9 +11,8 @@
 //   · modo 'todo'   -> lista paginada.
 //   · modo 'cifs'   -> cifs_adjudicatarios && [CIFS_SEGUIDOS]  (GIN; casa CUALQUIER ganador).
 //   · modo 'nicho'  -> (cpv_txt ILIKE algún prefijo del nicho) OR (tsv @@ palabras del nicho),
-//                      vía .or() con ilike + websearch-fts. El nicho (CPV + palabras) lo
-//                      define el CLIENTE (de intereses.yaml), no se guarda en la BD, así
-//                      ampliarlo es solo cambiar la config del front (sin re-backfill).
+//                      vía .or() con ilike + websearch-fts. El nicho (CPV + palabras +
+//                      exclusiones) lo construye menores_nicho.py y lo inyecta la web.
 //   · filtros CPV prefijo / importe / órgano / fecha -> PostgREST normal.
 //
 // TILDES: el tsv se guardó con unaccent. Las palabras del nicho y el texto libre se
@@ -43,19 +42,33 @@ const M_COLUMNAS = [
 
 const M_POR_PAGINA_DEF = 25;
 // UMBRAL de 10.000 filas. Decide DOS cosas (medido el 17/09/2026, tras cargar Andalucía):
-//  · EL RECUENTO. Si la estimación del planner queda por debajo, count exacto. Si queda
-//    por encima, la estimación NO se enseña, porque se equivoca mucho (el nicho estimaba
-//    10.074 y eran 2.947): se mira si existe la fila nº 10.001 y se da el número exacto
-//    o «más de 10.000».
-//  · EL ORDEN POR IMPORTE CON FILTROS. Con un filtro, Postgres recorre el índice de
-//    importe de TODA la tabla mirando fila a fila (SAS por importe: más de 30 s; nicho
-//    por importe ascendente: 20,6 s en frío). Si el resultado tiene 10.000 filas o menos,
-//    se traen solo clave + importe (en tandas de 1.000, paginando por clave: medido de 4 a
-//    340 ms por tanda) y se ordena aquí. Si tiene más, el orden por importe se desactiva y
-//    la UI avisa para acotar. Decide el tamaño del RESULTADO, no el del órgano: «SAS +
-//    nicho» (432) o «SAS en marzo» (7.407) sí se ordenan.
+//  · EL RECUENTO. Nunca se enseña la estimación del planner: se equivoca mucho (el nicho
+//    estimaba 10.074 y eran 2.947; «Consejo Superior de Investigaciones Científicas»
+//    estimaba 1 y eran 20.838). Se pide DESPUÉS de pintar la página (contar()): exacto, o
+//    «más de 10.000» mirando si existe la fila nº 10.001.
+//  · EL ORDEN POR IMPORTE CON FILTROS. Con un filtro, Postgres recorre el índice de importe
+//    de TODA la tabla mirando fila a fila (SAS por importe: más de 30 s; nicho por importe
+//    ascendente: 20,6 s en frío). Si el resultado tiene 10.000 filas o menos, se traen solo
+//    clave + importe y se ordena aquí; si tiene más, el orden por importe se desactiva y la
+//    UI avisa para acotar. Decide el tamaño del RESULTADO, no el del órgano: «SAS + nicho»
+//    (3) o «SAS en marzo» (7.407) sí se ordenan.
 const M_UMBRAL = 10000;
 const M_TANDA = 1000;                  // tope de filas por petición de PostgREST en Supabase
+// PRESUPUESTOS DE TIEMPO (la web corre con statement_timeout de 8 s). Medido en la revisión:
+// la sonda de la fila 10.001 con un texto común y un rango de importe («material» y
+// ≥ 10.000 €) lee decenas de miles de páginas y pasa de 8 s, y la lista de un filtro que el
+// planner sobrestima también puede. Si una petición agota su presupuesto, NO se devuelve un
+// error: la página sale por fecha (medido: 54-177 ms en esos casos) con el aviso.
+const M_PRESUPUESTO_SONDA_MS = 3000;   // sondas medidas en frío: 60 ms-2,3 s
+const M_PRESUPUESTO_TANDA_MS = 7000;   // por petición de la lista (bajo los 8 s del rol)
+const M_PRESUPUESTO_LISTA_MS = 15000;  // la lista entera (hasta 11 tandas)
+const M_PRESUPUESTO_CONTEO_MS = 7000;
+const M_PRESUPUESTO_PAGINA_MS = 7000;  // la página del servidor (bajo los 8 s del rol)
+// Ordenando por FECHA, la sonda solo sale si la página del servidor tarda más de esto: la
+// mayoría de las búsquedas las resuelve el índice del filtro en menos (un CIF, 276 ms), y
+// así no se lanza una consulta que no hace falta.
+const M_RETRASO_SONDA_MS = 400;
+const M_CADUCIDAD_ORDEN_MS = 5 * 60 * 1000;   // la lista ordenada se reutiliza 5 min como mucho
 const M_ORDEN_PERMITIDO = new Set(['fecha_adjudicacion', 'importe_sin_iva']);
 const M_MODOS = new Set(['todo', 'nicho', 'cifs']);
 
@@ -92,27 +105,46 @@ function mLimpiaOr(s) {
   return String(s == null ? '' : s).replace(/[(),]/g, ' ').trim();
 }
 
-// Valor de una EXCLUSIÓN del nicho dentro de or()/and(): entre comillas y con las
-// comillas y barras internas escapadas. Dentro de comillas las comas y los paréntesis ya
-// no rompen nada. Sin las comillas, PostgREST quita las de un valor que es SOLO una frase
-// y el websearch pierde la frase (medido: 429 filas en vez de 431).
+// Valor entre comillas para or()/and(), con comillas y barras internas escapadas. Dentro
+// de comillas las comas, los paréntesis, los puntos y los dos puntos ya no rompen nada.
+// Se usa para las EXCLUSIONES del nicho (sin comillas, PostgREST quita las de un valor
+// que es SOLO una frase y el websearch pierde la frase: medido 429 filas en vez de 431) y
+// para las claves de la paginación (llevan ':' y '/').
 function mValorOr(s) {
   return '"' + String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
 }
 
-// Orden por importe hecho en el navegador: sin importe al final (NULLS LAST en los dos
-// sentidos, como el servidor) y desempate por clave ascendente.
-function mComparaImporte(ascendente) {
+// Orden hecho en el navegador (resultados pequeños), igual que el del servidor: sin valor al
+// final en los dos sentidos (NULLS LAST) y desempate por clave ascendente.
+function mComparador(campo, ascendente) {
   const signo = ascendente ? 1 : -1;
+  const valor = campo === 'importe_sin_iva' ? (f) => mNumero(f.importe_sin_iva) : (f) => (f.fecha_adjudicacion || null);
   return (a, b) => {
-    const ia = mNumero(a.importe_sin_iva);
-    const ib = mNumero(b.importe_sin_iva);
-    if (ia === null && ib !== null) return 1;
-    if (ib === null && ia !== null) return -1;
-    if (ia !== null && ib !== null && ia !== ib) return signo * (ia - ib);
+    const va = valor(a);
+    const vb = valor(b);
+    if (va === null && vb !== null) return 1;
+    if (vb === null && va !== null) return -1;
+    if (va !== null && vb !== null && va !== vb) return signo * (va < vb ? -1 : 1);
     if (a.licitacion_id < b.licitacion_id) return -1;
     return a.licitacion_id > b.licitacion_id ? 1 : 0;
   };
+}
+
+// Ejecuta una consulta de PostgREST con un presupuesto de tiempo. Nunca lanza: devuelve
+// { data, count, error, agotado }.
+async function mConPresupuesto(consulta, ms) {
+  const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+  const q = ctl && typeof consulta.abortSignal === 'function' ? consulta.abortSignal(ctl.signal) : consulta;
+  let reloj = null;
+  const tope = new Promise((resolver) => {
+    reloj = setTimeout(() => { if (ctl) ctl.abort(); resolver({ data: null, count: null, error: new Error('tiempo agotado'), agotado: true }); }, ms);
+  });
+  try {
+    const r = await Promise.race([Promise.resolve(q).then((x) => x, (e) => ({ data: null, error: e })), tope]);
+    return { data: r.data ?? null, count: r.count ?? null, error: r.error || null, agotado: !!r.agotado };
+  } finally {
+    clearTimeout(reloj);
+  }
 }
 
 export function crearMenores(supabase) {
@@ -120,15 +152,32 @@ export function crearMenores(supabase) {
     throw new Error('crearMenores: hay que pasarle el cliente supabase ya inicializado.');
   }
 
-  // Lista (clave + importe) ya ordenada de la ÚLTIMA búsqueda pequeña por importe. Cambiar
-  // de página no vuelve a traerla: solo se piden las 25 filas de la página.
-  let mCacheOrden = { clave: null, lista: null };
+  // DECISIÓN de la ÚLTIMA búsqueda CON FILTROS (por clave de filtros; caduca a los 5 min,
+  // porque la ingesta diaria cambia datos). Cambiar de página u orden la reutiliza:
+  //   lista        [{licitacion_id, importe_sin_iva, fecha_adjudicacion, fuente}] de un
+  //                resultado de 10.000 filas o menos: sus páginas se ordenan aquí.
+  //   supera       true: más de M_UMBRAL; false: 10.000 o menos; null: aún no se sabe.
+  //   costosa      la sonda agotó su tiempo: no se vuelve a lanzar ni ella ni el recuento
+  //                (cortarla en el navegador no la para en el servidor; repetirla lo cargaría).
+  //   listaCostosa la lista agotó su tiempo: esas páginas salen del servidor.
+  //   servidor     la página del servidor contestó antes que la sonda: las siguientes también
+  //                salen de allí, para que el orden de los empates no cambie a mitad.
+  //   sonda        la promesa de la sonda (contar() la espera en vez de lanzar otra).
+  let mDecision = { clave: null, hora: 0 };
+  function decisionDe(clave) {
+    const vigente = mDecision.clave === clave && (Date.now() - mDecision.hora) < M_CADUCIDAD_ORDEN_MS;
+    if (!vigente) {
+      mDecision = { clave, hora: Date.now(), lista: null, supera: null, costosa: false, listaCostosa: false, servidor: false, sonda: null };
+    }
+    return mDecision;
+  }
 
   // params (todos opcionales):
   //   modo         'todo' | 'nicho' | 'cifs'         (def. 'todo')
   //   nichoCpv     string[]  prefijos CPV del nicho (para modo 'nicho')
   //   nichoKw      string    consulta websearch YA SIN TILDES de las palabras del
-  //                          nicho (p. ej. 'calidad del aire or purificador or ...')
+  //                          nicho SIN exclusión (p. ej. 'calidad del aire or purificador')
+  //   nichoExcl    [{kw, excluye: [websearch, ...]}]  palabras del nicho CON exclusión
   //   cifsSeguidos string[]  CIFs a cazar en modo 'cifs' (lista curada del front)
   //   cpvPrefijo   string[]  filtro por prefijo CPV (independiente del modo)
   //   texto        string    búsqueda libre en objeto+órgano (se normaliza sin tildes)
@@ -148,7 +197,6 @@ export function crearMenores(supabase) {
       modo: M_MODOS.has(params.modo) ? params.modo : 'todo',
       nichoCpv: Array.isArray(params.nichoCpv) ? params.nichoCpv.map(mTexto).filter(Boolean) : [],
       nichoKw: mTexto(params.nichoKw),
-      // [{kw, excluye: [websearch, ...]}]: palabras del nicho que llevan exclusión.
       nichoExcl: Array.isArray(params.nichoExcl)
         ? params.nichoExcl.filter((x) => x && mTexto(x.kw)).map((x) => ({
           kw: mTexto(x.kw),
@@ -166,6 +214,11 @@ export function crearMenores(supabase) {
       ordenCampo: M_ORDEN_PERMITIDO.has(params.ordenCampo) ? params.ordenCampo : 'fecha_adjudicacion',
       ordenAsc: params.ordenAsc !== undefined ? !!params.ordenAsc : false,
     };
+  }
+
+  // Clave de los FILTROS (sin página, tamaño ni orden): identifica un mismo resultado.
+  function claveFiltros(n) {
+    return JSON.stringify(Object.assign({}, n, { pagina: 0, porPagina: 0, ordenCampo: '', ordenAsc: false }));
   }
 
   // --- Aplica TODOS los filtros a una consulta (datos, sonda o conteo) -------
@@ -213,30 +266,74 @@ export function crearMenores(supabase) {
 
   // ¿Hay algún filtro que NO sea el propio importe? Sin ninguno (o solo con importe
   // mínimo y máximo), ordenar por importe es recorrer directamente el índice de importe
-  // (0,1 ms medido): se deja en el servidor, sin sonda ni tope.
+  // (medido: 50-850 ms incluso en la página 2.000): se deja en el servidor.
   function hayFiltros(n) {
     return n.modo === 'nicho' || (n.modo === 'cifs' && n.cifsSeguidos.length > 0)
       || n.cpvPrefijo.length > 0 || !!n.texto || !!n.organo || !!n.fechaDesde || !!n.fechaHasta;
   }
 
   // ¿Hay MÁS de M_UMBRAL filas con estos filtros? Se pide la fila nº M_UMBRAL + 1 SIN
-  // ORDER BY, para que Postgres use el plan más barato (medido: 60 ms-1,9 s en frío).
+  // ORDER BY, para que Postgres use el plan más barato. -> { supera } o { error, agotado }.
   async function superaUmbral(n) {
-    const r = await aplicar(supabase.from('menores').select('licitacion_id'), n).range(M_UMBRAL, M_UMBRAL);
-    if (r.error) return { error: r.error };
+    const r = await mConPresupuesto(
+      aplicar(supabase.from('menores').select('licitacion_id'), n).range(M_UMBRAL, M_UMBRAL),
+      M_PRESUPUESTO_SONDA_MS);
+    if (r.error) return { error: r.error, agotado: r.agotado };
     return { supera: Array.isArray(r.data) && r.data.length > 0 };
   }
 
-  // contar(params) -> { total, topado, error }
-  // Se pide DESPUÉS de pintar la página: la sonda puede tardar ~2 s en frío y no debe
-  // retrasar la lista.
-  async function contar(params = {}) {
+  // Clave + importe + fecha de TODAS las filas (≤ M_UMBRAL). Se ordena por (fuente, clave): ningún
+  // índice empieza por fuente, así que Postgres NO puede recorrer un índice de orden
+  // mirando fila a fila; entra por el índice del filtro y ordena en memoria. Ordenar solo
+  // por clave dejaba recorrer la clave primaria entera cuando el planner sobrestimaba
+  // («salud» desde abril: estimaba 26.737, había 4.636, y agotaba los 8 s). Se pagina por
+  // (fuente, clave), nunca por offset. -> { lista } o { error }.
+  async function listaClaves(n) {
+    const inicio = Date.now();
+    const lista = [];
+    let ultimo = null;
+    for (let vuelta = 0; vuelta <= Math.ceil(M_UMBRAL / M_TANDA); vuelta++) {
+      if (Date.now() - inicio > M_PRESUPUESTO_LISTA_MS) return { error: new Error('tiempo agotado'), agotado: true };
+      let q = aplicar(supabase.from('menores').select('licitacion_id,importe_sin_iva,fecha_adjudicacion,fuente'), n);
+      if (ultimo !== null) {
+        q = q.or('fuente.gt.' + mValorOr(ultimo.fuente) + ',and(fuente.eq.' + mValorOr(ultimo.fuente)
+          + ',licitacion_id.gt.' + mValorOr(ultimo.licitacion_id) + ')');
+      }
+      const r = await mConPresupuesto(
+        q.order('fuente', { ascending: true }).order('licitacion_id', { ascending: true }).limit(M_TANDA),
+        M_PRESUPUESTO_TANDA_MS);
+      if (r.error) return { error: r.error, agotado: r.agotado };
+      const tanda = r.data || [];
+      lista.push(...tanda);
+      if (tanda.length < M_TANDA) return { lista };
+      ultimo = tanda[tanda.length - 1];
+    }
+    return { lista };
+  }
+
+  // contar(params, estimado) -> { total, topado, error }
+  // Se pide DESPUÉS de pintar la página. Usa lo que ya sepa la decisión de esos filtros (la
+  // lista, la sonda o su coste; si la sonda está en curso, la espera). Si no sabe nada: con
+  // la estimación del planner por debajo del umbral, count exacto directo; si no, primero
+  // la fila nº 10.001.
+  async function contar(params = {}, estimado = null) {
     const n = normaliza(params);
-    const s = await superaUmbral(n);
-    if (s.error) return { total: null, topado: false, error: s.error };
-    if (s.supera) return { total: M_UMBRAL, topado: true, error: null };
-    const r = await aplicar(supabase.from('menores').select('licitacion_id', { count: 'exact', head: true }), n);
+    const d = mDecision.clave === claveFiltros(n) ? mDecision : null;
+    if (d && d.sonda && d.supera === null && !d.costosa) await d.sonda;
+    if (d && d.lista) return { total: d.lista.length, topado: false, error: null };
+    if (d && d.costosa) return { total: null, topado: false, error: new Error('recuento demasiado costoso') };
+    if (d && d.supera === true) return { total: M_UMBRAL, topado: true, error: null };
+    const pequeno = (d && d.supera === false) || (estimado !== null && estimado < M_UMBRAL);
+    if (!pequeno) {
+      const s = await superaUmbral(n);
+      if (s.error) return { total: null, topado: false, error: s.error };
+      if (s.supera) return { total: M_UMBRAL, topado: true, error: null };
+    }
+    const r = await mConPresupuesto(
+      aplicar(supabase.from('menores').select('licitacion_id', { count: 'exact', head: true }), n),
+      M_PRESUPUESTO_CONTEO_MS);
     if (r.error || r.count == null) return { total: null, topado: false, error: r.error || new Error('sin conteo') };
+    if (r.count > M_UMBRAL) return { total: M_UMBRAL, topado: true, error: null };
     return { total: r.count, topado: false, error: null };
   }
 
@@ -247,77 +344,110 @@ export function crearMenores(supabase) {
     return q.range(desde, hasta);
   }
 
-  // buscar(params) -> { filas, total, pagina, porPagina, topado, conteoPendiente,
-  //                     ordenImporteDesactivado, umbral, error }
-  //   total           número exacto, o M_UMBRAL con topado = true («más de 10.000»),
-  //                   o null con conteoPendiente = true (la UI llama a contar()).
-  //   ordenImporteDesactivado = true: se pidió orden por importe pero con estos filtros
-  //                   hay más de `umbral` menores; las filas llegan por fecha (más
-  //                   recientes primero) y la UI avisa para acotar.
+  // buscar(params) -> { filas, total, pagina, porPagina, topado, conteoPendiente, sinRecuento,
+  //                     estimado, ordenImporteDesactivado, motivoOrden, umbral, clave, error }
+  //   total             número exacto, o M_UMBRAL con topado = true («más de 10.000»), o
+  //                     null con conteoPendiente = true (la UI llama a contar(params, estimado)).
+  //   sinRecuento       true si la sonda agotó su tiempo: la UI dice «No se pudo contar» sin
+  //                     lanzar otra consulta pesada.
+  //   ordenImporteDesactivado = true: se pidió orden por importe y no se puede; las filas
+  //                     llegan por fecha (más recientes primero). motivoOrden: 'grande' (más
+  //                     de 10.000 menores) o 'costosa' (la sonda o la lista agotaron su tiempo).
+  //   clave             identifica los filtros (sin página ni orden): la UI guarda con ella
+  //                     el recuento para no repetirlo al cambiar de página.
+  //
+  // CON FILTROS, la página del servidor y la sonda salen A LA VEZ:
+  //   · por FECHA la sonda solo sale si la página del servidor tarda más de 400 ms. Si la
+  //     sonda dice «10.000 o menos», se trae la lista y se ordena aquí: el servidor podía
+  //     tardar mucho («SAS + nicho» por fecha: 12 s en frío recorriendo las 230.608 filas del
+  //     SAS por el índice órgano+fecha para encontrar 3).
+  //   · por IMPORTE manda la sonda: 10.000 o menos -> lista ordenada aquí; si no, la página
+  //     por fecha (que ya estaba en marcha) con el aviso.
   async function buscar(params = {}) {
     const n = normaliza(params);
     const { pagina, porPagina } = n;
     const desde = (pagina - 1) * porPagina;
     const hasta = desde + porPagina - 1;
+    const clave = claveFiltros(n);
     const resultado = (data, extra) => Object.assign({
-      filas: data ?? [], total: null, pagina, porPagina, topado: false,
-      conteoPendiente: false, ordenImporteDesactivado: false, umbral: M_UMBRAL, error: null,
+      filas: data ?? [], total: null, pagina, porPagina, topado: false, conteoPendiente: false,
+      sinRecuento: false, estimado: null, ordenImporteDesactivado: false, motivoOrden: null,
+      umbral: M_UMBRAL, clave, error: null,
     }, extra || {});
     const fallo = (error) => resultado([], { total: 0, error });
 
-    // ---- ORDEN POR IMPORTE CON FILTROS: lo decide el TAMAÑO del resultado ------
-    if (n.ordenCampo === 'importe_sin_iva' && hayFiltros(n)) {
-      const claveFiltros = JSON.stringify(Object.assign({}, n, { pagina: 0, porPagina: 0 }));
-      let lista = mCacheOrden.clave === claveFiltros ? mCacheOrden.lista : null;
-      if (!lista) {
-        const s = await superaUmbral(n);
-        if (s.error) return fallo(s.error);
-        if (s.supera) {
-          // GRANDE: ordenar por importe obligaría a recorrer la tabla. Página por fecha.
-          const nFecha = Object.assign({}, n, { ordenCampo: 'fecha_adjudicacion', ordenAsc: false });
-          const r = await paginaServidor(nFecha, desde, hasta);
-          if (r.error) return fallo(r.error);
-          return resultado(r.data, { total: M_UMBRAL, topado: true, ordenImporteDesactivado: true });
-        }
-        // PEQUEÑO: clave + importe de todas, paginando por CLAVE y no por offset. Medido:
-        // Postgres entra por el índice del filtro y ordena en memoria; nunca recorre la
-        // tabla entera (paginar por fecha con offset sí podría, en la última tanda).
-        lista = [];
-        let ultimo = null;
-        for (let vuelta = 0; vuelta <= Math.ceil(M_UMBRAL / M_TANDA); vuelta++) {
-          let q = aplicar(supabase.from('menores').select('licitacion_id,importe_sin_iva'), n);
-          if (ultimo !== null) q = q.gt('licitacion_id', ultimo);
-          const r = await q.order('licitacion_id', { ascending: true }).limit(M_TANDA);
-          if (r.error) return fallo(r.error);
-          const tanda = r.data || [];
-          lista.push(...tanda);
-          if (tanda.length < M_TANDA) break;
-          ultimo = tanda[tanda.length - 1].licitacion_id;
-        }
-        lista.sort(mComparaImporte(n.ordenAsc));
-        mCacheOrden = { clave: claveFiltros, lista };
-      }
-      const ids = lista.slice(desde, hasta + 1).map((x) => x.licitacion_id);
-      if (!ids.length) return resultado([], { total: lista.length });
+    // ---- SIN FILTROS (o solo importe): el servidor recorre directamente el índice del orden.
+    if (!hayFiltros(n)) {
+      const [rDatos, rEstim] = await Promise.all([
+        paginaServidor(n, desde, hasta),
+        aplicar(supabase.from('menores').select('licitacion_id', { count: 'planned', head: true }), n),
+      ]);
+      if (rDatos.error) return fallo(rDatos.error);
+      return resultado(rDatos.data, { conteoPendiente: true, estimado: rEstim.error ? null : (rEstim.count ?? null) });
+    }
+
+    // ---- CON FILTROS ---------------------------------------------------------
+    const d = decisionDe(clave);
+    const porImporte = n.ordenCampo === 'importe_sin_iva';
+    const nServidor = porImporte ? Object.assign({}, n, { ordenCampo: 'fecha_adjudicacion', ordenAsc: false }) : n;
+
+    const paginaAqui = async () => {
+      const ids = d.lista.slice().sort(mComparador(n.ordenCampo, n.ordenAsc)).slice(desde, hasta + 1).map((x) => x.licitacion_id);
+      if (!ids.length) return resultado([], { total: d.lista.length });
       const r = await supabase.from('menores').select(M_COLUMNAS).in('licitacion_id', ids);
       if (r.error) return fallo(r.error);
       const porId = new Map((r.data || []).map((f) => [f.licitacion_id, f]));
-      return resultado(ids.map((id) => porId.get(id)).filter(Boolean), { total: lista.length });
+      return resultado(ids.map((id) => porId.get(id)).filter(Boolean), { total: d.lista.length });
+    };
+    const deServidor = (r) => {
+      if (r.error) return fallo(r.error);
+      const extra = d.supera === true ? { total: M_UMBRAL, topado: true }
+        : d.costosa ? { sinRecuento: true } : { conteoPendiente: true };
+      if (porImporte) Object.assign(extra, { ordenImporteDesactivado: true, motivoOrden: d.supera === true ? 'grande' : 'costosa' });
+      return resultado(r.data, extra);
+    };
+    const pideServidor = () => mConPresupuesto(paginaServidor(nServidor, desde, hasta), M_PRESUPUESTO_PAGINA_MS);
+    const trataLista = async () => {
+      const l = await listaClaves(n);
+      if (l.error) { d.listaCostosa = true; return false; }
+      d.lista = l.lista;
+      return true;
+    };
+
+    // 1) Lo ya decidido para estos filtros.
+    if (d.lista) return paginaAqui();
+    if (d.supera === true || d.costosa || d.listaCostosa || (d.servidor && !porImporte)) return deServidor(await pideServidor());
+    if (d.supera === false && porImporte) {
+      if (await trataLista()) return paginaAqui();
+      return deServidor(await pideServidor());
     }
 
-    // ---- RESTO: orden en el servidor; recuento exacto o con tope --------------
-    const [rDatos, rEstim] = await Promise.all([
-      paginaServidor(n, desde, hasta),
-      aplicar(supabase.from('menores').select('licitacion_id', { count: 'planned', head: true }), n),
-    ]);
-    if (rDatos.error) return fallo(rDatos.error);
-    const estimado = rEstim.error ? null : (rEstim.count ?? 0);
-    if (estimado !== null && estimado < M_UMBRAL) {
-      const rExacto = await aplicar(supabase.from('menores').select('licitacion_id', { count: 'exact', head: true }), n);
-      if (!rExacto.error && rExacto.count != null) return resultado(rDatos.data, { total: rExacto.count });
+    // 2) Primera vez.
+    const pPagina = pideServidor().then((p) => ({ tipo: 'pagina', p }));
+    if (!porImporte) {
+      // Por fecha, primero se le deja un momento a la página del servidor: si contesta, ya
+      // está (y no se lanza la sonda). El recuento lo pedirá luego la UI con contar().
+      const primero = await Promise.race([pPagina, new Promise((res) => setTimeout(res, M_RETRASO_SONDA_MS, { tipo: 'espera' }))]);
+      if (primero.tipo === 'pagina') {
+        if (!primero.p.error) { d.servidor = true; return deServidor(primero.p); }
+      }
     }
-    // Estimación grande (o fallida): NO se enseña; la UI llama a contar() tras pintar.
-    return resultado(rDatos.data, { conteoPendiente: true });
+    if (!d.sonda) {
+      d.sonda = superaUmbral(n).then((s) => {
+        if (mDecision === d) { if (s.error) d.costosa = true; else d.supera = s.supera; }
+        return s;
+      });
+    }
+    const pSonda = d.sonda.then((s) => ({ tipo: 'sonda', s }));
+
+    if (!porImporte) {
+      const { s } = await pSonda;
+      if (!s.error && !s.supera && await trataLista()) return paginaAqui();
+      return deServidor((await pPagina).p);
+    }
+    const { s } = await pSonda;
+    if (!s.error && !s.supera && await trataLista()) return paginaAqui();
+    return deServidor((await pPagina).p);
   }
 
   return { buscar, contar };

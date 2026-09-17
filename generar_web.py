@@ -4217,6 +4217,8 @@ JS_MENORES_UI = r"""
   // Cada búsqueda lleva su número: un recuento que llega tarde de una búsqueda anterior
   // no pisa el contador de la vigente.
   let mnSecuencia = 0;
+  // Último recuento conocido y la clave de sus filtros (sin página ni orden).
+  let mnRecuento = { clave: null, total: null, topado: false };
 
   const MN_NICHO_CPV = Array.isArray(window.__MENORES_NICHO_CPV) ? window.__MENORES_NICHO_CPV : [];
   const MN_NICHO_KW  = typeof window.__MENORES_NICHO_KW === 'string' ? window.__MENORES_NICHO_KW : '';
@@ -4664,11 +4666,15 @@ JS_MENORES_UI = r"""
     if(mnCargando){ mnPendiente = true; return; }   // no se pierde: se relanza al terminar
     mnCargando = true; mnYaBuscado = true;
     const miSecuencia = ++mnSecuencia;
+    // Los parámetros se leen UNA vez, al lanzar: la página y su recuento tienen que ser de la
+    // MISMA búsqueda aunque el usuario teclee mientras viaja (el texto tiene debounce).
+    const params = mnParams();
+    const conCif = !!mnFiltros.cif;
     if(mnMsg){ mnMsg.hidden=false; mnMsg.textContent='Buscando…'; }
     if(mnPag){ mnPag.hidden=true; if(mnPagInfo) mnPagInfo.textContent=''; }
     if(mnAvisoOrden) mnAvisoOrden.hidden = true;
     let r;
-    try { r = await mnBuscarFn(mnParams()); }
+    try { r = await mnBuscarFn(params); }
     catch(e){ r = { error: e }; }
     mnCargando = false;
     // Si mientras viajaba esta consulta se pidió otra (típico: «Ver sus N menores» desde la
@@ -4694,37 +4700,50 @@ JS_MENORES_UI = r"""
     if(mnMsg) mnMsg.hidden = true;
     if(mnRes) mnRes.innerHTML = filas.map(mnTarjeta).join('');
     mnIntroCoherente(filas);
-    // ORDEN POR IMPORTE DESACTIVADO: con estos filtros hay más menores de los que se pueden
-    // ordenar por importe sin recorrer la tabla. Las filas llegan por fecha y se dice por qué.
+    // ORDEN POR IMPORTE DESACTIVADO: las filas llegan por fecha y se dice por qué. Con un
+    // adjudicatario filtrado no se sugiere «Solo mi nicho»: esa pastilla quita el filtro de
+    // la empresa y enseñaría otra cosa.
     if(mnAvisoOrden){
       mnAvisoOrden.hidden = !r.ordenImporteDesactivado;
       if(r.ordenImporteDesactivado){
-        mnAvisoOrden.textContent = 'Con estos filtros hay más de ' + Number(r.umbral || 10000).toLocaleString('es-ES')
-          + ' menores y no se pueden ordenar por importe: se muestran por fecha. Acota con «Solo mi nicho», '
-          + 'el texto, el CPV o las fechas para ordenarlos por importe.';
+        const acotar = conCif ? 'el texto, el CPV o las fechas' : '«Solo mi nicho», el texto, el CPV o las fechas';
+        mnAvisoOrden.textContent = (r.motivoOrden === 'grande'
+          ? 'Con estos filtros hay más de ' + Number(r.umbral || 10000).toLocaleString('es-ES') + ' menores y no se pueden ordenar por importe'
+          : 'Con estos filtros ordenar por importe tarda demasiado')
+          + ': se muestran por fecha. Acota con ' + acotar + ' para ordenarlos por importe.';
       }
     }
     // CONTADOR Y PAGINACIÓN. Nunca se enseña la estimación del planner (llegó a decir
-    // «≈ 10.074» con 2.947 de verdad): número exacto, «más de 10.000» o «Contando…».
-    mnPintaTotal(r.total, r.topado, r.conteoPendiente, filas.length);
-    if(r.conteoPendiente){
-      const params = mnParams();
-      mnContarFn(params).then(function(c){
+    // «≈ 10.074» con 2.947 de verdad): número exacto, «más de 10.000» o «Contando…». El
+    // recuento se guarda con la clave de los FILTROS: cambiar de página u orden no lo repite.
+    if(r.total != null){
+      mnRecuento = { clave: r.clave, total: r.total, topado: !!r.topado };
+      mnPintaTotal(r.total, r.topado, false, filas.length);
+    } else if(mnRecuento.clave === r.clave){
+      mnPintaTotal(mnRecuento.total, mnRecuento.topado, false, filas.length);
+    } else if(r.sinRecuento){
+      // Ni la sonda cupo en su tiempo: contar tampoco cabría. No se lanza otra consulta pesada.
+      mnPintaTotal(null, false, false, filas.length, true);
+    } else {
+      mnPintaTotal(null, false, true, filas.length);
+      mnContarFn(params, r.estimado).then(function(c){
         if(miSecuencia !== mnSecuencia) return;     // ya hay otra búsqueda: este recuento caducó
-        if(c.error || c.total == null){ if(mnCont) mnCont.textContent = ''; return; }
+        if(c.error || c.total == null){ mnPintaTotal(null, false, false, filas.length, true); return; }
+        mnRecuento = { clave: r.clave, total: c.total, topado: !!c.topado };
         mnPintaTotal(c.total, c.topado, false, filas.length);
       });
     }
   }
 
-  function mnPintaTotal(total, topado, pendiente, nFilasPagina){
+  function mnPintaTotal(total, topado, pendiente, nFilasPagina, sinRecuento){
     if(mnCont){
       if(pendiente) mnCont.textContent = 'Contando…';
+      else if(sinRecuento) mnCont.textContent = 'No se pudo contar';
       else if(topado) mnCont.textContent = 'más de ' + Number(total||0).toLocaleString('es-ES') + ' menores';
       else mnCont.textContent = Number(total||0).toLocaleString('es-ES') + ' menor' + (total === 1 ? '' : 'es');
     }
     if(mnPag){
-      const conocido = !pendiente && !topado && total != null;
+      const conocido = !pendiente && !sinRecuento && !topado && total != null;
       const totalPag = conocido ? Math.max(1, Math.ceil(total / MN_POR_PAGINA)) : null;
       mnPag.hidden = false;
       if(mnPagInfo) mnPagInfo.textContent = 'Página ' + mnPagina + (conocido ? ' de ' + totalPag : '');

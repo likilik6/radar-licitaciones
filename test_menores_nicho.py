@@ -34,9 +34,10 @@ comprueba("palabras sin tildes y sin repetir", palabras == ["ionizacion", "ioniz
 comprueba("criterios vacíos", mn.nicho_de_criterios(None) == ([], []))
 
 # --- cadena_websearch: frases entre comillas, lexemas sueltos, sin tildes ni comillas sueltas
-comprueba("frase y lexema", mn.cadena_websearch(["cámara de ionización", "dosimetría"]) == '"camara de ionizacion" or dosimetria')
+comprueba("todos entre comillas", mn.cadena_websearch(["cámara de ionización", "dosimetría"]) == '"camara de ionizacion" or "dosimetria"')
+comprueba("un '-' no funciona como negación", mn.cadena_websearch(["-cpap", "or"]) == '"-cpap" or "or"')
 comprueba("comillas internas fuera", mn.cadena_websearch(['equipo "de" anestesia']) == '"equipo de anestesia"')
-comprueba("vacíos fuera", mn.cadena_websearch(["", "  ", "cpap"]) == "cpap")
+comprueba("vacíos fuera", mn.cadena_websearch(["", "  ", "cpap"]) == '"cpap"')
 
 # --- aplica_exclusiones: ACOTADA por palabra; grupos ajenos al nicho se ignoran
 grupos = [
@@ -50,7 +51,7 @@ libres, excl = mn.aplica_exclusiones(palabras, grupos)
 comprueba("libres: las que no tienen grupo (ionizacion bipolar sigue libre)",
           libres == ["ionizacion bipolar", "formaldehido", "ventilacion"], libres)
 comprueba("excl en el orden del nicho", [e["kw"] for e in excl] == ["ionizacion", "purificador"], excl)
-comprueba("dos grupos sobre la misma palabra", excl[1]["excluye"] == ['"purificador de agua"', "adn"], excl[1])
+comprueba("dos grupos sobre la misma palabra", excl[1]["excluye"] == ['"purificador de agua"', '"adn"'], excl[1])
 comprueba("grupo sin términos no convierte la palabra", "ventilacion" in libres)
 
 # --- nicho(): lee el JSON (con BOM), ignora inactivos; si falla, avisa y sale sin exclusiones
@@ -61,7 +62,7 @@ with tempfile.TemporaryDirectory() as tmp:
         {"nombre": "b", "activo": False, "aplica_a": ["formaldehido"], "terminos": ["frascos"]},
     ]}, ensure_ascii=False), encoding="utf-8-sig")
     n = mn.nicho(CRITERIOS, ruta)
-    comprueba("nicho con JSON con BOM", n["aviso"] is None and n["excl"] == [{"kw": "ventilacion", "excluye": ['"ventilacion no invasiva" or cpap']}], n)
+    comprueba("nicho con JSON con BOM", n["aviso"] is None and n["excl"] == [{"kw": "ventilacion", "excluye": ['"ventilacion no invasiva" or "cpap"']}], n)
     comprueba("inactivo ignorado", "formaldehido" in n["palabras"], n["palabras"])
     roto = Path(tmp) / "roto.json"
     roto.write_text("{no es json", encoding="utf-8")
@@ -69,6 +70,24 @@ with tempfile.TemporaryDirectory() as tmp:
     comprueba("JSON roto: aviso y sin exclusiones", n2["aviso"] and n2["excl"] == [] and "ventilacion" in n2["palabras"], n2)
     n3 = mn.nicho(CRITERIOS, Path(tmp) / "no_existe.json")
     comprueba("JSON ausente: aviso y sin exclusiones", n3["aviso"] and n3["excl"] == [], n3)
+
+    # Formas equivocadas (revisión): nunca tumban la publicación ni cambian el nicho en silencio
+    for contenido, nombre in (("[]", "raíz lista"), ("null", "raíz null"), ('{"grupos": 5}', "grupos número")):
+        malo = Path(tmp) / "malo.json"
+        malo.write_text(contenido, encoding="utf-8")
+        nm = mn.nicho(CRITERIOS, malo)
+        comprueba(f"JSON {nombre}: aviso y sin exclusiones", nm["aviso"] and nm["excl"] == [], nm)
+    raro = Path(tmp) / "raro.json"
+    raro.write_text(json.dumps({"grupos": [
+        {"nombre": "cadena", "activo": True, "aplica_a": ["ventilacion"], "terminos": "respirador"},
+        {"nombre": "activo_texto", "activo": "true", "aplica_a": ["ventilacion"], "terminos": ["cpap"]},
+        {"nombre": "aplica_texto", "activo": True, "aplica_a": "ventilacion", "terminos": ["cpap"]},
+        {"nombre": "bueno", "activo": True, "aplica_a": ["formaldehido"], "terminos": ["frascos"]},
+    ]}), encoding="utf-8")
+    nr = mn.nicho(CRITERIOS, raro)
+    comprueba("grupos mal escritos: se ignoran con aviso (3)", nr["aviso"] and nr["aviso"].count("mal escrito") == 3, nr["aviso"])
+    comprueba("grupos mal escritos: el bueno sí se aplica y no hay letras sueltas",
+              nr["excl"] == [{"kw": "formaldehido", "excluye": ['"frascos"']}], nr["excl"])
 
 # --- sql_condicion: misma forma que el or() de menores_api.js
 n = {"cpv": ["9073"], "palabras": "calidad del aire", "excl": [{"kw": "ventilacion", "excluye": ["cpap", '"ventilacion no invasiva"']}]}

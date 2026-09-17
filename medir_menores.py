@@ -52,7 +52,7 @@ COLUMNAS_VISTA = ("licitacion_id,objeto,cpv,importe_sin_iva,organo_contratacion,
                   "cif_adjudicatario,cifs_adjudicatarios,fecha_adjudicacion,num_expediente,"
                   "enlace,n_adjudicatarios")
 POR_PAGINA = 25
-UMBRAL_COUNT_EXACTO = 10000          # menores_api.js: por debajo, el front pide count exacto
+UMBRAL_COUNT_EXACTO = 10000          # M_UMBRAL de menores_api.js (recuento y orden por importe)
 
 # Frases de exclusión con las que se revisó el nicho de LODEPA (16/09/2026).
 EXCLUYE_LODEPA = "cabina de bioseguridad,campana de flujo laminar,vitrina de gases"
@@ -219,14 +219,25 @@ def sql_vista(where: str) -> str:
 
 
 def vista(cur, sb, veces, nombre, where_sql, where_params, filtro_rest) -> dict:
-    """Primera página + el conteo que pide el front (planned; exacto si < 10.000)."""
+    """Primera página + el recuento, por el MISMO camino que menores_api.js: estimación del
+    planner; si es menor que el umbral, count exacto; si no, la sonda de la fila nº 10.001
+    (sin ORDER BY) y, si no existe, count exacto. Se guarda qué rama siguió."""
     orden = "order=fecha_adjudicacion.desc.nullslast,licitacion_id.asc"
     params_rest = f"select={COLUMNAS_VISTA}&{filtro_rest + '&' if filtro_rest else ''}{orden}&offset=0&limit={POR_PAGINA}"
     res = {"servidor_pagina": repite_explain(cur, sql_vista(where_sql), where_params, veces)}
     estimado = explica(cur, f"select 1 from public.menores {where_sql}", where_params,
                        analizar=False)["filas_estimadas"]
     res["conteo_estimado_planner"] = estimado
-    res["pide_count_exacto"] = estimado < UMBRAL_COUNT_EXACTO
+    hay_mas = None
+    if estimado >= UMBRAL_COUNT_EXACTO:
+        res["servidor_sonda"] = repite_explain(
+            cur, f"select licitacion_id from public.menores {where_sql} offset {UMBRAL_COUNT_EXACTO} limit 1",
+            where_params, veces)
+        cur.execute(f"select exists (select licitacion_id from public.menores {where_sql} offset {UMBRAL_COUNT_EXACTO} limit 1)",
+                    where_params)
+        hay_mas = cur.fetchone()[0]
+    res["rama_recuento"] = "exacto" if hay_mas is None else ("topado" if hay_mas else "sonda+exacto")
+    res["pide_count_exacto"] = res["rama_recuento"] != "topado"
     if res["pide_count_exacto"]:
         res["servidor_count_exacto"] = repite_explain(
             cur, f"select count(*) from public.menores {where_sql}", where_params, veces)
@@ -242,8 +253,15 @@ def vista(cur, sb, veces, nombre, where_sql, where_params, filtro_rest) -> dict:
         if r.status_code >= 400:
             sys.exit(f"ERROR {r.status_code} en el conteo {modo} de {nombre}")
         return r.headers.get("Content-Range")
+
+    def sonda():
+        r = sb._pide("menores", f"select=licitacion_id{'&' + filtro_rest if filtro_rest else ''}"
+                                f"&offset={UMBRAL_COUNT_EXACTO}&limit=1")
+        return len(r.json())
     res["rest_pagina"] = cronometra(pagina, veces)
     res["rest_count_planned"] = cronometra(lambda: conteo("planned"), veces)
+    if hay_mas is not None:
+        res["rest_sonda"] = cronometra(sonda, veces)
     if res["pide_count_exacto"]:
         res["rest_count_exact"] = cronometra(lambda: conteo("exact"), veces)
     return res
