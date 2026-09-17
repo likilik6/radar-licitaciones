@@ -226,6 +226,15 @@ CSS = """
   .mn-sug-item.mn-sug-cero:hover { background:var(--panel); }
   .mn-card .mn-tags { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:6px; }
   .mn-card .mn-multi { font-size:.72rem; color:var(--suave); }
+  /* Fuente de la fila (Estatal, Andalucía…): en TODAS las tarjetas, también las estatales,
+     para que al mezclarse fuentes no haya que adivinar de dónde sale cada menor. Va al final
+     de la línea importe · fecha y NO en .mn-tags: medido, el 99,6 % de las tarjetas reales no
+     lleva badge ni varios adjudicatarios, y en .mn-tags les abría una fila solo para la
+     etiqueta (204 -> 240 px). Aquí, medido en Chrome con este CSS, la altura no cambia a 300 px
+     de ancho o más (el .grid pide 330); solo si la línea no cabe baja la etiqueta (+20 px: a
+     288 px, móvil de 320, con «39.999,99 € · 31/12/2026 · Andalucía»). */
+  .mn-card .mn-fuente { margin-left:6px; font-size:.68rem; font-weight:600; color:var(--suave);
+    border:1px solid var(--borde); border-radius:999px; padding:1px 8px; white-space:nowrap; }
   .mn-org-fila { margin:4px 0 8px; }
   /* Órgano comprador DESTACADO y clicable (vertiente oportunidad). */
   .mn-organo { font:inherit; font-size:.86rem; font-weight:600; color:var(--acento-2);
@@ -811,13 +820,18 @@ CSS = """
   .comp-cruce-ganada .comp-cruce-et{ background:#dcfce7; color:#15803d; }
   .comp-cruce-presentada .comp-cruce-et{ background:#dbeafe; color:#1e40af; }
   /* Bloque «Contratos menores» de la ficha. Tinte AZUL FRÍO (los cruces son naranja) a
-     propósito: es OTRO UNIVERSO de datos (menores = sindicación 1143, solo Estado), no
-     una sección más de las adjudicaciones. El color es la primera pista de que esos
-     importes no se suman con los de arriba. */
+     propósito: es OTRO UNIVERSO de datos (public.menores: la sindicación 1143 del Estado
+     más las fuentes autonómicas cargadas, ver data/menores_fuentes.json), no una sección
+     más de las adjudicaciones. El color es la primera pista de que esos importes no se
+     suman con los de arriba. */
   .comp-menores-bloque{ background:#f1f5f9; border:1px solid #cbd5e1; border-radius:12px; padding:12px 14px; margin:14px 0; }
   .comp-menores-bloque .comp-sub-h{ margin-top:0; }
   .comp-menores-kpis{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:10px 0 8px; }
   .comp-menores-nota{ font-size:.78rem; color:var(--suave); margin:6px 2px 0; line-height:1.45; }
+  /* Desglose por fuente bajo los KPIs. Cada fuente en un bloque que no se parte, para que
+     «Andalucía 9 · 29.025,00 €» no quede con el número en una línea y el importe en otra. */
+  .comp-menores-porfuente{ font-size:.82rem; color:var(--texto); margin:0 2px 10px; line-height:1.6; }
+  .comp-menores-porfuente .comp-menores-pf{ white-space:nowrap; }
   .comp-menores-cargando{ padding:10px 2px; color:var(--suave); font-size:.9rem; }
   .comp-menores-error{ padding:10px 2px; color:#b91c1c; font-size:.9rem; }
   .comp-menores-vacio{ padding:6px 2px; color:var(--suave); font-size:.9rem; }
@@ -2712,10 +2726,11 @@ JS_SUPABASE = """
 
   // ===== BLOQUE «CONTRATOS MENORES» DE LA FICHA ==============================
   // POR QUÉ: esta ficha sale de public.adjudicaciones (sindicaciones 643 + 1044), que NO
-  // incluye los contratos menores. Los menores viven en public.menores (sindicación 1143,
-  // SOLO Estado). Sin este bloque, para ver a un rival entero había que mirar en dos
-  // sitios — y en algunos la parte de menores es la mitad del negocio (SGS: 374 menores y
-  // 1,7 M€ que aquí arriba no aparecen por ningún lado).
+  // incluye los contratos menores. Los menores viven en public.menores (sindicación 1143
+  // del Estado y, desde F1 de menores autonómicos, las fuentes que marca `cargada` en
+  // data/menores_fuentes.json). Sin este bloque, para ver a un rival entero había que
+  // mirar en dos sitios — y en algunos la parte de menores es la mitad del negocio (SGS:
+  // 374 menores y 1,7 M€ que aquí arriba no aparecen por ningún lado).
   //
   // UNIVERSOS DISTINTOS: los importes de menores NO se suman con los de las adjudicaciones.
   // El bloque lo dice por escrito, y el color (azul frío, frente al naranja de los cruces)
@@ -2759,17 +2774,74 @@ JS_SUPABASE = """
     return '<section id="comp-menores" class="comp-menores-bloque">' + compMenoresInterior(st) + '</section>';
   }
 
+  // FUENTES DE MENORES: data/menores_fuentes.json, inyectado por generar_web.py como
+  // window.__MENORES_FUENTES ({codigo: {etiqueta, nombre, cargada}}). Si el fichero faltaba
+  // o estaba mal llega {} y se enseña el código de la fuente tal cual: la ficha no se rompe.
+  // hasOwnProperty para que un código raro («constructor») no lea el prototipo.
+  function compFuentesMenores(){
+    const f = window.__MENORES_FUENTES;
+    return (f && typeof f === 'object' && !Array.isArray(f)) ? f : {};
+  }
+  function compFuenteMenor(cod){
+    const fs = compFuentesMenores();
+    return Object.prototype.hasOwnProperty.call(fs, cod) && fs[cod] ? fs[cod] : null;
+  }
+  function compEtiquetaFuente(cod){
+    const f = compFuenteMenor(cod);
+    return (f && f.etiqueta) || String(cod == null ? '—' : cod);
+  }
+
+  // d.por_fuente saneado ([] si la RPC es la antigua o no trae nada utilizable).
+  function compPorFuenteLista(d){
+    return Array.isArray(d && d.por_fuente)
+      ? d.por_fuente.filter(function(x){ return x && typeof x === 'object'; }) : [];
+  }
+
+  // La nota nombra las fuentes CARGADAS (no solo las que traiga este CIF): «Sin contratos
+  // menores a su nombre» solo significa algo si se dice DÓNDE se ha buscado. Hasta F1 era
+  // fija («contratos menores del Estado»), y dejaba de ser cierta en cuanto entrara Andalucía.
+  // DESFASE: `cargada` es la del JSON con el que se GENERÓ la web, y por_fuente sale de la
+  // base EN VIVO. Entre la carga de una fuente y el cambio de `cargada` + republicar (radar.yml
+  // no salta con un push: cron L-V o a mano) un CIF puede traer filas de una fuente que la
+  // nota no nombra, y «de la Plataforma… (sindicación 1143)» quedaba justo debajo de «Por
+  // fuente: … Andalucía 9». Entonces se calla la lista: ni se nombra una fuente sin `cargada`
+  // (contrato de menores_fuentes.json) ni se afirma una lista que la línea de encima desmiente.
+  function compNotaFuenteMenores(d){
+    const fs = compFuentesMenores();
+    const cargadas = Object.keys(fs).filter(function(k){ return fs[k] && fs[k].cargada === true; });
+    const desfase = compPorFuenteLista(d).some(function(x){ return cargadas.indexOf(String(x.fuente)) < 0; });
+    const nombres = desfase ? [] : cargadas.map(function(k){ return fs[k].nombre || fs[k].etiqueta || k; });
+    let de = 'contratos menores';
+    if(nombres.length === 1) de += ' de ' + nombres[0];
+    else if(nombres.length > 1) de += ' de ' + nombres.slice(0, -1).join(', de ') + ' y de ' + nombres[nombres.length - 1];
+    return '<p class="comp-menores-nota">Fuente distinta: <strong>' + catEsc(de) + '</strong>. '
+      + '<strong>No se suman</strong> con las adjudicaciones de arriba, que salen de las '
+      + 'sindicaciones 643 + 1044 (Estado + plataformas agregadas). Un menor va a dedo: no es un concurso perdido, '
+      + 'es una puerta que tocar.</p>';
+  }
+
+  // Desglose por fuente (d.por_fuente, de menores_f1.sql). Solo cuando dice algo que los
+  // KPIs no dicen ya: con todo estatal —hoy, cualquier CIF— repetiría la misma cifra. Si la
+  // RPC es la ANTIGUA y no trae por_fuente, no se pinta nada: el SQL y el front no se
+  // despliegan a la vez y ninguno de los dos puede depender de que el otro vaya delante.
+  function compMenoresPorFuente(d){
+    const pf = compPorFuenteLista(d);
+    if(!pf.length || (pf.length === 1 && pf[0].fuente === 'estatal')) return '';
+    return '<p class="comp-menores-porfuente">Por fuente: ' + pf.map(function(x){
+      const imp = x.importe_total == null ? NaN : Number(x.importe_total);
+      return '<span class="comp-menores-pf"><strong>' + catEsc(compEtiquetaFuente(x.fuente)) + '</strong> '
+        + (Number(x.n) || 0) + ' · ' + (isFinite(imp) ? compEur(imp) : 'sin importe') + '</span>';
+    }).join(' · ') + '</p>';
+  }
+
   function compMenoresInterior(st){
     const m = st && st.menores;
     const h = '<h3 class="comp-sub-h">🧾 Contratos menores</h3>';
-    const fuente = '<p class="comp-menores-nota">Fuente distinta: <strong>contratos menores del Estado</strong> '
-      + '(sindicación 1143). <strong>No se suman</strong> con las adjudicaciones de arriba, que salen de las '
-      + 'sindicaciones 643 + 1044 (Estado + plataformas agregadas). Un menor va a dedo: no es un concurso perdido, '
-      + 'es una puerta que tocar.</p>';
     if(!m || m.estado === 'cargando') return h + '<p class="comp-menores-cargando">Cargando contratos menores…</p>';
     if(m.estado === 'error') return h + '<p class="comp-menores-error">No se pudieron cargar los contratos menores.</p>';
 
     const d = m.datos || {};
+    const fuente = compNotaFuenteMenores(d);
     const n = Number(d.n) || 0;
     if(!n) return h + '<p class="comp-menores-vacio">Sin contratos menores a su nombre.</p>' + fuente;
 
@@ -2812,7 +2884,7 @@ JS_SUPABASE = """
     if(sinImporte) avisos.push(sinImporte + (sinImporte === 1 ? ' no publica importe' : ' no publican importe') + ', así que el total se queda corto.');
     const avisoHtml = avisos.length ? '<p class="comp-menores-nota">' + catEsc(avisos.join(' ')) + '</p>' : '';
 
-    return h + kpis + ver + avisoHtml + fuente;
+    return h + kpis + compMenoresPorFuente(d) + ver + avisoHtml + fuente;
   }
 
   // Debounce del input (300-400 ms) + delegación de clicks (resultado -> ficha; volver; más).
@@ -4140,6 +4212,9 @@ JS_MENORES_UI = r"""
   const MN_NICHO_CPV = Array.isArray(window.__MENORES_NICHO_CPV) ? window.__MENORES_NICHO_CPV : [];
   const MN_NICHO_KW  = typeof window.__MENORES_NICHO_KW === 'string' ? window.__MENORES_NICHO_KW : '';
   const MN_CIFS      = Array.isArray(window.__MENORES_CIFS) ? window.__MENORES_CIFS : [];
+  // {codigo: {etiqueta, nombre, cargada}} de data/menores_fuentes.json; {} si faltaba o estaba mal.
+  const MN_FUENTES   = (window.__MENORES_FUENTES && typeof window.__MENORES_FUENTES === 'object'
+                        && !Array.isArray(window.__MENORES_FUENTES)) ? window.__MENORES_FUENTES : {};
   const MN_LODEPA    = (typeof CIFS_LODEPA_FRONT !== 'undefined') ? CIFS_LODEPA_FRONT : ['B86833753'];
 
   const mnGate  = document.getElementById('mn-gate');
@@ -4165,6 +4240,7 @@ JS_MENORES_UI = r"""
   const mnPrev  = document.getElementById('mn-prev');
   const mnNext  = document.getElementById('mn-next');
   const mnPagInfo = document.getElementById('mn-pag-info');
+  const mnIntroFu = document.getElementById('mn-intro-fuentes');   // «; fuente(s): …» de la entradilla
 
   const MN_POR_PAGINA = 25;
   let mnPagina = 1, mnCargando = false, mnYaBuscado = false;
@@ -4206,6 +4282,25 @@ JS_MENORES_UI = r"""
     return todos.filter(mnEsSeguido);
   }
   function mnPrefijo(s){ return String(s==null?'':s).trim().split('-')[0].trim(); }
+  // Etiqueta de la fuente de UNA fila. Código desconocido (o JSON ausente) -> el código tal
+  // cual, que sigue diciendo algo; hasOwnProperty para no leer el prototipo de un objeto.
+  function mnFuente(cod){
+    const f = Object.prototype.hasOwnProperty.call(MN_FUENTES, cod) ? MN_FUENTES[cod] : null;
+    return { etiqueta: (f && f.etiqueta) || String(cod), nombre: (f && f.nombre) || '' };
+  }
+  // ENTRADILLA vs TARJETAS. La lista de fuentes de la entradilla («fuente: Estatal») la pone
+  // generar_web.py con las `cargada` del JSON con el que se generó; la etiqueta de cada
+  // tarjeta sale de la base en vivo. Entre cargar una fuente y marcarla + republicar (o para
+  // siempre, si se olvida) había «fuente: Estatal» encima de tarjetas «Andalucía». En cuanto
+  // llega una fila de una fuente sin `cargada` se retira la lista y no vuelve en la sesión:
+  // lo que ha dejado de ser cierto es la frase sobre la BASE, no sobre esta página.
+  function mnFuenteCargada(cod){
+    return Object.prototype.hasOwnProperty.call(MN_FUENTES, cod) && !!MN_FUENTES[cod] && MN_FUENTES[cod].cargada === true;
+  }
+  function mnIntroCoherente(filas){
+    if(!mnIntroFu || mnIntroFu.hidden) return;
+    if((filas || []).some(function(x){ return x && x.fuente && !mnFuenteCargada(x.fuente); })) mnIntroFu.hidden = true;
+  }
 
   function mnParams(){
     const f = mnFiltros;
@@ -4253,6 +4348,12 @@ JS_MENORES_UI = r"""
     else if(seguidos.length)      badge = '<span class="tag mn-competidor">COMPETIDOR</span>';
     const multi = (f.n_adjudicatarios || 0) > 1
       ? ' <span class="mn-multi" title="Este menor tuvo varios adjudicatarios">'+f.n_adjudicatarios+' adjudicatarios</span>' : '';
+    // Fuente de la fila (estatal, andalucia…): en TODAS, también «Estatal», al final de la
+    // línea importe · fecha (ver .mn-fuente en el CSS: en .mn-tags alargaba casi todas las
+    // tarjetas). Sin columna fuente (no debería: NOT NULL con default 'estatal') no se inventa.
+    const fu = f.fuente ? mnFuente(f.fuente) : null;
+    const fuente = fu
+      ? '<span class="mn-fuente"'+(fu.nombre ? ' title="'+mnEsc(fu.nombre)+'"' : '')+'>'+mnEsc(fu.etiqueta)+'</span>' : '';
     // Órgano comprador destacado y clicable (filtra "todo lo que compra este órgano").
     const org = f.organo_contratacion
       ? '<button type="button" class="mn-organo" data-organo="'+mnEsc(f.organo_contratacion)+'" title="Ver todo lo que compra este órgano por menor">🏛️ '+mnEsc(f.organo_contratacion)+'</button>'
@@ -4270,7 +4371,7 @@ JS_MENORES_UI = r"""
       + '<h2 class="card-title">'+tituloHtml+'</h2>'
       + (org ? '<div class="mn-org-fila">'+org+'</div>' : '')
       + '<div class="mn-adj"><span class="et">Adjudicado a</span> '+ganador+'</div>'
-      + '<div class="mn-meta">'+importe+' · <span class="mn-fecha">'+mnFecha(f.fecha_adjudicacion)+'</span></div>'
+      + '<div class="mn-meta">'+importe+' · <span class="mn-fecha">'+mnFecha(f.fecha_adjudicacion)+'</span>'+fuente+'</div>'
       + '</article>';
   }
 
@@ -4371,7 +4472,7 @@ JS_MENORES_UI = r"""
     if(!n){
       mnSug.hidden = false;
       mnSug.innerHTML = et + '<span class="mn-sug-vacio">' + mnEsc(nombre || cif)
-        + ' no tiene contratos menores estatales.</span>';
+        + ' no tiene contratos menores.</span>';
       return;
     }
     mnSug.hidden = false;
@@ -4433,7 +4534,7 @@ JS_MENORES_UI = r"""
       let cands = (data || [])
         // Fuera los identificadores que no tienen forma de CIF: en competidores hay basura del
         // origen (B180022, 290597, UTEPENDIENTEDECONSTITUIR) sobre la que no vamos a afirmar
-        // «sin menores estatales» como si fuera una empresa.
+        // «sin menores» como si fuera una empresa.
         .filter(function(e){ return mnPareceCif(e.cif); })
         .sort(function(a, b){
           return mnRangoNombre(a.nombre_canonico || a.cif, termino)
@@ -4496,7 +4597,10 @@ JS_MENORES_UI = r"""
           // manda al final, para que delante queden siempre las empresas en las que sí hay algo.
           const btn = hueco.closest('.mn-sug-item');
           if(btn){ btn.disabled = true; btn.classList.add('mn-sug-cero'); mnSug.appendChild(btn); }
-          hueco.textContent = '· sin menores estatales';
+          // Sin «estatales»: menores_resumen_cif cuenta TODAS las fuentes desde menores_f1.sql,
+          // y la entradilla ya dice cuáles son (con Andalucía dentro, «sin menores estatales»
+          // daba a entender que Andalucía no se había mirado).
+          hueco.textContent = '· sin menores';
         }
       }).catch(function(err){
         console.error('Menores: no se pudo contar menores de', e.cif, err && (err.message||err));
@@ -4574,6 +4678,7 @@ JS_MENORES_UI = r"""
     }
     if(mnMsg) mnMsg.hidden = true;
     if(mnRes) mnRes.innerHTML = filas.map(mnTarjeta).join('');
+    mnIntroCoherente(filas);
     if(mnCont){
       const aprox = r.aproximado ? '≈ ' : '';
       mnCont.textContent = aprox + (r.total||0).toLocaleString('es-ES') + ' menor' + ((r.total===1)?'':'es');
@@ -5266,12 +5371,62 @@ MENORES_CIFS_SEGUIDOS = [
     "B39594817",  # Raducan
 ]
 
+# FUENTES de public.menores (columna fuente): data/menores_fuentes.json, el mismo fichero
+# que leen informe_empresa.py y menores_autonomicos.py. De aquí salen la etiqueta de cada
+# fila de la vista Menores y las fuentes que NOMBRA la ficha de competidor (solo las
+# `cargada`). Si el fichero falta o está mal, la web se genera igual con {} —y el front
+# enseña el código de la fuente—: un JSON roto no puede tumbar la publicación del Radar.
+# utf-8-sig y no utf-8: `cargada` se cambia a mano en Windows, y `Set-Content -Encoding utf8`
+# de PowerShell 5.1 escribe BOM; con utf-8 json.loads fallaba y la web volvía a los códigos
+# sin más aviso que una línea en el log de Actions. utf-8-sig lee igual los ficheros sin BOM.
+def _fuentes_menores(ruta=Path("data") / "menores_fuentes.json"):
+    try:
+        crudo = json.loads(ruta.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as e:      # ValueError cubre JSON y UTF-8 inválidos
+        print(f"AVISO: no se pudo leer {ruta} ({e}); la web mostrará los códigos de fuente.")
+        return {}
+    if not isinstance(crudo, dict):
+        print(f"AVISO: {ruta} no es un objeto JSON; la web mostrará los códigos de fuente.")
+        return {}
+    fuentes = {}
+    for codigo, f in crudo.items():
+        if codigo.startswith("_") or not isinstance(f, dict):   # _nota y basura
+            continue
+        fuentes[codigo] = {
+            "etiqueta": str(f.get("etiqueta") or codigo),
+            "nombre": str(f.get("nombre") or f.get("etiqueta") or codigo),
+            "cargada": f.get("cargada") is True,
+        }
+    return fuentes
+
+
+MENORES_FUENTES = _fuentes_menores()
+
 # Se inyecta como <script> aparte (como DATOS_CONFIG_JS): el módulo lo lee de window.
+# Las fuentes son texto libre del JSON: se escapan TODOS los «<» como < (en JS es la
+# misma cadena). Escapar solo «</» no bastaba: un nombre con «<!--<script>» mete al
+# analizador HTML en el estado «script data double escaped», donde el </script> de este
+# bloque ya no cierra, y la página entera se quedaba sin JavaScript (probado en Chrome).
 DATOS_MENORES_JS = (
     "window.__MENORES_NICHO_CPV = " + json.dumps(MENORES_NICHO_CPV) + ";\n"
     "window.__MENORES_NICHO_KW = " + json.dumps(MENORES_NICHO_KW, ensure_ascii=False) + ";\n"
     "window.__MENORES_CIFS = " + json.dumps(MENORES_CIFS_SEGUIDOS) + ";\n"
+    "window.__MENORES_FUENTES = "
+    + json.dumps(MENORES_FUENTES, ensure_ascii=False).replace("<", "\\u003c") + ";\n"
 )
+
+# Entradilla de la vista Menores: decía «estatales» a fuego. Ahora nombra las fuentes
+# cargadas por su etiqueta; sin JSON no nombra ninguna (mejor callar que decir «estatales»
+# con Andalucía dentro). Va en <span id="mn-intro-fuentes">: el front la retira si la base
+# ya trae filas de una fuente sin `cargada` (ver mnIntroCoherente).
+_etiquetas_cargadas = [f["etiqueta"] for f in MENORES_FUENTES.values() if f["cargada"]]
+if not _etiquetas_cargadas:
+    MENORES_INTRO_FUENTES = ""
+elif len(_etiquetas_cargadas) == 1:
+    MENORES_INTRO_FUENTES = "; fuente: " + html.escape(_etiquetas_cargadas[0])
+else:
+    MENORES_INTRO_FUENTES = "; fuentes: " + html.escape(
+        ", ".join(_etiquetas_cargadas[:-1]) + " y " + _etiquetas_cargadas[-1])
 
 # CPV ACTIVOS (prefijos) para limitar el desplegable "Filtrar por CPV" a solo los
 # CPV que el radar tiene activos ahora mismo (los de la config; o los del YAML si
@@ -5617,7 +5772,7 @@ pagina = f"""<!DOCTYPE html>
     <div id="vista-menores" hidden>
       <div id="mn-gate" class="bg-gate" hidden>🔒 Inicia sesión para explorar los contratos menores.</div>
       <div id="mn-panel" hidden>
-        <p class="mn-intro">Contratos <strong>menores</strong> estatales (adjudicación directa). Explora quién capta el gasto de tu nicho y qué órganos compran tu tipo de servicio.</p>
+        <p class="mn-intro">Contratos <strong>menores</strong> (adjudicación directa<span id="mn-intro-fuentes">{MENORES_INTRO_FUENTES}</span>). Explora quién capta el gasto de tu nicho y qué órganos compran tu tipo de servicio.</p>
         <div class="bg-barra">
           <input id="mn-texto" class="bg-input" type="search" autocomplete="off"
                  placeholder="Título del contrato u órgano… (formaldehído, calidad del aire) · o el nombre o el CIF de una empresa">

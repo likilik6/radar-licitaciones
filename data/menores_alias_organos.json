@@ -1,0 +1,4 @@
+{
+  "_nota": "Alias de órganos para la regla de gemelas de menores_autonomicos.py. Por fuente: {\"<órgano estatal normalizado>\": \"<órgano de la fuente normalizado>\"}, normalizados con normorg (sin tildes, MAYÚSCULAS, solo letras, dígitos y espacios). Se añaden A MANO tras revisar un caso real: la regla no admite parecidos difusos. Hoy vacío: ningún órgano de la Junta publica menores en la estatal (F0).",
+  "andalucia": {}
+}

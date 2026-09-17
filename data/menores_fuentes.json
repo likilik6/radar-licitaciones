@@ -1,0 +1,10 @@
+{
+  "_nota": "Fuentes de public.menores (columna fuente). 'cargada' = ya hay datos de esa fuente en la base: la web y el informe solo nombran las cargadas. Lo leen generar_web.py, informe_empresa.py y menores_autonomicos.py.",
+  "estatal":   {"etiqueta": "Estatal",   "nombre": "Plataforma de Contratación del Sector Público (sindicación 1143)", "cargada": true},
+  "andalucia": {"etiqueta": "Andalucía", "nombre": "Junta de Andalucía (datos abiertos de contratación menor)", "cargada": false},
+  "euskadi":   {"etiqueta": "Euskadi",   "nombre": "KontratazioA (Euskadi)", "cargada": false},
+  "cataluna":  {"etiqueta": "Cataluña",  "nombre": "Plataforma de Serveis de Contractació Pública (Cataluña)", "cargada": false},
+  "larioja":   {"etiqueta": "La Rioja",  "nombre": "Gobierno de La Rioja (datos abiertos)", "cargada": false},
+  "galicia":   {"etiqueta": "Galicia",   "nombre": "Contratos de Galicia (Xunta)", "cargada": false},
+  "asturias":  {"etiqueta": "Asturias",  "nombre": "Principado de Asturias (datos abiertos)", "cargada": false}
+}
