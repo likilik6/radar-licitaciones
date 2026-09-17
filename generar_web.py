@@ -205,6 +205,10 @@ CSS = """
   .tag.mn-competidor { background:#fee2e2; color:#b91c1c; }   /* ganó un CIF seguido (competencia) */
   .tag.mn-lodepa { background:#dcfce7; color:#15803d; }       /* ganó LODEPA */
   .mn-intro { font-size:.9rem; color:var(--suave); margin:0 0 12px; }
+  /* Aviso de «orden por importe desactivado» (resultado de más de 10.000 menores). El
+     [hidden] explícito: si algún día este bloque lleva display:flex, no debe anularlo. */
+  .mn-aviso-orden { font-size:.88rem; background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; border-radius:10px; padding:8px 12px; margin:0 0 12px; }
+  .mn-aviso-orden[hidden] { display:none; }
   /* Atajo «¿buscas una empresa?»: esta caja busca en el TEXTO del contrato, así que al
      escribir el nombre de un competidor se ofrece saltar a SUS menores (filtro por CIF). */
   .mn-sug { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:10px 0 2px;
@@ -4208,9 +4212,16 @@ JS_MENORES_UI = r"""
   // Privado (authenticated). Tabla AISLADA public.menores; NO toca el Buscador.
   const _mn = crearMenores(supabase);
   const mnBuscarFn = _mn.buscar;
+  // Recuento con tope, pedido DESPUÉS de pintar la página (ver M_UMBRAL en menores_api.js).
+  const mnContarFn = _mn.contar;
+  // Cada búsqueda lleva su número: un recuento que llega tarde de una búsqueda anterior
+  // no pisa el contador de la vigente.
+  let mnSecuencia = 0;
 
   const MN_NICHO_CPV = Array.isArray(window.__MENORES_NICHO_CPV) ? window.__MENORES_NICHO_CPV : [];
   const MN_NICHO_KW  = typeof window.__MENORES_NICHO_KW === 'string' ? window.__MENORES_NICHO_KW : '';
+  // Palabras del nicho con exclusiones: [{kw, excluye: [...]}] (ver menores_nicho.py).
+  const MN_NICHO_EXCL = Array.isArray(window.__MENORES_NICHO_EXCL) ? window.__MENORES_NICHO_EXCL : [];
   const MN_CIFS      = Array.isArray(window.__MENORES_CIFS) ? window.__MENORES_CIFS : [];
   // {codigo: {etiqueta, nombre, cargada}} de data/menores_fuentes.json; {} si faltaba o estaba mal.
   const MN_FUENTES   = (window.__MENORES_FUENTES && typeof window.__MENORES_FUENTES === 'object'
@@ -4234,6 +4245,7 @@ JS_MENORES_UI = r"""
   const mnChips = document.getElementById('mn-chips');
   const mnLimpiar = document.getElementById('mn-limpiar');
   const mnCont  = document.getElementById('mn-contador');
+  const mnAvisoOrden = document.getElementById('mn-aviso-orden');
   const mnMsg   = document.getElementById('mn-estado-msg');
   const mnRes   = document.getElementById('mn-resultados');
   const mnPag   = document.getElementById('mn-paginacion');
@@ -4319,6 +4331,7 @@ JS_MENORES_UI = r"""
       modo: modo,
       nichoCpv: modo === 'nicho' ? MN_NICHO_CPV : undefined,
       nichoKw:  modo === 'nicho' ? MN_NICHO_KW  : undefined,
+      nichoExcl: modo === 'nicho' ? MN_NICHO_EXCL : undefined,
       cifsSeguidos: unCif || (modo === 'cifs' ? MN_CIFS : undefined),
       cpvPrefijo: f.cpvPrefijo.length ? f.cpvPrefijo.slice() : undefined,
       texto: mnTexto ? mnTexto.value : '',
@@ -4650,8 +4663,10 @@ JS_MENORES_UI = r"""
     if(!sesionActiva){ mnActualizarGate(); return; }
     if(mnCargando){ mnPendiente = true; return; }   // no se pierde: se relanza al terminar
     mnCargando = true; mnYaBuscado = true;
+    const miSecuencia = ++mnSecuencia;
     if(mnMsg){ mnMsg.hidden=false; mnMsg.textContent='Buscando…'; }
     if(mnPag){ mnPag.hidden=true; if(mnPagInfo) mnPagInfo.textContent=''; }
+    if(mnAvisoOrden) mnAvisoOrden.hidden = true;
     let r;
     try { r = await mnBuscarFn(mnParams()); }
     catch(e){ r = { error: e }; }
@@ -4679,17 +4694,42 @@ JS_MENORES_UI = r"""
     if(mnMsg) mnMsg.hidden = true;
     if(mnRes) mnRes.innerHTML = filas.map(mnTarjeta).join('');
     mnIntroCoherente(filas);
-    if(mnCont){
-      const aprox = r.aproximado ? '≈ ' : '';
-      mnCont.textContent = aprox + (r.total||0).toLocaleString('es-ES') + ' menor' + ((r.total===1)?'':'es');
+    // ORDEN POR IMPORTE DESACTIVADO: con estos filtros hay más menores de los que se pueden
+    // ordenar por importe sin recorrer la tabla. Las filas llegan por fecha y se dice por qué.
+    if(mnAvisoOrden){
+      mnAvisoOrden.hidden = !r.ordenImporteDesactivado;
+      if(r.ordenImporteDesactivado){
+        mnAvisoOrden.textContent = 'Con estos filtros hay más de ' + Number(r.umbral || 10000).toLocaleString('es-ES')
+          + ' menores y no se pueden ordenar por importe: se muestran por fecha. Acota con «Solo mi nicho», '
+          + 'el texto, el CPV o las fechas para ordenarlos por importe.';
+      }
     }
-    // Paginación.
-    const totalPag = Math.max(1, Math.ceil((r.total||0) / MN_POR_PAGINA));
+    // CONTADOR Y PAGINACIÓN. Nunca se enseña la estimación del planner (llegó a decir
+    // «≈ 10.074» con 2.947 de verdad): número exacto, «más de 10.000» o «Contando…».
+    mnPintaTotal(r.total, r.topado, r.conteoPendiente, filas.length);
+    if(r.conteoPendiente){
+      const params = mnParams();
+      mnContarFn(params).then(function(c){
+        if(miSecuencia !== mnSecuencia) return;     // ya hay otra búsqueda: este recuento caducó
+        if(c.error || c.total == null){ if(mnCont) mnCont.textContent = ''; return; }
+        mnPintaTotal(c.total, c.topado, false, filas.length);
+      });
+    }
+  }
+
+  function mnPintaTotal(total, topado, pendiente, nFilasPagina){
+    if(mnCont){
+      if(pendiente) mnCont.textContent = 'Contando…';
+      else if(topado) mnCont.textContent = 'más de ' + Number(total||0).toLocaleString('es-ES') + ' menores';
+      else mnCont.textContent = Number(total||0).toLocaleString('es-ES') + ' menor' + (total === 1 ? '' : 'es');
+    }
     if(mnPag){
+      const conocido = !pendiente && !topado && total != null;
+      const totalPag = conocido ? Math.max(1, Math.ceil(total / MN_POR_PAGINA)) : null;
       mnPag.hidden = false;
-      if(mnPagInfo) mnPagInfo.textContent = 'Página ' + mnPagina + (r.aproximado ? '' : ' de ' + totalPag);
+      if(mnPagInfo) mnPagInfo.textContent = 'Página ' + mnPagina + (conocido ? ' de ' + totalPag : '');
       if(mnPrev) mnPrev.disabled = mnPagina <= 1;
-      if(mnNext) mnNext.disabled = filas.length < MN_POR_PAGINA;
+      if(mnNext) mnNext.disabled = conocido ? mnPagina >= totalPag : nFilasPagina < MN_POR_PAGINA;
     }
   }
 
@@ -5337,26 +5377,19 @@ except (OSError, yaml.YAMLError):
 # v2: no se etiqueta en la ingesta, así ampliarlo = editar intereses.yaml y regenerar,
 # sin re-backfill). Sale de criticas + a_revisar (NUNCA 'pruebas'). Las palabras van
 # SIN TILDES y unidas por ' or ' (websearch) para casar el tsv (guardado con unaccent).
-def _nicho_menores(criterios):
-    import unicodedata
-    def sin_tildes(t):
-        return "".join(c for c in unicodedata.normalize("NFD", str(t).lower())
-                       if unicodedata.category(c) != "Mn")
-    cpv, kws = [], []
-    for grupo in ("criticas", "a_revisar"):
-        crit = (criterios or {}).get(grupo) or {}
-        for c in crit.get("cpv") or []:
-            s = str(c).strip()
-            if s and s not in cpv:
-                cpv.append(s)
-        for p in crit.get("palabras_clave") or []:
-            s = sin_tildes(p).strip()
-            if s and s not in kws:
-                kws.append(s)
-    return cpv, " or ".join(kws)
+# Se construye en menores_nicho.py, el MISMO sitio del que lo toma medir_menores.py: así
+# la web y la medición no pueden separarse. Las exclusiones (data/menores_nicho_
+# exclusiones.json) quitan la ventilación clínica y otros falsos positivos SOLO a lo que
+# entra por su palabra; si el fichero falta o está mal, el nicho sale sin exclusiones y
+# se avisa, pero la web se publica igual.
+import menores_nicho
 
-
-MENORES_NICHO_CPV, MENORES_NICHO_KW = _nicho_menores(criterios_defecto)
+_NICHO_MENORES = menores_nicho.nicho(criterios_defecto)
+if _NICHO_MENORES["aviso"]:
+    print("AVISO (nicho de menores): " + _NICHO_MENORES["aviso"])
+MENORES_NICHO_CPV = _NICHO_MENORES["cpv"]
+MENORES_NICHO_KW = _NICHO_MENORES["palabras"]        # solo las palabras SIN exclusión
+MENORES_NICHO_EXCL = _NICHO_MENORES["excl"]          # [{kw, excluye: [websearch, ...]}]
 
 # CIFS_SEGUIDOS: lista curada (ROADMAP.md) de competidores + LODEPA. Se usa para el
 # modo «solo competidores seguidos» y el badge. Son datos públicos (CIF de empresas).
@@ -5410,6 +5443,9 @@ MENORES_FUENTES = _fuentes_menores()
 DATOS_MENORES_JS = (
     "window.__MENORES_NICHO_CPV = " + json.dumps(MENORES_NICHO_CPV) + ";\n"
     "window.__MENORES_NICHO_KW = " + json.dumps(MENORES_NICHO_KW, ensure_ascii=False) + ";\n"
+    # Se escapan todos los «<» (un término con «<!--» o «</script» cortaría el bloque de
+    # datos), igual que __MENORES_FUENTES.
+    "window.__MENORES_NICHO_EXCL = " + json.dumps(MENORES_NICHO_EXCL, ensure_ascii=False).replace("<", "\\u003c") + ";\n"
     "window.__MENORES_CIFS = " + json.dumps(MENORES_CIFS_SEGUIDOS) + ";\n"
     "window.__MENORES_FUENTES = "
     + json.dumps(MENORES_FUENTES, ensure_ascii=False).replace("<", "\\u003c") + ";\n"
@@ -5826,6 +5862,7 @@ pagina = f"""<!DOCTYPE html>
           <button id="mn-limpiar" class="bg-limpiar" type="button" hidden>Limpiar filtros</button>
         </div>
         <div id="mn-estado-msg" class="bg-msg" hidden></div>
+        <div id="mn-aviso-orden" class="mn-aviso-orden" hidden></div>
         <div id="mn-resultados" class="grid"></div>
         <div id="mn-paginacion" class="bg-pag" hidden>
           <button id="mn-prev" class="bg-pag-btn" type="button">‹ Anterior</button>

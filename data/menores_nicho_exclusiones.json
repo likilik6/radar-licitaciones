@@ -1,0 +1,262 @@
+{
+  "_nota": "Exclusiones del modo «Solo mi nicho» de la vista Menores. NO va en intereses.yaml (filtrar.py trata cada clave de primer nivel como categoría del Radar). Semántica ACOTADA: un grupo solo quita filas que entran al nicho por alguno de sus términos 'aplica_a' (palabras de intereses.yaml, sin tildes). Lo que entra por CPV o por otra palabra del nicho no se toca. 'terminos': sin tildes y en minúsculas. Con espacio son FRASE (van entre comillas en el websearch: 'equipo de anestesia' = equip <2> anestesi). Sin espacio son lexema (se stemiza con el diccionario spanish: comprobar con to_tsvector antes de añadir). Un grupo cuyo 'aplica_a' no esté en el nicho se ignora.",
+  "version": 1,
+  "medido_sobre": "public.menores el 17/09/2026. Nicho actual: 2.947 filas (2.396 estatales + 551 andaluzas). Con los grupos activos: 2.364 (2.253 + 111), sin perder ninguna de las 29 reales, las 7 adyacentes ni la indeterminada.",
+  "grupos": [
+    {
+      "nombre": "ventilacion_clinica",
+      "activo": true,
+      "aplica_a": [
+        "ventilacion"
+      ],
+      "terminos": [
+        "cardiorespiratoria",
+        "cardiorrespiratoria",
+        "ventilacion no invasiva",
+        "ventilacion mecanica no invasiva",
+        "ventilacion mecanica invasiva",
+        "ventilacion invasiva",
+        "respirador ventilacion",
+        "respirador de ventilacion",
+        "ventilacion respiratoria",
+        "circuito ventilacion manual",
+        "mascarilla ventilacion manual",
+        "material para ventilacion y monitorizacion",
+        "equipo de anestesia",
+        "ventilacion asistida",
+        "mascarilla laringea",
+        "cpap",
+        "bipap",
+        "vmni",
+        "oxigenoterapia",
+        "resucitador",
+        "traqueostomia",
+        "intubacion",
+        "endotraqueal"
+      ],
+      "comentario": "Ventilación CLÍNICA (respiradores, VNI/VMNI, CPAP, material de ventilación y monitorización cardiorrespiratoria del catálogo del SAS). Solo frases o palabras sin uso en edificios: NO 'ventilacion mecanica' suelta (VMC de edificios, ventilación contra el radón), NO 'respirador' suelto (se stemiza 'respir', igual que 'respirable': sílice respirable), NO 'mascarilla' suelta (no quita ninguna fila más y arriesga contratos de CO2/ventilación de aulas), NO 'invasiva' suelta ('inspección no invasiva de conductos'), NO 'quirofano' (ventilación y bioseguridad de quirófanos es nicho).",
+      "medido_2026_09_17": {
+        "andalucia_quita_filas": 388,
+        "andalucia_quita_eur": 2845368.16,
+        "estatal_quita_filas": 17,
+        "estatal_quita_eur": 148126.49,
+        "reales_o_adyacentes_perdidos": 0,
+        "estatales_dudosas_perdidas": 0
+      }
+    },
+    {
+      "nombre": "formol_reactivo",
+      "activo": true,
+      "aplica_a": [
+        "formaldehido"
+      ],
+      "terminos": [
+        "vaselina",
+        "proteinas especificas",
+        "glucosa",
+        "tinciones",
+        "reactivos para histologia",
+        "alcohol etilico",
+        "suministro de formaldehido",
+        "suministro formaldehido",
+        "solucion de formaldehido",
+        "formaldehido en solucion",
+        "frascos",
+        "fungible de laboratorio",
+        "metanol"
+      ],
+      "comentario": "Formaldehído como REACTIVO o fijador (catálogo de laboratorio del SAS, 'suministro de formaldehído' de los IML, frascos de formol al 4 %, formol al 37 % de universidades). Se dejan fuera a propósito 'productos quimicos', 'etanol', 'alcohol' y 'reactivos' sueltos: salen en mediciones de exposición laboral (formaldehído, xileno, alcoholes). Siguen dentro las mediciones, medidores, detectores, sensores y muestreos (las 10 estatales y las 2 andaluzas reales).",
+      "medido_2026_09_17": {
+        "andalucia_quita_filas": 27,
+        "andalucia_quita_eur": 305993.7,
+        "estatal_quita_filas": 19,
+        "estatal_quita_eur": 11812.7,
+        "reales_o_adyacentes_perdidos": 0,
+        "estatales_dudosas_perdidas": 0
+      }
+    },
+    {
+      "nombre": "ionizacion_analitica",
+      "activo": true,
+      "aplica_a": [
+        "ionizacion"
+      ],
+      "terminos": [
+        "camara de ionizacion",
+        "dosimetria",
+        "dosimetro",
+        "electrometro",
+        "radiofisica",
+        "fuente de ionizacion",
+        "detector de ionizacion",
+        "espectrometria",
+        "espectrometro",
+        "cromatografo",
+        "maldi",
+        "modos de ionizacion",
+        "ionizacion de cobre",
+        "fuente ionizacion",
+        "camara ionizacion",
+        "detector ionizacion"
+      ],
+      "comentario": "Ionización que no es de aire: cámaras de ionización (dosimetría, radiofísica), fuentes y detectores de ionización de espectrómetros y cromatógrafos, ionización cobre-plata de piscinas. No aplica al término 'ionizacion bipolar', que entra siempre.",
+      "medido_2026_09_17": {
+        "andalucia_quita_filas": 8,
+        "andalucia_quita_eur": 66027.0,
+        "estatal_quita_filas": 16,
+        "estatal_quita_eur": 131757.42,
+        "reales_o_adyacentes_perdidos": 0,
+        "estatales_dudosas_perdidas": 0
+      }
+    },
+    {
+      "nombre": "purificador_agua",
+      "activo": true,
+      "aplica_a": [
+        "purificador"
+      ],
+      "terminos": [
+        "purificador de agua",
+        "purificador agua",
+        "agua purifica",
+        "fuentes purificadoras",
+        "ultrapura"
+      ],
+      "comentario": "Purificadores y fuentes de AGUA (Milli-Q, Elix, fuentes de agua de red). Van como frases, no la palabra 'agua' suelta: el tsv incluye el órgano, y la Agencia de Medio Ambiente y AGUA compra 15 de los 29 reales.",
+      "medido_2026_09_17": {
+        "andalucia_quita_filas": 10,
+        "andalucia_quita_eur": 30738.91,
+        "estatal_quita_filas": 43,
+        "estatal_quita_eur": 256126.07,
+        "reales_o_adyacentes_perdidos": 0,
+        "estatales_dudosas_perdidas": 0
+      }
+    },
+    {
+      "nombre": "purificacion_laboratorio",
+      "activo": true,
+      "aplica_a": [
+        "purificador"
+      ],
+      "terminos": [
+        "dna",
+        "adn",
+        "rna",
+        "arn",
+        "pcr",
+        "genejet",
+        "minipreps",
+        "helio",
+        "gases raros",
+        "gas portador",
+        "acidos",
+        "disolventes",
+        "combiflash",
+        "cromatografia",
+        "purificaciones quimicas",
+        "oligonucleotidos",
+        "anticuerpos",
+        "biotage",
+        "selekt",
+        "nextgen",
+        "automaticocombiflash"
+      ],
+      "comentario": "'purificador' se stemiza 'purif' y casa kits de purificación de ADN/ARN ('dna purif kit'), purificadores de helio, gases, ácidos y disolventes. NO añadir 'purificaciones': también es 'purif' y quitaría el término entero.",
+      "medido_2026_09_17": {
+        "andalucia_quita_filas": 0,
+        "andalucia_quita_eur": 0,
+        "estatal_quita_filas": 44,
+        "estatal_quita_eur": 195406.4,
+        "reales_o_adyacentes_perdidos": 0,
+        "estatales_dudosas_perdidas": 0
+      }
+    },
+    {
+      "nombre": "filtracion_infusion",
+      "activo": true,
+      "aplica_a": [
+        "filtracion del aire"
+      ],
+      "terminos": [
+        "jeringa",
+        "trasvasador",
+        "luer",
+        "infusion"
+      ],
+      "comentario": "'filtracion del aire' va sin comillas en el nicho (= 'filtracion' Y 'aire') y casa material de infusión del SAS ('trasvasador... con filtro de aire', 'filtro eliminación partículas y aire, conexión luer').",
+      "medido_2026_09_17": {
+        "andalucia_quita_filas": 7,
+        "andalucia_quita_eur": 52811.8,
+        "estatal_quita_filas": 0,
+        "estatal_quita_eur": 0,
+        "reales_o_adyacentes_perdidos": 0,
+        "estatales_dudosas_perdidas": 0
+      }
+    },
+    {
+      "nombre": "filtraciones_goteras",
+      "activo": true,
+      "aplica_a": [
+        "filtracion del aire"
+      ],
+      "terminos": [
+        "goteras",
+        "impermeabilizacion",
+        "filtraciones de agua",
+        "aire comprimido"
+      ],
+      "comentario": "Filtraciones de agua y goteras en máquinas de aire acondicionado, y filtración de aire comprimido de proceso (mismo efecto del AND de 'filtracion del aire').",
+      "medido_2026_09_17": {
+        "andalucia_quita_filas": 0,
+        "andalucia_quita_eur": 0,
+        "estatal_quita_filas": 4,
+        "estatal_quita_eur": 8229.0,
+        "reales_o_adyacentes_perdidos": 0,
+        "estatales_dudosas_perdidas": 0
+      }
+    },
+    {
+      "nombre": "ventilacion_agraria",
+      "activo": false,
+      "aplica_a": [
+        "ventilacion"
+      ],
+      "terminos": [
+        "invernadero",
+        "nave de ganado",
+        "semillero"
+      ],
+      "comentario": "OPCIONAL (desactivado): invernaderos, naves de ganado, semilleros. Una estatal dudosa: 'ventilación y extracción en taller de cocina e invernaderos' (CIEM Valle Tabares).",
+      "medido_2026_09_17": {
+        "andalucia_quita_filas": 6,
+        "andalucia_quita_eur": 30708.8,
+        "estatal_quita_filas": 5,
+        "estatal_quita_eur": 93022.14,
+        "reales_o_adyacentes_perdidos": 0,
+        "estatales_dudosas_perdidas": 1
+      }
+    },
+    {
+      "nombre": "ventilacion_centros_transformacion_tuneles",
+      "activo": false,
+      "aplica_a": [
+        "ventilacion"
+      ],
+      "terminos": [
+        "centro de transformacion",
+        "centro transformacion",
+        "tunel"
+      ],
+      "comentario": "OPCIONAL (desactivado): ventilación de centros de transformación y túneles. Tres estatales dudosas: estudio de gases y ventilación del túnel del Granillar, mantenimiento de ventilación de estaciones subterráneas de FGV y 'centro de transformación y centro de ventilación' de una sede ministerial.",
+      "medido_2026_09_17": {
+        "andalucia_quita_filas": 4,
+        "andalucia_quita_eur": 39261.67,
+        "estatal_quita_filas": 10,
+        "estatal_quita_eur": 157067.15,
+        "reales_o_adyacentes_perdidos": 0,
+        "estatales_dudosas_perdidas": 3
+      }
+    }
+  ],
+  "revision": "17/09/2026, tras el verificador: fuera 'tubuladura' (no quitaba ninguna fila que no quitaran ya otros términos y aparece fuera de lo clínico); añadidas las frases sin preposición 'fuente/camara/detector ionizacion' (la distancia de frase es EXACTA: 'fuente de ionizacion' no casa 'Fuente ionización SCIEX') y 'biotage', 'selekt', 'nextgen', 'automaticocombiflash' (purificadores de laboratorio de 39.134,55 € y 24.100,60 € que seguían dentro)."
+}

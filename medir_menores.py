@@ -83,29 +83,31 @@ def conecta_ro():
     return con
 
 
-def nicho_de_intereses() -> tuple[list[str], str]:
-    """El nicho EXACTO que usa la vista Menores: misma lógica que _nicho_menores() de
-    generar_web.py (criticas + a_revisar, palabras sin tildes unidas con « or »)."""
-    import unicodedata
+def nicho_web() -> dict:
+    """El nicho EXACTO que usa la vista Menores, con sus exclusiones. Sale de
+    menores_nicho.py, el mismo constructor que usa generar_web.py."""
     import yaml
+    import menores_nicho
     with open(RAIZ / "intereses.yaml", encoding="utf-8") as f:
         criterios = yaml.safe_load(f) or {}
+    return menores_nicho.nicho(criterios)
 
-    def sin_tildes(t):
-        return "".join(c for c in unicodedata.normalize("NFD", str(t).lower())
-                       if unicodedata.category(c) != "Mn")
-    cpv, kws = [], []
-    for grupo in ("criticas", "a_revisar"):
-        crit = criterios.get(grupo) or {}
-        for c in crit.get("cpv") or []:
-            s = str(c).strip()
-            if s and s not in cpv:
-                cpv.append(s)
-        for p in crit.get("palabras_clave") or []:
-            s = sin_tildes(p).strip()
-            if s and s not in kws:
-                kws.append(s)
-    return cpv, " or ".join(kws)
+
+def filtro_rest_nicho(n: dict) -> str:
+    """El parámetro or=(...) que manda menores_api.js en modo nicho, ya codificado para la
+    URL: prefijos CPV, palabras libres y and(palabra, not exclusión...) con las
+    exclusiones entre comillas (mValorOr)."""
+    from urllib.parse import urlencode
+    valor_or = lambda s: '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    limpia = lambda s: "".join(" " if c in "()," else c for c in s).strip()
+    cond = [f"cpv_txt.ilike.* {c}*" for c in n["cpv"]]
+    if n["palabras"]:
+        cond.append("tsv.wfts(spanish)." + limpia(n["palabras"]))
+    for e in n["excl"]:
+        pos = "tsv.wfts(spanish)." + limpia(e["kw"])
+        neg = ["tsv.not.wfts(spanish)." + valor_or(x) for x in e["excluye"]]
+        cond.append(f"and({pos},{','.join(neg)})" if neg else pos)
+    return urlencode({"or": "(" + ",".join(cond) + ")"})
 
 
 def explica(cur, sql: str, params=None, analizar: bool = True) -> dict:
@@ -278,7 +280,7 @@ def main() -> None:
     sb = ie.Supabase(url, clave)
     con = conecta_ro()
     cur = con.cursor()
-    nicho_cpv, nicho_kw = nicho_de_intereses()
+    nicho = nicho_web()
     arranque = time.time()
 
     medida = {"etiqueta": args.etiqueta,
@@ -294,12 +296,11 @@ def main() -> None:
     medida["vista_defecto"] = vista(cur, sb, args.repeticiones, "defecto", "", None, "")
 
     print("· vista Menores: nicho")
-    conds = ["cpv_txt ilike %s"] * len(nicho_cpv) + ["tsv @@ websearch_to_tsquery('spanish', %s)"]
-    where_nicho = "where (" + " or ".join(conds) + ")"
-    params_nicho = [f"% {c}%" for c in nicho_cpv] + [nicho_kw]
-    rest_nicho = "or=(" + ",".join([f"cpv_txt.ilike.*%20{c}*" for c in nicho_cpv] +
-                                   [f"tsv.wfts(spanish).{quote(nicho_kw)}"]) + ")"
-    medida["nicho"] = {"cpv": nicho_cpv, "palabras": nicho_kw}
+    import menores_nicho
+    cond_nicho, params_nicho = menores_nicho.sql_condicion(nicho)
+    where_nicho = "where " + cond_nicho
+    rest_nicho = filtro_rest_nicho(nicho)
+    medida["nicho"] = {"cpv": nicho["cpv"], "palabras": nicho["palabras"], "excl": nicho["excl"]}
     medida["vista_nicho"] = vista(cur, sb, args.repeticiones, "nicho", where_nicho, params_nicho, rest_nicho)
 
     print("· vista Menores: un CIF (entrada desde la ficha)")
