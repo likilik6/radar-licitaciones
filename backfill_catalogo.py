@@ -100,6 +100,9 @@ RPC_REFRESCAR_COMPETIDORES = "refrescar_competidores"
 # competidores: el pipeline solo la INVOCA tras upsertar adjudicaciones. Es idempotente
 # (solo escribe lo que CAMBIA) y admite un tamaño de lote para no rozar el statement_timeout.
 RPC_REFRESCAR_DESIERTAS = "refrescar_desiertas"
+# FASE M: recalcula public.menores_cobertura (hasta dónde llega cada fuente y tamaño de los
+# órganos grandes). Ver menores_cobertura.sql. Solo LEE menores; no toca el catálogo.
+RPC_COBERTURA_MENORES = "menores_cobertura_refresca"
 LIMITE_GRATIS_MB = 500          # plan gratuito de Supabase (~500 MB de base de datos)
 BASE = "https://contrataciondelsectorpublico.gob.es/sindicacion"
 
@@ -740,6 +743,43 @@ def refrescar_competidores(sesion, url_base, headers, reintentos=4):
     return None
 
 
+def refrescar_cobertura_menores(sesion, url_base, headers, reintentos=3):
+    """FASE M: recalcula public.menores_cobertura con la RPC menores_cobertura_refresca
+    (menores_cobertura.sql). Se llama tras el volcado diario de menores: el estatal entra
+    todos los días y, sin esto, la web diría «Datos hasta…» con la foto del fin de semana.
+    Cuesta 4-10 s de SOLO LECTURA sobre menores; no toca el catálogo ni el Radar. NO es
+    fatal: si la RPC no existe (aún no se ha ejecutado el SQL) avisa y salta."""
+    url = f"{url_base}/rest/v1/rpc/{RPC_COBERTURA_MENORES}"
+    h = {k: v for k, v in headers.items() if k != "Prefer"}
+    ultimo = None
+    for intento in range(1, reintentos + 1):
+        try:
+            r = sesion.post(url, headers=h, json={}, timeout=120)
+        except requests.RequestException as e:
+            ultimo = e
+        else:
+            if r.status_code == 200:
+                print(f"  Cobertura de menores refrescada: {r.text.strip()[:200]}")
+                return True
+            if r.status_code == 404 or "PGRST202" in r.text or "Could not find the function" in r.text:
+                print(f"  AVISO: la RPC public.{RPC_COBERTURA_MENORES} no existe todavía "
+                      f"(HTTP {r.status_code}). ¿Ejecutaste menores_cobertura.sql? SALTO el "
+                      f"refresco de cobertura (la web seguirá con la foto anterior).")
+                return False
+            if 400 <= r.status_code < 500 and r.status_code != 429:
+                print(f"  AVISO: {RPC_COBERTURA_MENORES} devolvió HTTP {r.status_code}: "
+                      f"{r.text[:300]}; salto.")
+                return False
+            ultimo = RuntimeError(f"HTTP {r.status_code}: {r.text[:200]}")
+        if intento < reintentos:
+            espera = 2 ** intento
+            print(f"    refrescar cobertura: reintento {intento}/{reintentos} en {espera}s ({ultimo})")
+            time.sleep(espera)
+    print(f"  AVISO: no pude refrescar la cobertura de menores ({ultimo}); salto (se reintenta "
+          f"en la próxima ingesta; es idempotente).")
+    return False
+
+
 def refrescar_competidores_oneshot():
     """Fase E · refresco manual de public.competidores (sin reingerir). Para la primera
     carga o forzar un rebuild:  python backfill_catalogo.py --refrescar-competidores"""
@@ -1200,6 +1240,9 @@ def diario(fuentes):
     # FASE M: volcado diario de menores del feed en vivo (1143). Independiente del
     # catálogo (otra tabla, otra fuente); guardado y no fatal (salta si no existe).
     menores_incremental(sesion, url_base, headers)
+    # Y, con los menores del día ya dentro, se recalcula la cobertura (hasta qué fecha llega
+    # cada fuente). Si no, la web enseñaría la foto del fin de semana de lunes a viernes.
+    refrescar_cobertura_menores(sesion, url_base, headers)
 
     print("=" * 78)
     print(f"Ingesta diaria terminada. Filas upsertadas: {total:,}  ·  adjudicaciones: {total_adj:,}")

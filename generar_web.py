@@ -209,6 +209,8 @@ CSS = """
      [hidden] explícito: si algún día este bloque lleva display:flex, no debe anularlo. */
   .mn-cobertura { font-size:.82rem; color:var(--suave); margin:-4px 0 12px; line-height:1.55; }
   .mn-cobertura[hidden] { display:none; }
+  .mn-cobertura span { display:block; }
+  .mn-cob-organo { font-weight:600; color:var(--texto); }
   .mn-aviso-orden { font-size:.88rem; background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; border-radius:10px; padding:8px 12px; margin:0 0 12px; }
   .mn-aviso-orden[hidden] { display:none; }
   /* Atajo «¿buscas una empresa?»: esta caja busca en el TEXTO del contrato, así que al
@@ -4335,15 +4337,29 @@ JS_MENORES_UI = r"""
     const t = String(iso || '').slice(0,10).split('-');
     return t.length === 3 ? t[2]+'/'+t[1]+'/'+t[0] : String(iso || '');
   }
+  // Miles con punto SIEMPRE. toLocaleString('es-ES') deja «4681» al lado de «37.978» (en
+  // español no agrupa los de cuatro cifras) y en la misma línea canta.
+  function mnMiles(n){
+    return String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  }
+  // «2026-04» -> «abr-26». Con el año: si no, en enero la línea dice «ago sep oct nov dic ene»
+  // y no se sabe de qué año es cada uno.
   function mnMesCorto(mes){
     const t = String(mes || '').split('-');
-    return MN_MESES_CORTOS[Number(t[1]) - 1] || t[1] || '?';
+    return (MN_MESES_CORTOS[Number(t[1]) - 1] || t[1] || '?') + '-' + String(t[0] || '').slice(2);
   }
   function mnPintaCobertura(){
     if(!mnCobertura) return;
-    const t = [mnCoberturaTexto, mnCoberturaOrgano].filter(Boolean).join(' ');
-    mnCobertura.textContent = t;
-    mnCobertura.hidden = !t;
+    if(!mnCobertura.firstChild){                     // dos líneas: órgano arriba, fuentes abajo
+      const a = document.createElement('span'); a.className = 'mn-cob-organo';
+      mnCobertura.appendChild(a); mnCobertura.appendChild(document.createElement('span'));
+    }
+    const linea1 = mnCobertura.firstChild, linea2 = mnCobertura.lastChild;
+    linea1.textContent = mnCoberturaOrgano || '';
+    linea1.hidden = !mnCoberturaOrgano;
+    linea2.textContent = mnCoberturaTexto || '';
+    linea2.hidden = !mnCoberturaTexto;
+    mnCobertura.hidden = !(mnCoberturaOrgano || mnCoberturaTexto);
   }
   const MN_COBERTURA_DIAS = 45;        // más vieja que esto, no se usa para decidir nada
   async function mnCargaCobertura(){
@@ -4371,17 +4387,22 @@ JS_MENORES_UI = r"""
                          .sort(function(a,b){ return (Number(b.filas)||0) - (Number(a.filas)||0); });
     if(!fuentes.length) return;
     const hasta = fuentes.map(function(f){ return mnFuente(f.clave).etiqueta + ' ' + mnFechaCorta(f.ultima); }).join(' · ');
+    const enCurso = new Date().toISOString().slice(0, 7);
     const porMes = fuentes.map(function(f){
       const ms = Array.isArray(f.meses) ? f.meses : [];
       if(!ms.length) return '';
       return mnFuente(f.clave).etiqueta + ' ' + ms.map(function(m){
-        return mnMesCorto(m && m.mes) + ' ' + Number((m && m.n) || 0).toLocaleString('es-ES');
+        const n = Number((m && m.n) || 0), previo = Number((m && m.previo) || 0);
+        // El % es la única manera de ver que un mes NO está cerrado: «jun 35.460» parece
+        // completo y va por el 77% de lo que fue junio del año pasado.
+        return mnMesCorto(m && m.mes) + ' ' + mnMiles(n)
+          + (previo ? ' (' + Math.round(100 * n / previo) + '%)' : '')
+          + (m && m.mes === enCurso ? ' [mes en curso]' : '');
       }).join(' · ');
     }).filter(Boolean).join(' | ');
-    const vieja = !fuentes.some(fresca);
-    mnCoberturaTexto = 'Datos hasta: ' + hasta + '. Lo más reciente está INCOMPLETO: los órganos tardan semanas en publicar'
-      + (porMes ? ' — menores por mes: ' + porMes : '')
-      + (vieja ? ' (cuenta calculada el ' + mnFechaCorta(fuentes[0].actualizado) + ')' : '') + '.';
+    mnCoberturaTexto = 'Datos hasta: ' + hasta + ' — foto del ' + mnFechaCorta(fuentes[0].actualizado)
+      + '. Lo más reciente está INCOMPLETO: los órganos tardan semanas en publicar'
+      + (porMes ? ' — menores por mes, con el % sobre el mismo mes del año anterior: ' + porMes : '') + '.';
     mnPintaCobertura();
   }
   // Fecha del último menor del ÓRGANO filtrado. Se pregunta en vivo (49 ms por el índice
