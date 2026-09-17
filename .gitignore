@@ -36,3 +36,7 @@ cache_backfill/
 # Informes de empresa generados por informe_empresa.py: llevan CIFs, importes y
 # competencia. El repo es PUBLICO -> solo en local.
 informes/
+
+# Caché de CSV descargados por menores_autonomicos.py (Junta de Andalucía, hasta 224 MB
+# por año). Reproducibles: nunca al repo.
+cache_menores/

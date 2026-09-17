@@ -249,6 +249,390 @@ print("\n== bloque_competidores (mejora 3) ==")
 comprueba("lista vacía -> []", ie.bloque_competidores(None, []), [])
 comprueba("un CIF vacío se ignora sin romper", ie.bloque_competidores(None, ["", "  "]), [])
 
+# ---------------------------------------------------------------------------
+print("\n== fuentes de menores: lectura de data/menores_fuentes.json ==")
+# F1 de menores autonómicos: la tabla deja de ser solo estatal. Los controles de siempre
+# (LODEPA 6 menores / 56.208,00 €; Hardolass 2 / 78.580,00 € = 38.800 + 39.780, medidos
+# en vivo) son de la parte ESTATAL, así que el desglose tiene que dejarlos a la vista.
+import tempfile  # noqa: E402
+
+real = ie.lee_fuentes_menores()
+comprueba("el fichero del repo se lee", "estatal" in real, True)
+comprueba("la estatal figura como cargada", real.get("estatal", {}).get("cargada"), True)
+comprueba("las notas («_nota») no son fuentes", any(k.startswith("_") for k in real), False)
+
+with tempfile.TemporaryDirectory() as tmp:
+    roto = Path(tmp) / "roto.json"
+    roto.write_text("{esto no es json", encoding="utf-8")
+    lista = Path(tmp) / "lista.json"
+    lista.write_text('["estatal"]', encoding="utf-8")
+    comprueba("fichero ausente -> {} (el informe sale igual)",
+              ie.lee_fuentes_menores(Path(tmp) / "no_existe.json"), {})
+    comprueba("JSON roto -> {}", ie.lee_fuentes_menores(roto), {})
+    comprueba("JSON que no es un objeto -> {}", ie.lee_fuentes_menores(lista), {})
+    # La ruta por defecto se resuelve AL LLAMAR, no al importar: así se puede parchear.
+    _original = ie.FUENTES_MENORES
+    ie.FUENTES_MENORES = Path(tmp) / "no_existe.json"
+    try:
+        comprueba("parchear FUENTES_MENORES cambia lo que se lee", ie.lee_fuentes_menores(), {})
+    finally:
+        ie.FUENTES_MENORES = _original
+
+ESTATAL = {"etiqueta": "Estatal",
+           "nombre": "Plataforma de Contratación del Sector Público (sindicación 1143)",
+           "cargada": True}
+ANDALUCIA = {"etiqueta": "Andalucía",
+             "nombre": "Junta de Andalucía (datos abiertos de contratación menor)",
+             "cargada": True}
+F_UNA = {"estatal": ESTATAL, "andalucia": {**ANDALUCIA, "cargada": False}}   # la de hoy
+F_VARIAS = {"estatal": ESTATAL, "andalucia": ANDALUCIA}                      # tras F1
+
+print("\n== desglose_por_fuente ==")
+comprueba("etiqueta conocida", ie.etiqueta_fuente("andalucia", F_VARIAS), "Andalucía")
+comprueba("fuente fuera del fichero -> su código tal cual",
+          ie.etiqueta_fuente("galicia", F_VARIAS), "galicia")
+comprueba("sin fichero -> su código tal cual", ie.etiqueta_fuente("estatal", {}), "estatal")
+comprueba("sin fuente -> rótulo explícito, no vacío", ie.etiqueta_fuente(None, F_VARIAS),
+          "(sin fuente)")
+
+MEZCLA = [
+    {"fuente": "andalucia", "importe_sin_iva": 1000},
+    {"fuente": "estatal", "importe_sin_iva": 38800.0},
+    {"fuente": "andalucia", "importe_sin_iva": None},      # sin importe: no suma, sí cuenta
+    {"fuente": "larioja", "importe_sin_iva": 0},           # 0 € NO es «no se sabe»
+    {"fuente": "estatal", "importe_sin_iva": "39780.00"},  # PostgREST puede dar cadena
+    {"fuente": "galicia", "importe_sin_iva": None},        # ninguna trae importe -> null
+    {"fuente": "andalucia", "importe_sin_iva": 250.5},
+]
+d = ie.desglose_por_fuente(MEZCLA, F_VARIAS)
+comprueba("de más a menos contratos; empate por código (como el SQL)",
+          [x["fuente"] for x in d], ["andalucia", "estatal", "galicia", "larioja"])
+comprueba("la parte estatal queda a la vista (control Hardolass)", d[1],
+          {"fuente": "estatal", "etiqueta": "Estatal", "n": 2, "importe_total_sin_iva": 78580.0})
+comprueba("una fila sin importe cuenta pero no suma", (d[0]["n"], d[0]["importe_total_sin_iva"]),
+          (3, 1250.5))
+comprueba("ninguna fila con importe -> null", d[2]["importe_total_sin_iva"], None)
+comprueba("importe 0 -> 0.0, no null", d[3]["importe_total_sin_iva"], 0.0)
+comprueba("fuente sin etiqueta -> código", d[2]["etiqueta"], "galicia")
+comprueba("la suma del desglose cuadra con las filas", sum(x["n"] for x in d), len(MEZCLA))
+comprueba("sin filas -> []", ie.desglose_por_fuente([], F_VARIAS), [])
+
+print("\n== textos de fuentes: una y varias cargadas ==")
+aviso_una = ie.aviso_fuente_menores(F_UNA)
+comprueba("una cargada · nombra la estatal",
+          "«Estatal»: Plataforma de Contratación del Sector Público (sindicación 1143)" in aviso_una,
+          True)
+comprueba("una cargada · NO nombra la declarada sin cargar", "Andalucía" in aviso_una, False)
+comprueba("una cargada · mantiene que no se suman", "NO se suman con los del bloque 2" in aviso_una,
+          True)
+aviso_varias = ie.aviso_fuente_menores(F_VARIAS)
+comprueba("varias cargadas · nombra las dos, en el orden del fichero",
+          aviso_varias.index("«Estatal»") < aviso_varias.index("«Andalucía»: Junta de Andalucía"),
+          True)
+comprueba("varias cargadas · mantiene que no se suman",
+          "NO se suman con los del bloque 2" in aviso_varias, True)
+aviso_sin = ie.aviso_fuente_menores({})
+comprueba("sin fichero · lo dice", "No se pudo leer data/menores_fuentes.json" in aviso_sin, True)
+comprueba("sin fichero · mantiene que no se suman", "NO se suman" in aviso_sin, True)
+comprueba("fichero sin ninguna cargada · no dice que no se pudo leer",
+          ie.aviso_fuente_menores({"estatal": {**ESTATAL, "cargada": False}})
+          .startswith("Ninguna fuente figura como cargada"), True)
+comprueba("cargada tiene que ser true de verdad, no una cadena",
+          ie.nombra_cargadas({"estatal": {**ESTATAL, "cargada": "false"}}), None)
+t8_una, t8_varias = ie.texto_fuentes_menores(F_UNA), ie.texto_fuentes_menores(F_VARIAS)
+comprueba("bloque 8 · una cargada", ("sindicación 1143)" in t8_una, "Andalucía" in t8_una),
+          (True, False))
+comprueba("bloque 8 · varias cargadas", "«Andalucía»: Junta de Andalucía" in t8_varias, True)
+comprueba("bloque 8 · sigue avisando de las agregadas",
+          "NO incluye las plataformas agregadas" in t8_varias, True)
+comprueba("bloque 8 · sin fichero no revienta",
+          ie.texto_fuentes_menores({}).startswith("Fuentes sin nombrar."), True)
+
+
+class SupabaseMenores:
+    """Devuelve filas fijas y APUNTA lo que se pidió, para ver que el select trae fuente."""
+
+    def __init__(self, filas, conteo=0):
+        self._filas = filas
+        self._conteo = conteo
+        self.params = []
+        self.peticiones, self.por_tabla, self.segundos, self.mas_lenta = 0, {}, 0.0, ("", 0.0)
+
+    def filas(self, tabla, params, tope=None):
+        self.params.append(params)
+        return list(self._filas)
+
+    def cuenta(self, tabla, params):
+        return self._conteo
+
+    def una(self, tabla, params):
+        return {"fecha_publicacion": "2024-09-15T00:00:00+00:00"}
+
+
+print("\n== bloque 3: menores de la empresa con desglose por fuente ==")
+HARDOLASS = [
+    {"licitacion_id": "m1", "objeto": "Limpieza A", "organo_contratacion": "Órgano 1",
+     "cif_adjudicatario": "B01947753", "n_adjudicatarios": 1, "importe_sin_iva": 38800.0,
+     "fecha_adjudicacion": "2025-06-01", "cpv": ["90911200"], "fuente": "estatal"},
+    {"licitacion_id": "m2", "objeto": "Limpieza B", "organo_contratacion": "Órgano 2",
+     "cif_adjudicatario": "B01947753", "n_adjudicatarios": 1, "importe_sin_iva": 39780.0,
+     "fecha_adjudicacion": "2024-03-01", "cpv": [], "fuente": "estatal"},
+]
+sb_h = SupabaseMenores(HARDOLASS)
+b3 = ie.bloque3_menores_cif(sb_h, "B01947753", F_UNA)
+comprueba("el select pide la columna fuente", ",fuente" in sb_h.params[0].split("&")[0], True)
+comprueba("Hardolass · total de siempre", (b3["n"], b3["importe_total_sin_iva"]), (2, 78580.0))
+comprueba("Hardolass · por_fuente = solo estatal", b3["por_fuente"],
+          [{"fuente": "estatal", "etiqueta": "Estatal", "n": 2, "importe_total_sin_iva": 78580.0}])
+comprueba("se conservan TODAS las claves de antes",
+          {"filas", "n", "importe_total_sin_iva", "ultimo", "n_sin_fecha", "n_compartidos",
+           "importe_compartido", "aviso_fuente", "aviso_repartidos"} <= set(b3), True)
+
+ANDALUZAS = [
+    {"licitacion_id": "and:766139", "objeto": "Limpieza C", "organo_contratacion": "SAS",
+     "cif_adjudicatario": "B01947753", "n_adjudicatarios": 1, "importe_sin_iva": 1200.0,
+     "fecha_adjudicacion": "2025-07-01", "cpv": [], "fuente": "andalucia"},
+    {"licitacion_id": "and:766140", "objeto": "Limpieza D", "organo_contratacion": "SAS",
+     "cif_adjudicatario": "B01947753", "n_adjudicatarios": 1, "importe_sin_iva": None,
+     "fecha_adjudicacion": "2025-08-01", "cpv": [], "fuente": "andalucia"},
+    {"licitacion_id": "gal:1", "objeto": "Limpieza E", "organo_contratacion": "Xunta",
+     "cif_adjudicatario": "B01947753", "n_adjudicatarios": 1, "importe_sin_iva": None,
+     "fecha_adjudicacion": "2025-09-01", "cpv": [], "fuente": "galicia"},
+]
+b3v = ie.bloque3_menores_cif(SupabaseMenores(HARDOLASS + ANDALUZAS), "B01947753", F_VARIAS)
+comprueba("varias fuentes · el total suma todas", (b3v["n"], b3v["importe_total_sin_iva"]),
+          (5, 79780.0))
+comprueba("varias fuentes · el control estatal sigue leyéndose en su línea",
+          [x for x in b3v["por_fuente"] if x["fuente"] == "estatal"][0]["importe_total_sin_iva"],
+          78580.0)
+comprueba("varias fuentes · orden y etiquetas",
+          [(x["etiqueta"], x["n"], x["importe_total_sin_iva"]) for x in b3v["por_fuente"]],
+          [("Andalucía", 2, 1200.0), ("Estatal", 2, 78580.0), ("galicia", 1, None)])
+
+# Sin pasar `fuentes`, el bloque lee el fichero él solo: se parchea la ruta.
+_original = ie.FUENTES_MENORES
+ie.FUENTES_MENORES = Path(tempfile.gettempdir()) / "menores_fuentes_que_no_existe.json"
+try:
+    b3s = ie.bloque3_menores_cif(SupabaseMenores(HARDOLASS), "B01947753")
+finally:
+    ie.FUENTES_MENORES = _original
+comprueba("JSON ausente · no revienta y usa el código", b3s["por_fuente"][0]["etiqueta"], "estatal")
+comprueba("JSON ausente · el aviso lo dice", "No se pudo leer" in b3s["aviso_fuente"], True)
+comprueba("JSON ausente · las cifras no cambian", b3s["importe_total_sin_iva"], 78580.0)
+
+print("\n== bloque 3b: desglose del nicho, tope y aviso del CPV ==")
+sb_n = SupabaseMenores(HARDOLASS + ANDALUZAS, conteo=5)
+b3b = ie.bloque3b_menores_nicho(sb_n, ["90911200"], fuentes=F_VARIAS)
+comprueba("3b · el select pide la columna fuente", "cpv,enlace,fuente&" in sb_n.params[0], True)
+comprueba("3b · por_fuente sobre las filas traídas", [x["n"] for x in b3b["por_fuente"]], [2, 2, 1])
+comprueba("3b · sin tope, la nota lo dice", "todas, sin tope" in b3b["por_fuente_nota"], True)
+comprueba("3b · aviso del CPV en el JSON",
+          ("CÓDIGO CPV" in b3b["aviso_cpv"], "Andalucía" in b3b["aviso_cpv"]), (True, True))
+_tope = ie.TOPE_MENORES_NICHO
+ie.TOPE_MENORES_NICHO = 5
+try:
+    b3b_t = ie.bloque3b_menores_nicho(SupabaseMenores(HARDOLASS + ANDALUZAS, 99), ["90911200"],
+                                      fuentes=F_VARIAS)
+finally:
+    ie.TOPE_MENORES_NICHO = _tope
+comprueba("3b · topado", b3b_t["topado"], True)
+comprueba("3b · topado, la nota dice que es una muestra",
+          ("TOPADAS" in b3b_t["por_fuente_nota"], "no el del universo" in b3b_t["por_fuente_nota"]),
+          (True, True))
+MIL = [{"fuente": "estatal", "importe_sin_iva": 1, "organo_contratacion": "X"}] * ie.TOPE_MENORES_NICHO
+b3b_mil = ie.bloque3b_menores_nicho(SupabaseMenores(MIL, 22854), ["90911200"], fuentes=F_VARIAS)
+comprueba("3b · topado con el tope real, miles con punto (y la coma del texto intacta)",
+          b3b_mil["por_fuente_nota"].split(" (")[0],
+          "Desglose sobre las 3.000 filas traídas, TOPADAS en 3.000")
+b3b_v = ie.bloque3b_menores_nicho(None, [], fuentes=F_VARIAS)
+comprueba("3b sin CPV · desglose vacío y aviso igual",
+          (b3b_v["por_fuente"], b3b_v["aviso_cpv"] == ie.aviso_cpv_nicho(F_VARIAS)), ([], True))
+
+print("\n== bloque 8: la nota de fuentes nombra las cargadas (fichero parcheado) ==")
+with tempfile.TemporaryDirectory() as tmp:
+    parcheado = Path(tmp) / "menores_fuentes.json"
+    parcheado.write_text(json.dumps({"_nota": "x", **F_VARIAS}, ensure_ascii=False),
+                         encoding="utf-8")
+    _original = ie.FUENTES_MENORES
+    ie.FUENTES_MENORES = parcheado
+    try:
+        b8 = ie.bloque8_metadatos(SupabaseMenores([]), "2026-09-17T00:00:00+00:00", 24,
+                                  {}, [], {}, 624204)
+    finally:
+        ie.FUENTES_MENORES = _original
+comprueba("bloque 8 · menores nombra Estatal y Andalucía",
+          ("«Estatal»" in b8["fuentes"]["menores"], "«Andalucía»" in b8["fuentes"]["menores"]),
+          (True, True))
+comprueba("bloque 8 · el resto de la nota no cambia", b8["fuentes"]["aviso"],
+          "Los importes de menores y de adjudicaciones NO se suman entre sí.")
+
+
+print("\n== escribe_md: columna Fuente, línea de desglose y aviso del CPV ==")
+
+
+def informe_minimo(menores_empresa, menores_nicho):
+    """Lo justo para que escribe_md pinte; lo que se prueba son las secciones 3 y 3b."""
+    return {
+        "cif": "B01947753", "identidad": None, "adjudicaciones": [],
+        "menores_empresa": menores_empresa, "menores_nicho": menores_nicho,
+        "cpv": {"cpv_deducidos": []}, "quien_gana": [], "oportunidades": [], "competidores": [],
+        "mercado": {"n_licitaciones": 0, "importe_total_sin_iva": None, "abiertas_hoy": 0,
+                    "desiertas": 0, "por_organo": [], "por_ccaa": [], "n_sin_ccaa": 0},
+        "metadatos": {"consultado_en": "2026-09-17T00:00:00+00:00", "ventana_informe_meses": 24,
+                      "catalogo_total_filas": 624204,
+                      "catalogo_ventana": {"desde": None, "hasta": None},
+                      "catalogo_por_anno": [], "peticiones_http": 0,
+                      "segundos_en_consultas": 0, "filas_por_bloque": {},
+                      "cpv_criba": {}, "cpv_expansion": []},
+    }
+
+
+def seccion(md, desde, hasta):
+    return md[md.index(desde):md.index(hasta)]
+
+
+md_una = ie.escribe_md(informe_minimo(b3, b3b_v))
+s3 = seccion(md_una, "## 3 · Contratos menores", "### 3b")
+comprueba("MD una · cabecera con columna Fuente",
+          "| Fecha | Objeto | Órgano | Fuente | Importe s/IVA |" in s3, True)
+comprueba("MD una · filas con la etiqueta", "| Estatal | 38.800,00 € |" in s3, True)
+comprueba("MD una · solo estatal -> sin línea de desglose (el total YA es la parte estatal)",
+          "**Por fuente:**" in s3, False)
+comprueba("MD una · total de siempre", "**Total menores:** 78.580,00 € · **nº:** 2" in s3, True)
+
+md_varias = ie.escribe_md(informe_minimo(b3v, b3b))
+s3v = seccion(md_varias, "## 3 · Contratos menores", "### 3b")
+comprueba("MD varias · línea de desglose con la parte estatal a la vista",
+          "**Por fuente:** Andalucía: 2 menores, 1.200,00 € · Estatal: 2 menores, 78.580,00 € "
+          "· galicia: 1 menor, —" in s3v, True)
+comprueba("MD varias · fila de una fuente sin etiqueta sale con su código",
+          "| galicia | — |" in s3v, True)
+comprueba("MD varias · el aviso nombra las dos cargadas",
+          ("«Estatal»" in s3v, "«Andalucía»" in s3v), (True, True))
+
+solo_and = ie.bloque3_menores_cif(SupabaseMenores(ANDALUZAS[:2]), "B01947753", F_VARIAS)
+s3a = seccion(ie.escribe_md(informe_minimo(solo_and, b3b_v)), "## 3 · Contratos menores", "### 3b")
+comprueba("MD una sola fuente NO estatal -> sí hay línea de desglose",
+          "**Por fuente:** Andalucía: 2 menores, 1.200,00 €" in s3a, True)
+
+s3b = seccion(md_varias, "### 3b", "## 4 ·")
+comprueba("MD 3b · aviso del CPV", f"> ⚠️ {b3b['aviso_cpv']}" in s3b, True)
+comprueba("MD 3b · línea de desglose", "**Por fuente:** Andalucía: 2 menores" in s3b, True)
+comprueba("MD 3b · nota de sobre qué filas es", "_Desglose sobre las 5 filas del nicho" in s3b,
+          True)
+s3b_v = seccion(md_una, "### 3b", "## 4 ·")
+comprueba("MD 3b sin filas · el aviso del CPV sale igual y no hay desglose",
+          (b3b_v["aviso_cpv"] in s3b_v, "**Por fuente:**" in s3b_v), (True, False))
+comprueba("MD · miles con punto en el desglose",
+          ie.linea_por_fuente([{"etiqueta": "Estatal", "n": 22854, "importe_total_sin_iva": 1.5}]),
+          "Estatal: 22.854 menores, 1,50 €")
+
+print("\n== revisión: el hueco entre cargar una fuente y marcarla como cargada ==")
+# menores_autonomicos.py acaba la carga con «RECUERDA: 'andalucia' sigue con
+# cargada=false»: durante un rato hay filas andaluzas y el fichero dice que no. El aviso
+# no puede nombrar solo la estatal encima de una tabla con filas de Andalucía.
+b3_tr = ie.bloque3_menores_cif(SupabaseMenores(HARDOLASS + ANDALUZAS[:2]), "B01947753", F_UNA)
+av_tr = b3_tr["aviso_fuente"]
+comprueba("hueco · el aviso dice que hay filas de una fuente sin marcar",
+          "Hay filas de «Andalucía», que aún NO figura como cargada" in av_tr, True)
+comprueba("hueco · lo dice ANTES de «que no figure aquí» (lo de la tabla figura en el aviso)",
+          av_tr.index("«Andalucía»") < av_tr.index("que no figure aquí"), True)
+comprueba("hueco · sigue nombrando la estatal y avisando de que no se suman",
+          ("«Estatal»: Plataforma" in av_tr, "NO se suman" in av_tr), (True, True))
+s3_tr = seccion(ie.escribe_md(informe_minimo(b3_tr, b3b_v)), "## 3 · Contratos menores", "### 3b")
+comprueba("hueco · el MD lo lleva en el aviso de la sección 3",
+          "> ⚠️ Fuentes de menores cargadas: «Estatal»" in s3_tr
+          and "Hay filas de «Andalucía»" in s3_tr, True)
+comprueba("hueco · plural con dos fuentes sin marcar (una ni siquiera está en el fichero)",
+          "Hay filas de «Andalucía», «galicia», que aún NO figuran como cargadas" in
+          ie.aviso_fuente_menores(F_UNA, ["andalucia", "estatal", "galicia", "andalucia"]), True)
+comprueba("hueco · con Andalucía ya marcada no hay frase",
+          "NO figura" in ie.aviso_fuente_menores(F_VARIAS, ["estatal", "andalucia"]), False)
+comprueba("hueco · solo estatal (hoy) no hay frase",
+          "NO figura" in ie.aviso_fuente_menores(F_UNA, ["estatal", "estatal"]), False)
+comprueba("hueco · sin fichero no se sabe qué está cargado: no se afirma nada",
+          "NO figura" in ie.aviso_fuente_menores({}, ["andalucia"]), False)
+av_ninguna = ie.aviso_fuente_menores({"estatal": {**ESTATAL, "cargada": False}}, ["estatal"])
+comprueba("hueco · fichero sin cargadas y filas estatales: lo dice",
+          (av_ninguna.startswith("Ninguna fuente figura como cargada"),
+           "Hay filas de «Estatal», que aún NO figura" in av_ninguna), (True, True))
+comprueba("bloque 8 · la nota de fuentes dice lo mismo en el hueco",
+          "Hay filas de «Andalucía»" in ie.texto_fuentes_menores(F_UNA, ["estatal", "andalucia"]),
+          True)
+comprueba("bloque 8 · sin filas de fuentes sin marcar no hay frase",
+          "NO figura" in ie.texto_fuentes_menores(F_UNA, ["estatal"]), False)
+b8_tr = ie.bloque8_metadatos(SupabaseMenores([]), "2026-09-17T00:00:00+00:00", 24, {}, [], {},
+                             624204, F_UNA, ["estatal", "andalucia"])
+comprueba("bloque 8 · recibe las fuentes presentes y las lleva a metadatos",
+          "Hay filas de «Andalucía»" in b8_tr["fuentes"]["menores"], True)
+
+print("\n== revisión: el aviso del CPV depende de si Andalucía está cargada ==")
+# Hoy Andalucía tiene 0 filas: decir que «sus menores pueden NO aparecer aquí por el CPV»
+# haría creer que están en la base y el CPV los esconde.
+cpv_hoy = ie.aviso_cpv_nicho(F_UNA)
+comprueba("sin cargar · dice que aún no está cargada",
+          ("Andalucía aún no está cargada" in cpv_hoy, "pueden NO aparecer aquí" in cpv_hoy),
+          (True, False))
+cpv_f1 = ie.aviso_cpv_nicho(F_VARIAS)
+comprueba("cargada · avisa de que sus menores pueden NO aparecer",
+          ("pueden NO aparecer aquí aunque sean del nicho" in cpv_f1, "aún no está" in cpv_f1),
+          (True, False))
+comprueba("en el hueco · filas andaluzas en el nicho = se trata como cargada",
+          ie.aviso_cpv_nicho(F_UNA, ["estatal", "andalucia"]), cpv_f1)
+comprueba("sin fichero · no afirma ni una cosa ni la otra",
+          "no se sabe si Andalucía está cargada" in ie.aviso_cpv_nicho({}), True)
+for nombre_caso, texto in (("sin cargar", cpv_hoy), ("cargada", cpv_f1),
+                           ("sin fichero", ie.aviso_cpv_nicho({}))):
+    comprueba(f"{nombre_caso} · siempre: filtro por código y estatales sin CPV",
+              ("CÓDIGO CPV" in texto, "el 47,8% no trae CPV" in texto,
+               texto.endswith("Que no aparezcan no quiere decir que no existan.")),
+              (True, True, True))
+b3b_hoy = ie.bloque3b_menores_nicho(SupabaseMenores(HARDOLASS, 2), ["90911200"], fuentes=F_UNA)
+comprueba("3b solo estatal y Andalucía sin cargar · JSON con el aviso de hoy",
+          b3b_hoy["aviso_cpv"], cpv_hoy)
+comprueba("3b sin CPV y Andalucía sin cargar · también",
+          ie.bloque3b_menores_nicho(None, [], fuentes=F_UNA)["aviso_cpv"], cpv_hoy)
+comprueba("3b con filas andaluzas en el hueco · JSON con el aviso de cargada",
+          ie.bloque3b_menores_nicho(SupabaseMenores(HARDOLASS + ANDALUZAS, 5), ["90911200"],
+                                    fuentes=F_UNA)["aviso_cpv"], cpv_f1)
+comprueba("MD 3b · pinta el aviso del JSON, no uno fijo",
+          f"> ⚠️ {cpv_hoy}" in seccion(ie.escribe_md(informe_minimo(b3, b3b_hoy)), "### 3b",
+                                       "## 4 ·"), True)
+
+print("\n== revisión: sin fichero de fuentes no se manda a un desglose que no está ==")
+s3_sin = seccion(ie.escribe_md(informe_minimo(b3s, b3b_v)), "## 3 · Contratos menores", "### 3b")
+comprueba("sin fichero, solo estatal · no hay línea «Por fuente»", "**Por fuente:**" in s3_sin,
+          False)
+comprueba("sin fichero, solo estatal · el aviso no remite al desglose",
+          "desglose" in b3s["aviso_fuente"], False)
+comprueba("sin fichero · el aviso explica lo que sí se ve (el código en la columna)",
+          ("código de su fuente" in b3s["aviso_fuente"], "| estatal | 38.800,00 € |" in s3_sin),
+          (True, True))
+
+print("\n== revisión: textos del 3b (miles y singular) y nombre ausente ==")
+FILA_NICHO = {"fuente": "estatal", "importe_sin_iva": 10.0, "organo_contratacion": "O"}
+b3b_criba = ie.bloque3b_menores_nicho(SupabaseMenores([FILA_NICHO] * 1079, 22854), ["90911200"],
+                                      ["limpieza"], [], fuentes=F_UNA)
+s3b_criba = seccion(ie.escribe_md(informe_minimo(b3, b3b_criba)), "### 3b", "## 4 ·")
+comprueba("criba · miles con punto, como la línea «Por fuente»",
+          ("De 22.854 menores que casan por código CPV, 22.854 contienen" in s3b_criba,
+           "y 1.079 quedan tras descartar" in s3b_criba, "22,854" in s3b_criba,
+           "**Por fuente:** Estatal: 1.079 menores" in s3b_criba),
+          (True, True, False, True))
+comprueba("una sola fila · singular",
+          ie.bloque3b_menores_nicho(SupabaseMenores([FILA_NICHO], 1), ["90911200"],
+                                    fuentes=F_UNA)["por_fuente_nota"],
+          "Desglose sobre la única fila del nicho.")
+comprueba("dos filas · plural de siempre",
+          ie.bloque3b_menores_nicho(SupabaseMenores([FILA_NICHO] * 2, 2), ["90911200"],
+                                    fuentes=F_UNA)["por_fuente_nota"],
+          "Desglose sobre las 2 filas del nicho: todas, sin tope.")
+comprueba("sin nombre · la etiqueta, como generar_web._fuentes_menores",
+          ie.nombra_cargadas({"estatal": {"etiqueta": "Estatal", "cargada": True}}),
+          "«Estatal»: Estatal")
+comprueba("sin nombre ni etiqueta · el código",
+          ie.nombra_cargadas({"estatal": {"cargada": True}}), "«estatal»: estatal")
+
 print("\n== el script no escribe NUNCA en la base ==")
 fuente = (Path(__file__).resolve().parent / "informe_empresa.py").read_text(encoding="utf-8")
 for verbo in (".post(", ".patch(", ".delete(", ".put("):

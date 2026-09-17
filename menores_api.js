@@ -37,6 +37,7 @@ const M_COLUMNAS = [
   'num_expediente',
   'enlace',
   'n_adjudicatarios',
+  'fuente',            // estatal | andalucia | … (etiqueta en data/menores_fuentes.json)
 ].join(',');
 
 const M_POR_PAGINA_DEF = 25;

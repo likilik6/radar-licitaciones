@@ -1,0 +1,183 @@
+# Menores AUTONÓMICOS (F1: Junta de Andalucía) — carga a public.menores.
+#
+# Qué hace: descarga los CSV de contratación menor de la Junta (CKAN de datos abiertos),
+# los normaliza y los carga con la RPC menores_carga_lote (menores_f1.sql), que solo
+# escribe lo nuevo o lo que cambia. Ver la cabecera de menores_autonomicos.py.
+#
+# CUÁNDO:
+#   · Programado sábado y domingo a las 3:15 UTC: días SIN Radar (cron L-V). La hora sola
+#     no separa: GitHub retrasa los programados de este repo de 36 min a 12 h (el Radar
+#     de las 6:00 UTC empezó entre 6:36 y 18:09 entre el 17/08 y el 17/09/2026, y duró de
+#     20 a 85 min), así que un lunes o jueves a las 3:15 podía acabar a la vez que la
+#     ingesta diaria (backfill_catalogo.py --diario) en el Micro.
+#     Dos veces por semana para que la caché del estado no caduque: GitHub borra las
+#     cachés que nadie lee en 7 días; de domingo a sábado van 6. Sin estado se volverían
+#     a bajar ~500 MB de un servidor que va a 90-180 KB/s.
+#     SOLO corre si la variable del repo MENORES_AUTONOMICOS_ACTIVO vale 'true': así el
+#     merge no dispara cargas solas. Con MENORES_AUTONOMICOS_CPV = 'true' pide además el
+#     CPV al portal de la Junta (en F1 el portal ignoró la consulta por lotes: no la
+#     actives hasta medir otra forma de pedirlo; ver enriquece_cpv).
+#   · A mano (workflow_dispatch) siempre. Por defecto SIMULA (cargar = false).
+#   · Antes de escribir, espera a que no corra el Radar ni un backfill (lanzados a mano
+#     también: el 14/09 hubo cuatro Radar entre las 18:47 y las 21:58, y el 15/09 seis
+#     backfill seguidos, uno de 3 h 23 min).
+#
+# ESTADO: el JSON con la versión (last_modified + size) de cada recurso ya cargado vive
+# en la caché de Actions. Un año que no ha cambiado no se descarga. Solo lo escribe una
+# carga (--cargar); una simulación no marca nada como hecho.
+#
+# SEPARADO del Radar y del catálogo del Buscador: no toca data/, docs/ ni licitaciones.
+# El log y el informe son PÚBLICOS (repo público): el script solo imprime recuentos.
+
+name: Menores autonómicos
+
+on:
+  schedule:
+    - cron: "15 3 * * 6,0"
+  workflow_dispatch:
+    inputs:
+      anios:
+        description: "Años sueltos para trocear (p. ej. '2024,2025'). Vacío = los de la ventana de 3 años."
+        required: false
+        default: ""
+      cargar:
+        description: "Escribir en Supabase. Sin marcar, SIMULA (descarga, normaliza y cuenta)."
+        required: false
+        type: boolean
+        default: false
+      cpv_portal:
+        description: "Rellenar el CPV con la ficha del portal de la Junta. OJO: en F1 el portal ignoró la consulta por lotes (se corta solo)."
+        required: false
+        type: boolean
+        default: false
+      forzar:
+        description: "Procesar aunque el recurso no haya cambiado desde la última carga."
+        required: false
+        type: boolean
+        default: false
+
+# Propio y sin cancelar: dos cargas a la vez pisarían el estado, y cortar una a medias
+# obliga a repetir su año entero. NO se comparte el grupo 'pages' del Radar: GitHub
+# cancela los pendientes de un mismo grupo (se perdería un Radar o esta carga). La
+# convivencia con el Radar la resuelven los días del cron y el paso de espera.
+concurrency:
+  group: menores-autonomicos
+  cancel-in-progress: false
+
+jobs:
+  andalucia:
+    # Programado solo con la variable activada; a mano, siempre.
+    if: github.event_name == 'workflow_dispatch' || vars.MENORES_AUTONOMICOS_ACTIVO == 'true'
+    runs-on: ubuntu-latest
+    # Tope duro de GitHub: 360 min. La primera carga (4 años, ~500 MB a 90-180 KB/s más
+    # ~306.000 filas) puede ir justa: si no cabe, trocear con 'anios'.
+    timeout-minutes: 330
+    # Solo lee: el repo (checkout) y la lista de ejecuciones de otros workflows (paso de
+    # espera). Las credenciales van por secrets.
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar librerías
+        run: pip install -r requirements.txt
+
+      # La clave lleva run_id y run_attempt porque una caché no se puede sobrescribir;
+      # restore-keys recupera la más reciente.
+      - name: Recuperar el estado de la última carga
+        uses: actions/cache/restore@v4
+        with:
+          path: .estado_menores
+          key: menores-autonomicos-estado-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            menores-autonomicos-estado-
+
+      # Después de recuperar el estado: si la espera se agota y el job falla, «Guardar el
+      # estado» vuelve a guardar el recuperado y la caché no caduca.
+      # 18 vueltas de 5 min = 90 min, más que el Radar más largo medido (85 min). Un
+      # backfill puede durar horas: entonces se para con error y se relanza después.
+      # Si gh no responde, se avisa y se sigue (la espera es una cortesía, no un cerrojo).
+      - name: Esperar a que no corra el Radar ni un backfill
+        # Una simulación no escribe: no hace falta esperar.
+        if: github.event_name == 'schedule' || inputs.cargar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for vuelta in $(seq 1 18); do
+            ocupados=0
+            for wf in radar.yml backfill.yml; do
+              for st in in_progress queued; do
+                if ! n=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$wf" --status "$st" \
+                           --limit 5 --json databaseId --jq 'length' 2>/dev/null); then
+                  echo "AVISO: no pude consultar $wf ($st); sigo sin esperar."
+                  n=0
+                fi
+                ocupados=$((ocupados + n))
+              done
+            done
+            if [ "$ocupados" -eq 0 ]; then
+              echo "Ni Radar ni backfill en marcha: adelante."
+              exit 0
+            fi
+            echo "Radar o backfill en marcha ($ocupados); espero 5 min (vuelta $vuelta de 18)."
+            sleep 300
+          done
+          echo "Tras 90 min siguen el Radar o un backfill: no cargo a la vez. Relánzalo después." >&2
+          exit 1
+
+      - name: Cargar menores de Andalucía
+        env:
+          # Vienen de los SECRETS del repo. GitHub los enmascara en el log.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+          EVENTO: ${{ github.event_name }}
+          ANIOS: ${{ inputs.anios }}
+          CARGAR: ${{ inputs.cargar }}
+          CPV_PORTAL: ${{ inputs.cpv_portal }}
+          FORZAR: ${{ inputs.forzar }}
+          CPV_PROGRAMADO: ${{ vars.MENORES_AUTONOMICOS_CPV }}
+        run: |
+          mkdir -p .estado_menores informes_menores
+          # En los programados no hay inputs: carga siempre, sin forzar y con la ventana.
+          if [ "$EVENTO" = "schedule" ]; then
+            CARGAR=true; FORZAR=false; ANIOS=""
+            if [ "$CPV_PROGRAMADO" = "true" ]; then CPV_PORTAL=true; else CPV_PORTAL=false; fi
+          fi
+          args=(--fuente andalucia --estado .estado_menores/estado.json
+                --informe informes_menores/informe_andalucia.json)
+          if [ -n "$ANIOS" ]; then args+=(--anios "$ANIOS"); fi
+          if [ "$CPV_PORTAL" = "true" ]; then args+=(--cpv-portal); fi
+          if [ "$FORZAR" = "true" ]; then args+=(--forzar); fi
+          if [ "$CARGAR" = "true" ]; then
+            if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE" ]; then
+              echo "Faltan los secrets SUPABASE_URL y/o SUPABASE_SERVICE_ROLE." >&2
+              exit 1
+            fi
+            args+=(--cargar)
+          fi
+          echo "Ejecutando: python menores_autonomicos.py ${args[*]}"
+          python menores_autonomicos.py "${args[@]}"
+
+      # Aunque la carga falle a medias: el estado guarda los años que SÍ terminaron.
+      - name: Guardar el estado
+        if: always() && hashFiles('.estado_menores/estado.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: .estado_menores
+          key: menores-autonomicos-estado-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Subir el informe
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: informe-menores-andalucia
+          path: informes_menores/
+          if-no-files-found: warn
+          retention-days: 30

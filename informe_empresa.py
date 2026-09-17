@@ -32,6 +32,10 @@ base real; si algo de esto cambia, el script hay que revisarlo):
   nacional o de código ambiguo— así que el informe declara SIEMPRE la cobertura.
 · Umbral de genericidad (2% del catálogo = 12.484 licitaciones): hoy solo lo superan 2
   CPV de todo el vocabulario, así que es una red de seguridad, no un recorte habitual.
+· `menores.fuente` (medido el 17/09/2026) es NOT NULL con default 'estatal', y hoy
+  TODAS las filas son estatales: 1.407.588. De ellas solo 734.793 traen CPV (52,2%).
+  Las fuentes autonómicas entran con F1 (Andalucía, que no trae CPV): por eso los
+  bloques de menores desglosan por fuente y el 3b avisa de lo que el CPV no ve.
 =============================================================================
 
 CREDENCIALES · fichero `.env` en la raíz del repo (ya está en .gitignore):
@@ -60,6 +64,7 @@ import requests
 
 RAIZ = Path(__file__).resolve().parent
 CPV_VOCABULARIO = RAIZ / "data" / "cpv_nombres.json"   # 9.454 códigos; NO se consulta la BD
+FUENTES_MENORES = RAIZ / "data" / "menores_fuentes.json"   # etiqueta/nombre/cargada por fuente
 
 # Carpeta por defecto: la del proyecto en OneDrive, que es de donde se leen los informes.
 # Se puede cambiar con --salida o con INFORMES_DIR en el .env. Si no existe ninguna, cae
@@ -309,6 +314,147 @@ def expande_cpv(entrada: list[str]) -> tuple[list[str], list[dict]]:
 
 
 # ---------------------------------------------------------------------------
+# Fuentes de menores (data/menores_fuentes.json)
+# ---------------------------------------------------------------------------
+def lee_fuentes_menores(ruta: Path | None = None) -> dict:
+    """Catálogo de fuentes de `menores`: {código: {etiqueta, nombre, cargada}}. Es el
+    MISMO fichero que leen generar_web.py y menores_autonomicos.py, así que el informe
+    nombra las mismas fuentes que la web.
+
+    Si falta o está roto NO se muere: devuelve {} y las filas salen con su código tal
+    cual. Un informe con «andalucia» en vez de «Andalucía» sigue siendo correcto; un
+    informe que no sale por culpa de un fichero de rótulos, no.
+    """
+    try:
+        datos = json.loads(Path(ruta or FUENTES_MENORES).read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(datos, dict):
+        return {}
+    # Las claves con «_» delante son notas del fichero («_nota»), no fuentes.
+    return {k: v for k, v in datos.items() if not k.startswith("_") and isinstance(v, dict)}
+
+
+def etiqueta_fuente(codigo, fuentes: dict) -> str:
+    """Rótulo de una fuente. Si el fichero no la conoce, el código tal cual: mejor
+    «euskadi» que inventarse un nombre o esconder la fila."""
+    if not codigo:
+        return "(sin fuente)"
+    return (fuentes.get(codigo) or {}).get("etiqueta") or str(codigo)
+
+
+def desglose_por_fuente(filas: list[dict], fuentes: dict) -> list[dict]:
+    """[{fuente, etiqueta, n, importe_total_sin_iva}] de más a menos contratos.
+
+    Mismo orden (n desc, luego código) y mismas reglas que `por_fuente` de
+    menores_resumen_cif (menores_f1.sql), así que la web y el informe cuentan lo mismo.
+    La forma NO es idéntica: allí la clave es `importe_total` y aquí
+    `importe_total_sin_iva` (como el resto del informe), y aquí se añade `etiqueta`. El
+    importe es null si NINGUNA fila de esa fuente lo trae, porque «0 €» y «no se sabe»
+    no son lo mismo.
+
+    POR QUÉ: los controles de siempre (LODEPA 6 menores / 56.208,00 €, Hardolass 2 /
+    78.580,00 €) son de la fuente estatal. Cuando entre Andalucía el total cambiará y
+    el control solo se podrá leer en la línea estatal de este desglose.
+    """
+    grupos = {}
+    for f in filas:
+        g = grupos.setdefault(f.get("fuente"), {"n": 0, "importe": 0.0, "con_importe": 0})
+        g["n"] += 1
+        imp = num(f.get("importe_sin_iva"))
+        if imp is not None:
+            g["importe"] += imp
+            g["con_importe"] += 1
+    salida = [{"fuente": k, "etiqueta": etiqueta_fuente(k, fuentes), "n": g["n"],
+               "importe_total_sin_iva": round(g["importe"], 2) if g["con_importe"] else None}
+              for k, g in grupos.items()]
+    salida.sort(key=lambda x: (-x["n"], str(x["fuente"] or "")))
+    return salida
+
+
+def nombra_cargadas(fuentes: dict) -> str | None:
+    """Las fuentes CARGADAS, en el orden del fichero: «Estatal»: Plataforma de... Solo
+    las que tienen cargada=true (una fuente declarada pero vacía no se nombra: diría que
+    hay datos que no hay). None si no hay ninguna, p. ej. porque el fichero falta.
+
+    Sin `nombre`, la etiqueta y luego el código: el MISMO respaldo que
+    generar_web._fuentes_menores, para que la web y el informe nombren igual."""
+    partes = [f"«{v.get('etiqueta') or k}»: {v.get('nombre') or v.get('etiqueta') or k}"
+              for k, v in fuentes.items() if v.get("cargada") is True]
+    return "; ".join(partes) if partes else None
+
+
+def sin_cargadas(fuentes: dict) -> str:
+    """Por qué no se puede nombrar ninguna fuente. Son dos fallos distintos y el texto
+    no debe confundirlos: un fichero que no se lee no es un fichero sin cargadas."""
+    if fuentes:
+        return "Ninguna fuente figura como cargada en data/menores_fuentes.json"
+    return "No se pudo leer data/menores_fuentes.json"
+
+
+def aviso_sin_cargar(presentes, fuentes: dict) -> str:
+    """Frase para las fuentes que TIENEN filas en el informe pero no figuran como
+    cargadas; "" si no hay ninguna.
+
+    POR QUÉ: entre cargar una fuente y pasar su `cargada` a true hay SIEMPRE un hueco.
+    menores_autonomicos.py acaba la carga con «RECUERDA: 'andalucia' sigue con
+    cargada=false» (el cambio es a mano y posterior) y el informe lee el fichero de la
+    copia local, que puede ir por detrás. En ese hueco el aviso nombraría solo la
+    estatal encima de una tabla con filas andaluzas: mejor decirlo que contradecirse.
+
+    Sin fichero no se dice nada: no se sabe qué está cargado y el aviso ya lo cuenta.
+    """
+    if not fuentes:
+        return ""
+    etiquetas = []
+    for codigo in presentes:
+        if codigo and (fuentes.get(codigo) or {}).get("cargada") is not True:
+            etiqueta = etiqueta_fuente(codigo, fuentes)
+            if etiqueta not in etiquetas:
+                etiquetas.append(etiqueta)
+    if not etiquetas:
+        return ""
+    lista = ", ".join(f"«{e}»" for e in etiquetas)
+    n = "" if len(etiquetas) == 1 else "n"
+    s = "" if len(etiquetas) == 1 else "s"
+    return (f"Hay filas de {lista}, que aún NO figura{n} como cargada{s} en "
+            "data/menores_fuentes.json: su carga puede estar a medias o el fichero sin "
+            "actualizar, así que sus cifras pueden quedarse cortas. ")
+
+
+def aviso_fuente_menores(fuentes: dict, presentes=()) -> str:
+    """El aviso del bloque 3. `presentes`: las fuentes de las filas de la empresa."""
+    nombres = nombra_cargadas(fuentes)
+    if nombres:
+        texto = f"Fuentes de menores cargadas: {nombres}. "
+    elif fuentes:
+        texto = f"{sin_cargadas(fuentes)}: no se puede decir de qué plataformas hay menores. "
+    else:
+        # Sin «ver el desglose»: con solo estatal el MD no pinta esa línea, y el lector
+        # buscaría algo que no está. Lo que sí se ve es la columna Fuente con el código.
+        texto = (f"{sin_cargadas(fuentes)}: cada fila lleva el código de su fuente en vez "
+                 "de su nombre, y no se puede decir qué fuentes están cargadas. ")
+    # La frase de las no cargadas va ANTES de «que no figure aquí»: así lo que hay en la
+    # tabla siempre figura en el aviso.
+    texto += aviso_sin_cargar(presentes, fuentes)
+    if nombres:
+        texto += ("Los menores publicados SOLO en una plataforma autonómica que no figure "
+                  "aquí no están en la base. ")
+    return texto + ("Universo DISTINTO del de las adjudicaciones (643 + 1044): estos importes "
+                    "NO se suman con los del bloque 2.")
+
+
+def texto_fuentes_menores(fuentes: dict, presentes=()) -> str:
+    """La línea de menores de la nota de fuentes (bloque 8). La sindicación 1143 NO trae
+    las plataformas agregadas: un menor autonómico solo está si su fuente se cargó.
+    `presentes`: las fuentes que salen en las filas del informe (bloques 3 y 3b)."""
+    cabeza = nombra_cargadas(fuentes) or f"Fuentes sin nombrar. {sin_cargadas(fuentes)}"
+    return (f"{cabeza}. {aviso_sin_cargar(presentes, fuentes)}La sindicación 1143 NO "
+            "incluye las plataformas agregadas: los menores publicados solo en una "
+            "autonómica están únicamente si su fuente figura aquí.")
+
+
+# ---------------------------------------------------------------------------
 # Bloques
 # ---------------------------------------------------------------------------
 def bloque1_identidad(sb: Supabase, cif: str) -> dict | None:
@@ -372,11 +518,12 @@ def bloque2_adjudicaciones(sb: Supabase, cif: str) -> tuple[list[dict], dict]:
     return salida, catalogo
 
 
-def bloque3_menores_cif(sb: Supabase, cif: str) -> dict:
+def bloque3_menores_cif(sb: Supabase, cif: str, fuentes: dict | None = None) -> dict:
+    fuentes = lee_fuentes_menores() if fuentes is None else fuentes
     filas = sb.filas("menores",
                      "select=licitacion_id,objeto,organo_contratacion,adjudicatario,"
                      "cif_adjudicatario,cifs_adjudicatarios,n_adjudicatarios,"
-                     "importe_sin_iva,fecha_adjudicacion,cpv,enlace"
+                     "importe_sin_iva,fecha_adjudicacion,cpv,enlace,fuente"
                      f"&cifs_adjudicatarios=ov.%7B{quote(cif)}%7D"
                      "&order=fecha_adjudicacion.desc.nullslast")
     total = sum(num(f.get("importe_sin_iva")) or 0 for f in filas)
@@ -396,9 +543,8 @@ def bloque3_menores_cif(sb: Supabase, cif: str) -> dict:
         "n_compartidos": len(compartidos),
         "importe_compartido": round(sum(num(f.get("importe_sin_iva")) or 0
                                         for f in compartidos), 2),
-        "aviso_fuente": ("Sindicación 1143 (contratos menores del Estado). Universo DISTINTO "
-                         "del de las adjudicaciones (643 + 1044): estos importes NO se suman "
-                         "con los del bloque 2."),
+        "por_fuente": desglose_por_fuente(filas, fuentes),
+        "aviso_fuente": aviso_fuente_menores(fuentes, [f.get("fuente") for f in filas]),
         "aviso_repartidos": ("En los menores repartidos el importe es el del contrato completo "
                              "y se atribuye al adjudicatario principal: no es la parte que se "
                              "llevó esta empresa."),
@@ -435,9 +581,36 @@ def trocea_terminos(texto: str) -> list[str]:
     return [p.strip() for p in str(texto or "").split(",") if p.strip()]
 
 
+def aviso_cpv_nicho(fuentes: dict, presentes=()) -> str:
+    """El aviso del 3b: lo que el filtro por CPV no ve.
+
+    La parte de Andalucía depende de si está cargada. Con cargada=false y 0 filas (hoy),
+    decir «sus menores pueden NO aparecer aquí por el CPV» llevaría a la conclusión
+    equivocada: no aparecen porque no están en la base. Si ya hay filas andaluzas en el
+    nicho (enriquecidas con CPV) se trata como cargada aunque el fichero vaya por detrás.
+
+    El 47,8% = 1 − 734.793 / 1.407.588 menores estatales con CPV, medido el 17/09/2026.
+    """
+    texto = ("Este bloque arranca filtrando por CÓDIGO CPV: un menor sin CPV no entra "
+             "aunque sea del nicho. Ya pasa con los estatales: el 47,8% no trae CPV. ")
+    if (fuentes.get("andalucia") or {}).get("cargada") is True or "andalucia" in presentes:
+        texto += ("Andalucía no trae CPV en sus datos abiertos salvo que se enriquezca desde "
+                  "el portal, así que sus menores pueden NO aparecer aquí aunque sean del "
+                  "nicho. ")
+    elif fuentes:
+        texto += ("Andalucía aún no está cargada; cuando lo esté, sus menores tampoco "
+                  "entrarán aquí salvo que se enriquezcan con CPV desde el portal. ")
+    else:
+        texto += ("No se pudo leer data/menores_fuentes.json, así que no se sabe si Andalucía "
+                  "está cargada: si lo está, sus menores pueden NO aparecer aquí, porque no "
+                  "traen CPV salvo que se enriquezcan desde el portal. ")
+    return texto + "Que no aparezcan no quiere decir que no existan."
+
+
 def bloque3b_menores_nicho(sb: Supabase, cpvs: list[str],
                            incluye: list[str] | None = None,
-                           excluye: list[str] | None = None) -> dict:
+                           excluye: list[str] | None = None,
+                           fuentes: dict | None = None) -> dict:
     """Menores de esos CPV: quién compra esto por adjudicación directa.
 
     Va por `cpv_txt LIKE '% <codigo>%'` y NO por `cpv && [...]`: menores.cpv no tiene
@@ -451,10 +624,18 @@ def bloque3b_menores_nicho(sb: Supabase, cpvs: list[str],
     Y filtrar en Python DESPUÉS no serviría: el bloque topa en TOPE_MENORES_NICHO filas,
     así que se cribaría sobre una muestra truncada y el universo real quedaría sin medir
     (con LODEPA el universo son 22.854 menores, no los 3.000 del tope).
+
+    CIEGO A LO QUE NO TRAE CPV. El filtro de arriba es la puerta de entrada, y medido el
+    17/09/2026 solo 734.793 de los 1.407.588 menores estatales llevan CPV (52,2%). Los
+    de Andalucía llegan SIN CPV salvo que se enriquezcan desde el portal: sin el aviso,
+    el desglose por fuente de este bloque diría «todo estatal» y parecería que Andalucía
+    no compra esto, cuando lo que pasa es que el bloque no la ve.
     """
+    fuentes = lee_fuentes_menores() if fuentes is None else fuentes
     if not cpvs:
         return {"filas": [], "n": 0, "topado": False, "importe_total_sin_iva": None,
-                "criba": None}
+                "criba": None, "por_fuente": [], "por_fuente_nota": None,
+                "aviso_cpv": aviso_cpv_nicho(fuentes)}
     incluye = [t for t in (incluye or []) if t]
     excluye = [t for t in (excluye or []) if t]
 
@@ -471,7 +652,7 @@ def bloque3b_menores_nicho(sb: Supabase, cpvs: list[str],
     filtro = "&".join(partes)
 
     campos = ("select=licitacion_id,objeto,organo_contratacion,adjudicatario,"
-              "cif_adjudicatario,importe_sin_iva,fecha_adjudicacion,cpv,enlace")
+              "cif_adjudicatario,importe_sin_iva,fecha_adjudicacion,cpv,enlace,fuente")
     filas = sb.filas("menores", f"{campos}&{filtro}&order=fecha_adjudicacion.desc.nullslast",
                      tope=TOPE_MENORES_NICHO)
     # Cuántos había ANTES de cribar, para poder declarar el efecto de cada lista. Son
@@ -490,8 +671,22 @@ def bloque3b_menores_nicho(sb: Supabase, cpvs: list[str],
                   for k, v in compradores.items()),
                  key=lambda x: x["importe_sin_iva"], reverse=True)[:20]
     topado = len(filas) >= TOPE_MENORES_NICHO
+    # El desglose sale de las filas TRAÍDAS, no de un conteo aparte: si el bloque topa,
+    # son las 3.000 más recientes y el reparto entre fuentes es el de esa muestra. Se
+    # dice en el propio resultado para que nadie lo lea como el universo.
+    traidas = f"{len(filas):,}".replace(",", ".")
+    tope_txt = f"{TOPE_MENORES_NICHO:,}".replace(",", ".")
+    nota_fuente = (
+        (f"Desglose sobre las {traidas} filas traídas, TOPADAS en {tope_txt} (las más "
+         "recientes): es el reparto de esa muestra, no el del universo.")
+        if topado else
+        ("Desglose sobre la única fila del nicho." if len(filas) == 1
+         else f"Desglose sobre las {traidas} filas del nicho: todas, sin tope."))
     return {"filas": filas, "n": len(filas), "topado": topado,
             "importe_total_sin_iva": round(total, 2) if filas else None,
+            "por_fuente": desglose_por_fuente(filas, fuentes),
+            "por_fuente_nota": nota_fuente if filas else None,
+            "aviso_cpv": aviso_cpv_nicho(fuentes, [f.get("fuente") for f in filas]),
             "top_organos_compradores": top,
             "criba": {
                 "incluye": incluye, "excluye": excluye,
@@ -752,7 +947,9 @@ def bloque7_oportunidades(sb: Supabase, cpvs: list[str]) -> list[dict]:
 
 
 def bloque8_metadatos(sb: Supabase, consulta_iso: str, meses: int, criba: dict,
-                      expansion: list[dict], filas_por_bloque: dict, total: int) -> dict:
+                      expansion: list[dict], filas_por_bloque: dict, total: int,
+                      fuentes: dict | None = None, presentes=()) -> dict:
+    fuentes = lee_fuentes_menores() if fuentes is None else fuentes
     prim = sb.una("licitaciones", "select=fecha_publicacion&order=fecha_publicacion.asc")
     ult = sb.una("licitaciones", "select=fecha_publicacion&order=fecha_publicacion.desc.nullslast")
     # Distribución por año SIN traerse 624k filas: un conteo indexado por año.
@@ -779,7 +976,7 @@ def bloque8_metadatos(sb: Supabase, consulta_iso: str, meses: int, criba: dict,
         "consulta_mas_lenta": {"que": sb.mas_lenta[0], "segundos": sb.mas_lenta[1]},
         "fuentes": {
             "adjudicaciones": "Sindicaciones 643 (estatal) + 1044 (plataformas agregadas)",
-            "menores": "Sindicación 1143 (contratos menores del Estado; NO incluye agregadas)",
+            "menores": texto_fuentes_menores(fuentes, presentes),
             "aviso": "Los importes de menores y de adjudicaciones NO se suman entre sí.",
         },
     }
@@ -803,6 +1000,16 @@ def tabla_md(cabeceras: list[str], filas: list[list]) -> str:
               "|" + "|".join("---" for _ in cabeceras) + "|"]
     salida += ["| " + " | ".join(celda(c) for c in f) + " |" for f in filas]
     return "\n".join(salida) + "\n"
+
+
+def linea_por_fuente(desglose: list[dict]) -> str:
+    """«Estatal: 6 menores, 56.208,00 € · Andalucía: 2 menores, —»."""
+    partes = []
+    for d in desglose:
+        cuantos = f"{d['n']:,}".replace(",", ".")
+        partes.append(f"{d['etiqueta']}: {cuantos} {'menor' if d['n'] == 1 else 'menores'}, "
+                      f"{eur(d['importe_total_sin_iva'])}")
+    return " · ".join(partes)
 
 
 def escribe_md(informe: dict) -> str:
@@ -839,27 +1046,48 @@ def escribe_md(informe: dict) -> str:
     mc = informe["menores_empresa"]
     p += ["", "## 3 · Contratos menores", "",
           f"> ⚠️ {mc['aviso_fuente']}", ""]
-    p.append(tabla_md(["Fecha", "Objeto", "Órgano", "Importe s/IVA"],
+    # La etiqueta de cada fila sale del propio desglose (que ya la resolvió contra
+    # data/menores_fuentes.json): el MD pinta el JSON y no vuelve a leer el fichero.
+    rotulos = {d["fuente"]: d["etiqueta"] for d in mc.get("por_fuente") or []}
+    p.append(tabla_md(["Fecha", "Objeto", "Órgano", "Fuente", "Importe s/IVA"],
                       [[f["fecha_adjudicacion"], (f["objeto"] or "")[:70],
-                        (f["organo_contratacion"] or "")[:50], eur(num(f["importe_sin_iva"]))]
+                        (f["organo_contratacion"] or "")[:50],
+                        rotulos.get(f.get("fuente")) or etiqueta_fuente(f.get("fuente"), {}),
+                        eur(num(f["importe_sin_iva"]))]
                        for f in mc["filas"]]))
     p.append(f"\n**Total menores:** {eur(mc['importe_total_sin_iva'])} · "
              f"**nº:** {mc['n']} · **último:** {mc['ultimo'] or '—'}\n")
+    pf = mc.get("por_fuente") or []
+    if len(pf) > 1 or (pf and pf[0]["fuente"] != "estatal"):
+        # Con una sola fuente estatal el total YA es la parte estatal. En cuanto hay
+        # otra, los controles de siempre solo se leen en esta línea.
+        p.append(f"\n**Por fuente:** {linea_por_fuente(pf)}\n")
     if mc["n_compartidos"]:
         p.append(f"\n> ⚠️ {mc['aviso_repartidos']} Afecta a {mc['n_compartidos']} "
                  f"contrato(s) por {eur(mc['importe_compartido'])}.\n")
 
     mn = informe["menores_nicho"]
-    p += ["", "### 3b · Menores del nicho (quién compra esto a dedo)", ""]
+    p += ["", "### 3b · Menores del nicho (quién compra esto a dedo)", "",
+          f"> ⚠️ {mn['aviso_cpv']}", ""]
+    if mn.get("por_fuente"):
+        # Siempre, aunque sea solo estatal: «Estatal: 3.000» junto al aviso del CPV es
+        # lo que deja ver que las fuentes sin CPV no están entrando.
+        nota = mn.get("por_fuente_nota")
+        p.append(f"**Por fuente:** {linea_por_fuente(mn['por_fuente'])}"
+                 + (f"  \n_{nota}_" if nota else "") + "\n")
     p.append(tabla_md(["Órgano comprador", "Nº menores", "Importe s/IVA"],
                       [[o["organo_contratacion"][:60], o["n_menores"], eur(o["importe_sin_iva"])]
                        for o in mn.get("top_organos_compradores", [])]))
     cr_men = mn.get("criba") or {}
     if cr_men.get("incluye") or cr_men.get("excluye"):
+        # Miles con punto, como la línea «Por fuente» de encima: «22,854» se lee en
+        # español como 22 con decimales.
+        n_cod, n_inc, n_exc = (f"{cr_men[k]:,}".replace(",", ".") for k in
+                               ("n_solo_por_codigo", "n_tras_incluir", "n_tras_excluir"))
         p.append("\n> **Criba por texto, aplicada en la consulta.** De "
-                 f"{cr_men['n_solo_por_codigo']:,} menores que casan por código CPV, "
-                 f"{cr_men['n_tras_incluir']:,} contienen alguna palabra de «incluye» y "
-                 f"{cr_men['n_tras_excluir']:,} quedan tras descartar las de «excluye».  \n"
+                 f"{n_cod} menores que casan por código CPV, "
+                 f"{n_inc} contienen alguna palabra de «incluye» y "
+                 f"{n_exc} quedan tras descartar las de «excluye».  \n"
                  f"> Incluye: _{', '.join(cr_men['incluye']) or '—'}_.  \n"
                  f"> Excluye: _{', '.join(cr_men['excluye']) or '—'}_.\n")
     if mn.get("topado"):
@@ -1005,7 +1233,8 @@ def main() -> None:
     identidad = bloque1_identidad(sb, cif)
     adjudicaciones, catalogo = bloque2_adjudicaciones(sb, cif)
     print(f"· {len(adjudicaciones)} adjudicaciones")
-    menores_emp = bloque3_menores_cif(sb, cif)
+    fuentes = lee_fuentes_menores()   # {} si falta: el informe sale igual, con códigos
+    menores_emp = bloque3_menores_cif(sb, cif, fuentes)
     print(f"· {menores_emp['n']} contratos menores")
     cpv_info = bloque4_cpv(adjudicaciones, catalogo, menores_emp["filas"])
 
@@ -1023,7 +1252,8 @@ def main() -> None:
            if criba["descartados_genericos"] else ""))
 
     menores_nicho = bloque3b_menores_nicho(
-        sb, cpvs, trocea_terminos(args.nicho_incluye), trocea_terminos(args.nicho_excluye))
+        sb, cpvs, trocea_terminos(args.nicho_incluye), trocea_terminos(args.nicho_excluye),
+        fuentes)
     mercado = bloque5_mercado(sb, cpvs, desde_iso)
     quien_gana = bloque6_quien_gana(sb, mercado.pop("ids", []))
     oportunidades = bloque7_oportunidades(sb, cpvs)
@@ -1045,8 +1275,11 @@ def main() -> None:
         "7_oportunidades": len(oportunidades),
         "competidores": sum(c["n_adjudicaciones"] for c in competidores),
     }
+    # Las fuentes que SALEN en el informe: si alguna no figura como cargada, la nota de
+    # fuentes lo dice en vez de nombrar solo la estatal (ver aviso_sin_cargar).
+    presentes = [d["fuente"] for d in menores_emp["por_fuente"] + menores_nicho["por_fuente"]]
     metadatos = bloque8_metadatos(sb, consulta_iso, args.meses, criba, expansion,
-                                  filas_por_bloque, total_catalogo)
+                                  filas_por_bloque, total_catalogo, fuentes, presentes)
 
     informe = {
         "cif": cif, "identidad": identidad, "adjudicaciones": adjudicaciones,
