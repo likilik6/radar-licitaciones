@@ -24,6 +24,8 @@ from backfill_catalogo import (
     automarcar_ganadas, _informe_automarcar, CIFS_LODEPA, RPC_AUTOMARCAR,
     refrescar_competidores, RPC_REFRESCAR_COMPETIDORES,
     refrescar_cobertura_menores, RPC_COBERTURA_MENORES,
+    refrescar_desiertas_bucle, marca_refresco, RPC_REFRESCO_MARCA, RPC_REFRESCAR_DESIERTAS,
+    DIAS_DESIERTAS,
 )
 
 NSDECL = (
@@ -474,7 +476,7 @@ def test_informe_automarcar_no_revienta():
 
 # --- Fase E · glue Python de refrescar_competidores (sin red) -----------------
 def test_refrescar_competidores_ok():
-    ses = _FakeSesion([_FakeResp(200, None, text="77624")])
+    ses = _FakeSesion([_FakeResp(200, None, text="77624"), _FakeResp(200, None, text="")])
     headers = {"apikey": "K", "Authorization": "Bearer K",
                "Prefer": "resolution=merge-duplicates,return=minimal"}
     n = refrescar_competidores(ses, "https://x.supabase.co", headers)
@@ -483,6 +485,11 @@ def test_refrescar_competidores_ok():
     check(llam["url"].endswith(f"/rest/v1/rpc/{RPC_REFRESCAR_COMPETIDORES}"),
           f"refrescar: URL RPC, era {llam['url']}")
     check("Prefer" not in llam["headers"], "refrescar: no manda Prefer (es una función)")
+    anota = ses.llamadas[1]
+    check(anota["url"].endswith(f"/rest/v1/rpc/{RPC_REFRESCO_MARCA}")
+          and anota["json"]["p_clave"] == "competidores" and anota["json"]["p_ok"] is True
+          and anota["json"]["p_filas"] == 77624,
+          f"refrescar: anota el intento bueno, era {anota['json']}")
     print("  OK test_refrescar_competidores_ok")
 
 
@@ -495,7 +502,8 @@ def test_refrescar_competidores_rpc_ausente_salta():
 
 # --- FASE M · glue Python de refrescar_cobertura_menores (sin red) -------------
 def test_cobertura_menores_ok():
-    ses = _FakeSesion([_FakeResp(200, None, text='{"fuentes":2,"organos":26,"ms":4300}')])
+    ses = _FakeSesion([_FakeResp(200, None, text='{"fuentes":2,"organos":26,"ms":4300}'),
+                       _FakeResp(200, None, text="")])
     headers = {"apikey": "K", "Authorization": "Bearer K",
                "Prefer": "resolution=merge-duplicates,return=minimal"}
     ok = refrescar_cobertura_menores(ses, "https://x.supabase.co", headers)
@@ -504,6 +512,10 @@ def test_cobertura_menores_ok():
     check(llam["url"].endswith(f"/rest/v1/rpc/{RPC_COBERTURA_MENORES}"),
           f"cobertura: URL RPC, era {llam['url']}")
     check("Prefer" not in llam["headers"], "cobertura: no manda Prefer (es una función)")
+    anota = ses.llamadas[1]["json"]
+    check(anota["p_clave"] == "menores_cobertura" and anota["p_ok"] is True
+          and anota["p_detalle"] == {"fuentes": 2, "organos": 26, "ms": 4300},
+          f"cobertura: anota el intento con su detalle, era {anota}")
     print("  OK test_cobertura_menores_ok")
 
 
@@ -521,14 +533,65 @@ def test_cobertura_menores_5xx_reintenta_y_se_rinde():
     dormido = []
     original, bc.time.sleep = bc.time.sleep, lambda s: dormido.append(s)
     try:
-        ses = _FakeSesion([_FakeResp(500, None, text="boom") for _ in range(3)])
+        ses = _FakeSesion([_FakeResp(500, None, text="boom") for _ in range(3)]
+                          + [_FakeResp(200, None, text="")])
         ok = refrescar_cobertura_menores(ses, "https://x.supabase.co", {})
     finally:
         bc.time.sleep = original
     check(ok is False, "cobertura: 5xx repetido -> False sin lanzar")
-    check(len(ses.llamadas) == 3, f"cobertura: reintenta 3 veces, fueron {len(ses.llamadas)}")
+    check(len(ses.llamadas) == 4, f"cobertura: 3 intentos + la anotación, fueron {len(ses.llamadas)}")
+    fallo = ses.llamadas[3]["json"]
+    check(fallo["p_clave"] == "menores_cobertura" and fallo["p_ok"] is False and fallo["p_error"],
+          f"cobertura: el FALLO queda anotado, era {fallo}")
     check(dormido == [2, 4], f"cobertura: espera creciente entre reintentos, era {dormido}")
     print("  OK test_cobertura_menores_5xx_reintenta_y_se_rinde")
+
+
+# --- DESIERTAS · ventana de días y constancia del intento ---------------------
+def test_desiertas_ventana_y_anota():
+    # Dos tandas (5.000 y 1.200), la tercera devuelve 0, y luego la anotación.
+    ses = _FakeSesion([_FakeResp(200, None, text="5000"), _FakeResp(200, None, text="1200"),
+                       _FakeResp(200, None, text="0"), _FakeResp(200, None, text="")])
+    total = refrescar_desiertas_bucle(ses, "https://x.supabase.co", {"apikey": "K"}, lote=5000)
+    check(total == 6200, f"desiertas: suma las tandas, era {total!r}")
+    check(all(l["json"]["p_dias"] == DIAS_DESIERTAS for l in ses.llamadas[:3]),
+          f"desiertas: manda la ventana de días, eran {[l['json'] for l in ses.llamadas[:3]]}")
+    anota = ses.llamadas[3]["json"]
+    check(anota["p_clave"] == "desiertas" and anota["p_ok"] is True and anota["p_filas"] == 6200,
+          f"desiertas: anota el intento bueno, era {anota}")
+    print("  OK test_desiertas_ventana_y_anota")
+
+
+def test_desiertas_escaneo_completo_con_dias_cero():
+    ses = _FakeSesion([_FakeResp(200, None, text="0"), _FakeResp(200, None, text="")])
+    refrescar_desiertas_bucle(ses, "https://x.supabase.co", {}, lote=5000, dias=0)
+    check(ses.llamadas[0]["json"]["p_dias"] == 0,
+          f"desiertas: con dias=0 pide el escaneo completo, era {ses.llamadas[0]['json']}")
+    print("  OK test_desiertas_escaneo_completo_con_dias_cero")
+
+
+def test_desiertas_timeout_queda_anotado():
+    # Lo que viene pasando desde el 17/09: statement timeout una y otra vez.
+    import backfill_catalogo as bc
+    original, bc.time.sleep = bc.time.sleep, lambda s: None
+    try:
+        ses = _FakeSesion([_FakeResp(500, None, text='{"code":"57014","message":"canceling statement due to statement timeout"}')
+                           for _ in range(4)] + [_FakeResp(200, None, text="")])
+        total = refrescar_desiertas_bucle(ses, "https://x.supabase.co", {}, lote=5000)
+    finally:
+        bc.time.sleep = original
+    check(total is None, "desiertas: se rinde sin lanzar")
+    fallo = ses.llamadas[-1]["json"]
+    check(fallo["p_clave"] == "desiertas" and fallo["p_ok"] is False and "57014" in (fallo["p_error"] or ""),
+          f"desiertas: el fallo queda anotado con su motivo, era {fallo}")
+    print("  OK test_desiertas_timeout_queda_anotado")
+
+
+def test_marca_refresco_no_revienta_sin_tabla():
+    ses = _FakeSesion([_FakeResp(404, None, text='{"code":"PGRST202","message":"Could not find the function"}')])
+    ok = marca_refresco(ses, "https://x.supabase.co", {}, "desiertas", True, filas=1)
+    check(ok is False, "marca_refresco: sin RPC devuelve False y NO lanza")
+    print("  OK test_marca_refresco_no_revienta_sin_tabla")
 
 
 def smoke_vivo():
@@ -591,6 +654,10 @@ def main():
     test_cobertura_menores_ok()
     test_cobertura_menores_rpc_ausente_salta()
     test_cobertura_menores_5xx_reintenta_y_se_rinde()
+    test_desiertas_ventana_y_anota()
+    test_desiertas_escaneo_completo_con_dias_cero()
+    test_desiertas_timeout_queda_anotado()
+    test_marca_refresco_no_revienta_sin_tabla()
     test_refrescar_competidores_rpc_ausente_salta()
     if "--vivo" in sys.argv:
         smoke_vivo()

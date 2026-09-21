@@ -924,6 +924,34 @@ JS_SUPABASE = """
   const SUPABASE_KEY = "sb_publishable_3J3pFbMlNzu-NUDs1-740g_lu8YsRv_";
   const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+  // ====== FRESCURA DE LOS AGREGADOS (public.refrescos) ======================
+  // Desiertas, competidores y la cobertura de menores se calculan en la ingesta. Si un día
+  // falla, antes solo se veía en el log de Actions y la web seguía enseñando lo viejo como
+  // si estuviera al día. Aquí se lee UNA vez por sesión (3 filas) y quien quiera lo pinta.
+  // Si la tabla no está o falla, se devuelve {} y no se enseña nada: la vista no cambia.
+  let _frescura = null;
+  async function frescuraAgregados(){
+    if(_frescura) return _frescura;
+    let filas = [];
+    try {
+      const r = await supabase.from('refrescos').select('clave,intento,ok,ultimo_ok,filas,error').limit(20);
+      if(!r.error) filas = r.data || [];
+    } catch(e){ filas = []; }
+    if(!filas.length) return {};            // sin cachear: se reintenta más adelante
+    _frescura = {};
+    filas.forEach(function(f){ if(f && f.clave) _frescura[f.clave] = f; });
+    return _frescura;
+  }
+  // «al día (21/09 13:58)» o «el último intento falló el 21/09; los datos son del 16/09».
+  function frescuraTexto(f, nombre){
+    if(!f) return '';
+    const dia = function(iso){ const t = String(iso || '').slice(0,10).split('-'); return t.length === 3 ? t[2]+'/'+t[1] : ''; };
+    const hora = function(iso){ return String(iso || '').slice(11,16); };
+    if(f.ok) return nombre + ': al día (' + dia(f.intento) + ' ' + hora(f.intento) + ').';
+    return nombre + ': el último intento FALLÓ el ' + dia(f.intento)
+      + (f.ultimo_ok ? '; los datos son del ' + dia(f.ultimo_ok) : '; no consta ningún refresco bueno') + '.';
+  }
+
   // Etiqueta legible por estado manual (el color lo pone la clase CSS estado-*).
   const ESTADOS = { ganada: 'GANADA', perdida: 'PERDIDA', presentada: 'PRESENTADA', descartada: 'DESCARTADA' };
 
@@ -3928,7 +3956,21 @@ JS_BUSCADOR_UI = """
   }
 
   // Pinta los chips de filtros activos y decide si se ve "Limpiar filtros".
+  // DESIERTAS: la columna estado_adjudicacion la calcula la ingesta, así que hay que decir
+  // de cuándo es. Solo se enseña cuando el filtro de desiertas está puesto (es lo único que
+  // depende de ese agregado).
+  const bgFrescura = document.getElementById('bg-frescura');
+  async function bgPintaFrescura(){
+    if(!bgFrescura) return;
+    if(!bgFiltros.desiertas){ bgFrescura.hidden = true; bgFrescura.textContent = ''; return; }
+    const f = (await frescuraAgregados())['desiertas'];
+    const t = frescuraTexto(f, 'Desiertas');
+    bgFrescura.textContent = t;
+    bgFrescura.hidden = !t;
+  }
+
   function bgRenderChips(){
+    bgPintaFrescura();
     const f = bgFiltros;
     const chips = [];
     const FUENTE = { estatal:'Estatal', agregadas:'Agregadas' };
@@ -4418,6 +4460,11 @@ JS_MENORES_UI = r"""
     }
     mnCoberturaTexto = 'Datos hasta: ' + hasta + ' — foto del ' + mnFechaCorta(fuentes[0].actualizado)
       + '. Lo más reciente está INCOMPLETO: los órganos tardan semanas o meses en publicar.';
+    // Si el ÚLTIMO intento de refresco falló, la foto no es de hoy aunque lo parezca.
+    try {
+      const fr = (await frescuraAgregados())['menores_cobertura'];
+      if(fr && !fr.ok) mnCoberturaTexto += ' ' + frescuraTexto(fr, 'Aviso: el recuento de cobertura');
+    } catch(e){ /* la frescura es un extra: nunca estorba a la vista */ }
     mnPintaCobertura();
   }
   // Fecha del último menor del ÓRGANO filtrado. Se pregunta en vivo (49 ms por el índice
@@ -5964,6 +6011,7 @@ pagina = f"""<!DOCTYPE html>
           <button id="bg-limpiar" class="bg-limpiar" type="button" hidden>Limpiar filtros</button>
         </div>
         <div id="bg-estado-msg" class="bg-msg" hidden></div>
+        <p id="bg-frescura" class="mn-cobertura" hidden></p>
         <div id="bg-resultados" class="grid"></div>
         <div id="bg-paginacion" class="bg-pag" hidden>
           <button id="bg-prev" class="bg-pag-btn" type="button">‹ Anterior</button>
