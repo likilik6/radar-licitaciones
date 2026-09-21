@@ -4417,7 +4417,7 @@ JS_MENORES_UI = r"""
         : 'Menores por mes:');
     }
     mnCoberturaTexto = 'Datos hasta: ' + hasta + ' — foto del ' + mnFechaCorta(fuentes[0].actualizado)
-      + '. Lo más reciente está INCOMPLETO: los órganos tardan semanas en publicar.';
+      + '. Lo más reciente está INCOMPLETO: los órganos tardan semanas o meses en publicar.';
     mnPintaCobertura();
   }
   // Fecha del último menor del ÓRGANO filtrado. Se pregunta en vivo (49 ms por el índice
