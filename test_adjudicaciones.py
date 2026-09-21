@@ -23,6 +23,7 @@ from backfill_catalogo import (
     fila_adjudicacion, fila_para_tabla, _dedup_adj,
     automarcar_ganadas, _informe_automarcar, CIFS_LODEPA, RPC_AUTOMARCAR,
     refrescar_competidores, RPC_REFRESCAR_COMPETIDORES,
+    refrescar_cobertura_menores, RPC_COBERTURA_MENORES,
 )
 
 NSDECL = (
@@ -492,6 +493,44 @@ def test_refrescar_competidores_rpc_ausente_salta():
     print("  OK test_refrescar_competidores_rpc_ausente_salta")
 
 
+# --- FASE M · glue Python de refrescar_cobertura_menores (sin red) -------------
+def test_cobertura_menores_ok():
+    ses = _FakeSesion([_FakeResp(200, None, text='{"fuentes":2,"organos":26,"ms":4300}')])
+    headers = {"apikey": "K", "Authorization": "Bearer K",
+               "Prefer": "resolution=merge-duplicates,return=minimal"}
+    ok = refrescar_cobertura_menores(ses, "https://x.supabase.co", headers)
+    check(ok is True, f"cobertura: 200 -> True, era {ok!r}")
+    llam = ses.llamadas[0]
+    check(llam["url"].endswith(f"/rest/v1/rpc/{RPC_COBERTURA_MENORES}"),
+          f"cobertura: URL RPC, era {llam['url']}")
+    check("Prefer" not in llam["headers"], "cobertura: no manda Prefer (es una función)")
+    print("  OK test_cobertura_menores_ok")
+
+
+def test_cobertura_menores_rpc_ausente_salta():
+    # Aún sin ejecutar menores_cobertura.sql: avisa y sigue, NUNCA revienta la ingesta.
+    ses = _FakeSesion([_FakeResp(404, None, text='{"code":"PGRST202","message":"Could not find the function"}')])
+    ok = refrescar_cobertura_menores(ses, "https://x.supabase.co", {})
+    check(ok is False, "cobertura: RPC ausente -> False (salta, no revienta)")
+    check(len(ses.llamadas) == 1, "cobertura: RPC ausente no se reintenta")
+    print("  OK test_cobertura_menores_rpc_ausente_salta")
+
+
+def test_cobertura_menores_5xx_reintenta_y_se_rinde():
+    import backfill_catalogo as bc
+    dormido = []
+    original, bc.time.sleep = bc.time.sleep, lambda s: dormido.append(s)
+    try:
+        ses = _FakeSesion([_FakeResp(500, None, text="boom") for _ in range(3)])
+        ok = refrescar_cobertura_menores(ses, "https://x.supabase.co", {})
+    finally:
+        bc.time.sleep = original
+    check(ok is False, "cobertura: 5xx repetido -> False sin lanzar")
+    check(len(ses.llamadas) == 3, f"cobertura: reintenta 3 veces, fueron {len(ses.llamadas)}")
+    check(dormido == [2, 4], f"cobertura: espera creciente entre reintentos, era {dormido}")
+    print("  OK test_cobertura_menores_5xx_reintenta_y_se_rinde")
+
+
 def smoke_vivo():
     import requests, time
     from feeds import CABECERAS, ATOM_NS, FEEDS
@@ -549,6 +588,9 @@ def main():
     test_automarcar_sin_cifs_salta()
     test_informe_automarcar_no_revienta()
     test_refrescar_competidores_ok()
+    test_cobertura_menores_ok()
+    test_cobertura_menores_rpc_ausente_salta()
+    test_cobertura_menores_5xx_reintenta_y_se_rinde()
     test_refrescar_competidores_rpc_ausente_salta()
     if "--vivo" in sys.argv:
         smoke_vivo()

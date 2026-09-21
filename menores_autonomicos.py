@@ -1817,6 +1817,21 @@ def procesa(args):
             informe["puerta_organos"] = puerta.resumen()
             print(f"  {compacto(informe['gemelas_en_base'])}")
             print(f"  puerta: {compacto(informe['puerta_organos'])}")
+            # COBERTURA (menores_cobertura.sql): hasta qué fecha llega cada fuente, menores
+            # por mes de los últimos 6 y tamaño de los órganos grandes. ~4 s. Si la tabla aún
+            # no está creada, se avisa y la carga termina bien igual: la web solo se queda sin
+            # la línea «Datos hasta: …» y sin el aviso instantáneo de orden por importe.
+            if args.cargar:
+                t_cob = time.time()
+                try:
+                    cobertura = cliente.rpc("menores_cobertura_refresca", {},
+                                            descripcion="refresco de cobertura")
+                    informe["cobertura"] = cobertura
+                    print(f"  cobertura: {compacto(cobertura or {})} · {time.time() - t_cob:.1f} s")
+                except Exception as e:  # noqa: BLE001 — la cobertura no puede tumbar una carga buena
+                    informe["cobertura"] = {"error": str(e)[:300]}
+                    print(f"  AVISO: no se pudo refrescar la cobertura ({e}). "
+                          f"¿Está ejecutado menores_cobertura.sql?")
             informe["peticiones_supabase"] = dict(cliente.peticiones)
         else:
             informe["puerta_organos"] = {"puerta": "saltada: sin credenciales (simulación local)"}

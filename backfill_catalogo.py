@@ -100,6 +100,9 @@ RPC_REFRESCAR_COMPETIDORES = "refrescar_competidores"
 # competidores: el pipeline solo la INVOCA tras upsertar adjudicaciones. Es idempotente
 # (solo escribe lo que CAMBIA) y admite un tamaño de lote para no rozar el statement_timeout.
 RPC_REFRESCAR_DESIERTAS = "refrescar_desiertas"
+# FASE M: recalcula public.menores_cobertura (hasta dónde llega cada fuente y tamaño de los
+# órganos grandes). Ver menores_cobertura.sql. Solo LEE menores; no toca el catálogo.
+RPC_COBERTURA_MENORES = "menores_cobertura_refresca"
 LIMITE_GRATIS_MB = 500          # plan gratuito de Supabase (~500 MB de base de datos)
 BASE = "https://contrataciondelsectorpublico.gob.es/sindicacion"
 
@@ -740,6 +743,56 @@ def refrescar_competidores(sesion, url_base, headers, reintentos=4):
     return None
 
 
+def refrescar_cobertura_menores(sesion, url_base, headers, reintentos=3):
+    """FASE M: recalcula public.menores_cobertura con la RPC menores_cobertura_refresca
+    (menores_cobertura.sql). Se llama tras el volcado diario de menores: el estatal entra
+    todos los días y, sin esto, la web diría «Datos hasta…» con la foto del fin de semana.
+    Cuesta de SOLO LECTURA sobre menores: 0,4-10 s en régimen, ~9 s el primer refresco de
+    cada mes y ~25 s la primera vez o cuando aparece una fuente nueva (recalcula los 6 meses
+    del año anterior). No toca el catálogo ni el Radar. NO es
+    fatal: si la RPC no existe (aún no se ha ejecutado el SQL) avisa y salta."""
+    url = f"{url_base}/rest/v1/rpc/{RPC_COBERTURA_MENORES}"
+    h = {k: v for k, v in headers.items() if k != "Prefer"}
+    ultimo = None
+    for intento in range(1, reintentos + 1):
+        try:
+            r = sesion.post(url, headers=h, json={}, timeout=120)
+        except requests.RequestException as e:
+            ultimo = e
+        else:
+            if r.status_code == 200:
+                print(f"  Cobertura de menores refrescada: {r.text.strip()[:200]}")
+                return True
+            if r.status_code == 404 or "PGRST202" in r.text or "Could not find the function" in r.text:
+                print(f"  AVISO: la RPC public.{RPC_COBERTURA_MENORES} no existe todavía "
+                      f"(HTTP {r.status_code}). ¿Ejecutaste menores_cobertura.sql? SALTO el "
+                      f"refresco de cobertura (la web seguirá con la foto anterior).")
+                return False
+            if 400 <= r.status_code < 500 and r.status_code != 429:
+                print(f"  AVISO: {RPC_COBERTURA_MENORES} devolvió HTTP {r.status_code}: "
+                      f"{r.text[:300]}; salto.")
+                return False
+            ultimo = RuntimeError(f"HTTP {r.status_code}: {r.text[:200]}")
+        if intento < reintentos:
+            espera = 2 ** intento
+            print(f"    refrescar cobertura: reintento {intento}/{reintentos} en {espera}s ({ultimo})")
+            time.sleep(espera)
+    print(f"  AVISO: no pude refrescar la cobertura de menores ({ultimo}); salto (se reintenta "
+          f"en la próxima ingesta; es idempotente).")
+    return False
+
+
+def refrescar_cobertura_oneshot():
+    """FASE M · refresco manual de public.menores_cobertura (sin reingerir). Para forzarlo
+    tras una carga grande:  python backfill_catalogo.py --refrescar-cobertura-menores"""
+    sesion, headers, _endpoint, url_base = _preparar_upsert()
+    print("=" * 78)
+    print("REFRESCAR COBERTURA DE MENORES — hasta dónde llega cada fuente")
+    print("=" * 78)
+    if not refrescar_cobertura_menores(sesion, url_base, headers):
+        sys.exit("Refresco de cobertura no ejecutado (ver AVISO arriba).")
+
+
 def refrescar_competidores_oneshot():
     """Fase E · refresco manual de public.competidores (sin reingerir). Para la primera
     carga o forzar un rebuild:  python backfill_catalogo.py --refrescar-competidores"""
@@ -958,6 +1011,9 @@ def carga_menores(periodos=None, limpiar=True):
     print("=" * 78)
     print(f"Backfill de menores terminado. Filas upsertadas (con repeticiones entre .atom): {total:,}")
     print("RECUERDA (una vez, en el SQL Editor): analyze public.menores;")
+    # Con la tabla recién cargada, la cobertura de la web se queda vieja del todo si no se
+    # refresca aquí mismo (no fatal: si la RPC no existe, avisa y sigue).
+    refrescar_cobertura_menores(sesion, url_base, headers)
 
 
 def menores_incremental(sesion, url_base, headers):
@@ -1199,7 +1255,19 @@ def diario(fuentes):
 
     # FASE M: volcado diario de menores del feed en vivo (1143). Independiente del
     # catálogo (otra tabla, otra fuente); guardado y no fatal (salta si no existe).
-    menores_incremental(sesion, url_base, headers)
+    # El bloque de menores NO puede tumbar la ingesta del catálogo (es otra tabla y otra
+    # fuente): un 4xx suyo dejaba sin correr la purga, el automarcado, competidores y
+    # desiertas. Se avisa y se sigue.
+    try:
+        menores_incremental(sesion, url_base, headers)
+        # Y, con los menores del día ya dentro, se recalcula la cobertura (hasta qué fecha
+        # llega cada fuente). Si no, la web enseñaría la foto del fin de semana de L a V.
+        refrescar_cobertura_menores(sesion, url_base, headers)
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa: BLE001
+        print(f"  AVISO: el bloque de menores falló ({type(e).__name__}: {e}); "
+              f"sigo con el catálogo.")
 
     print("=" * 78)
     print(f"Ingesta diaria terminada. Filas upsertadas: {total:,}  ·  adjudicaciones: {total_adj:,}")
@@ -1409,6 +1477,9 @@ def main():
                          "Con --simular solo dice cuántas marcaría.")
     ap.add_argument("--refrescar-competidores", action="store_true",
                     help="Fase E: reconstruye public.competidores (agregado por CIF) sin reingerir.")
+    ap.add_argument("--refrescar-cobertura-menores", action="store_true",
+                    help="FASE M: recalcula public.menores_cobertura (hasta qué fecha llega cada "
+                         "fuente y tamaño de los órganos grandes) sin reingerir.")
     ap.add_argument("--refrescar-desiertas", action="store_true",
                     help="DESIERTAS: pone al día licitaciones.estado_adjudicacion / n_lotes_desiertos "
                          "desde adjudicaciones, sin reingerir. Es lo que POBLA la columna la primera "
@@ -1463,6 +1534,8 @@ def main():
         automarcar_oneshot(args.simular)
     elif args.refrescar_competidores:
         refrescar_competidores_oneshot()
+    elif args.refrescar_cobertura_menores:
+        refrescar_cobertura_oneshot()
     elif args.refrescar_desiertas:
         refrescar_desiertas_oneshot(args.lote)
     elif args.cargar_menores:

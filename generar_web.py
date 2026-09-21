@@ -205,6 +205,17 @@ CSS = """
   .tag.mn-competidor { background:#fee2e2; color:#b91c1c; }   /* ganó un CIF seguido (competencia) */
   .tag.mn-lodepa { background:#dcfce7; color:#15803d; }       /* ganó LODEPA */
   .mn-intro { font-size:.9rem; color:var(--suave); margin:0 0 12px; }
+  /* Aviso de «orden por importe desactivado» (resultado de más de 10.000 menores). El
+     [hidden] explícito: si algún día este bloque lleva display:flex, no debe anularlo. */
+  .mn-cobertura { font-size:.82rem; color:var(--suave); margin:-4px 0 12px; line-height:1.55; }
+  .mn-cobertura[hidden] { display:none; }
+  .mn-cobertura span { display:block; }
+  /* El display de AUTOR gana al [hidden] de la hoja del navegador: sin esta regla, ocultar
+     un span con .hidden = true no haría nada. */
+  .mn-cobertura span[hidden] { display:none; }
+  .mn-cob-organo { font-weight:600; color:var(--texto); }
+  .mn-aviso-orden { font-size:.88rem; background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; border-radius:10px; padding:8px 12px; margin:0 0 12px; }
+  .mn-aviso-orden[hidden] { display:none; }
   /* Atajo «¿buscas una empresa?»: esta caja busca en el TEXTO del contrato, así que al
      escribir el nombre de un competidor se ofrece saltar a SUS menores (filtro por CIF). */
   .mn-sug { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:10px 0 2px;
@@ -4208,10 +4219,21 @@ JS_MENORES_UI = r"""
   // Privado (authenticated). Tabla AISLADA public.menores; NO toca el Buscador.
   const _mn = crearMenores(supabase);
   const mnBuscarFn = _mn.buscar;
+  // Recuento con tope, pedido DESPUÉS de pintar la página (ver M_UMBRAL en menores_api.js).
+  const mnContarFn = _mn.contar;
+  // Cada búsqueda lleva su número: un recuento que llega tarde de una búsqueda anterior
+  // no pisa el contador de la vigente.
+  let mnSecuencia = 0;
+  // Último recuento conocido y la clave de sus filtros (sin página ni orden).
+  let mnRecuento = { clave: null, total: null, topado: false };
 
   const MN_NICHO_CPV = Array.isArray(window.__MENORES_NICHO_CPV) ? window.__MENORES_NICHO_CPV : [];
   const MN_NICHO_KW  = typeof window.__MENORES_NICHO_KW === 'string' ? window.__MENORES_NICHO_KW : '';
+  // Palabras del nicho con exclusiones: [{kw, excluye: [...]}] (ver menores_nicho.py).
+  const MN_NICHO_EXCL = Array.isArray(window.__MENORES_NICHO_EXCL) ? window.__MENORES_NICHO_EXCL : [];
   const MN_CIFS      = Array.isArray(window.__MENORES_CIFS) ? window.__MENORES_CIFS : [];
+  // Aviso del fichero de exclusiones (grupos ignorados por estar mal escritos).
+  const MN_NICHO_AVISO = typeof window.__MENORES_NICHO_AVISO === 'string' ? window.__MENORES_NICHO_AVISO : '';
   // {codigo: {etiqueta, nombre, cargada}} de data/menores_fuentes.json; {} si faltaba o estaba mal.
   const MN_FUENTES   = (window.__MENORES_FUENTES && typeof window.__MENORES_FUENTES === 'object'
                         && !Array.isArray(window.__MENORES_FUENTES)) ? window.__MENORES_FUENTES : {};
@@ -4234,6 +4256,7 @@ JS_MENORES_UI = r"""
   const mnChips = document.getElementById('mn-chips');
   const mnLimpiar = document.getElementById('mn-limpiar');
   const mnCont  = document.getElementById('mn-contador');
+  const mnAvisoOrden = document.getElementById('mn-aviso-orden');
   const mnMsg   = document.getElementById('mn-estado-msg');
   const mnRes   = document.getElementById('mn-resultados');
   const mnPag   = document.getElementById('mn-paginacion');
@@ -4241,6 +4264,8 @@ JS_MENORES_UI = r"""
   const mnNext  = document.getElementById('mn-next');
   const mnPagInfo = document.getElementById('mn-pag-info');
   const mnIntroFu = document.getElementById('mn-intro-fuentes');   // «; fuente(s): …» de la entradilla
+  const mnCobertura = document.getElementById('mn-cobertura');     // «Datos hasta: …»
+  const mnAvisoExcl = document.getElementById('mn-aviso-excl');    // exclusiones mal escritas
 
   const MN_POR_PAGINA = 25;
   let mnPagina = 1, mnCargando = false, mnYaBuscado = false;
@@ -4302,6 +4327,118 @@ JS_MENORES_UI = r"""
     if((filas || []).some(function(x){ return x && x.fuente && !mnFuenteCargada(x.fuente); })) mnIntroFu.hidden = true;
   }
 
+  // === COBERTURA: hasta dónde llega cada fuente ==============================
+  // Se lee UNA vez de public.menores_cobertura (28 filas hoy; la rellena el cargador, ver
+  // menores_cobertura.sql). Si la tabla todavía no existe, no sale la línea y la vista
+  // funciona igual. De paso le pasa a la API los tamaños por órgano: con ellos el aviso de
+  // «más de 10.000 menores, no se pueden ordenar por importe» sale al instante en vez de
+  // tardar 3 s en ir a por la fila nº 10.001.
+  const MN_MESES_CORTOS = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  let mnCoberturaPedida = false, mnCoberturaTexto = '', mnCoberturaOrgano = '', mnCoberturaMeses = [];
+
+  function mnFechaCorta(iso){
+    const t = String(iso || '').slice(0,10).split('-');
+    return t.length === 3 ? t[2]+'/'+t[1]+'/'+t[0] : String(iso || '');
+  }
+  // Miles con punto SIEMPRE. toLocaleString('es-ES') deja «4681» al lado de «37.978» (en
+  // español no agrupa los de cuatro cifras) y en la misma línea canta.
+  function mnMiles(n){
+    return String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  }
+  // «2026-04» -> «abr-26». Con el año: si no, en enero la línea dice «ago sep oct nov dic ene»
+  // y no se sabe de qué año es cada uno.
+  function mnMesCorto(mes){
+    const t = String(mes || '').split('-');
+    return (MN_MESES_CORTOS[Number(t[1]) - 1] || t[1] || '?') + '-' + String(t[0] || '').slice(2);
+  }
+  // Una línea por cosa, en este orden: el órgano filtrado (lo más útil), hasta dónde llega
+  // cada fuente, y el desglose por meses (una línea por fuente).
+  function mnPintaCobertura(){
+    if(!mnCobertura) return;
+    const lineas = [mnCoberturaOrgano, mnCoberturaTexto].concat(mnCoberturaMeses).filter(Boolean);
+    while(mnCobertura.firstChild) mnCobertura.removeChild(mnCobertura.firstChild);
+    lineas.forEach(function(t, i){
+      const sp = document.createElement('span');
+      if(i === 0 && mnCoberturaOrgano) sp.className = 'mn-cob-organo';
+      sp.textContent = t;                            // textContent: nada de HTML
+      mnCobertura.appendChild(sp);
+    });
+    mnCobertura.hidden = !lineas.length;
+  }
+  const MN_COBERTURA_DIAS = 45;        // más vieja que esto, no se usa para decidir nada
+  async function mnCargaCobertura(){
+    if(mnCoberturaPedida) return;
+    mnCoberturaPedida = true;
+    let datos = null;
+    // Si la lectura falla (un timeout suelto, el token caducando), se vuelve a intentar en la
+    // siguiente búsqueda: si no, un fallo de un segundo dejaba la sesión entera sin línea y,
+    // peor, sin los tamaños por órgano que hacen instantáneo el aviso.
+    try {
+      // Las filas de fuente primero ('fuente' < 'organo') por si algún día hubiera más de
+      // 1.000 órganos: PostgREST corta ahí y lo primero que se pierde no puede ser la fecha.
+      const r = await supabase.from('menores_cobertura').select('ambito,clave,fuente,ultima,filas,meses,actualizado')
+        .order('ambito', { ascending: true }).order('filas', { ascending: false }).limit(1000);
+      if(!r.error) datos = r.data || [];
+    } catch(e){ datos = null; }
+    if(!datos || !datos.length){ mnCoberturaPedida = false; return; }
+    // La pista solo vale si la cobertura es RECIENTE: si el cargador lleva meses parado (o
+    // hubo una purga), el tamaño guardado puede no tener nada que ver con lo que hay.
+    const fresca = function(f){
+      const t = Date.parse(f && f.actualizado);
+      return isFinite(t) && (Date.now() - t) < MN_COBERTURA_DIAS * 24 * 3600 * 1000;
+    };
+    const tam = Object.create(null);
+    datos.forEach(function(f){ if(f && f.ambito === 'organo' && f.clave && fresca(f)) tam[f.clave] = Number(f.filas) || 0; });
+    if(typeof _mn.pistas === 'function') _mn.pistas(tam);
+    const fuentes = datos.filter(function(f){ return f && f.ambito === 'fuente' && f.ultima; })
+                         .sort(function(a,b){ return (Number(b.filas)||0) - (Number(a.filas)||0); });
+    if(!fuentes.length) return;
+    const hasta = fuentes.map(function(f){ return mnFuente(f.clave).etiqueta + ' ' + mnFechaCorta(f.ultima); }).join(' · ');
+    const enCurso = String(fuentes[0].actualizado || '').slice(0, 7);   // el mes de la FOTO, no el del reloj
+    const hayPrevio = fuentes.some(function(f){
+      return (Array.isArray(f.meses) ? f.meses : []).some(function(m){ return Number(m && m.previo) > 0; });
+    });
+    // Una línea por fuente: en el móvil, las 12 cifras seguidas eran un muro.
+    mnCoberturaMeses = fuentes.map(function(f){
+      const ms = Array.isArray(f.meses) ? f.meses : [];
+      if(!ms.length) return '';
+      return mnFuente(f.clave).etiqueta + ': ' + ms.map(function(m){
+        const n = Number((m && m.n) || 0), previo = Number((m && m.previo) || 0);
+        // El % es la única manera de ver que un mes NO está cerrado: «jun 35.460» parece
+        // completo y va por el 77% de lo que fue junio del año pasado.
+        return mnMesCorto(m && m.mes) + ' ' + mnMiles(n)
+          + (previo ? ' (' + Math.round(100 * n / previo) + '%)' : '')
+          + (m && m.mes === enCurso ? ' [mes en curso]' : '');
+      }).join(' · ');
+    }).filter(Boolean);
+    if(mnCoberturaMeses.length){
+      mnCoberturaMeses.unshift(hayPrevio
+        ? 'Menores por mes (el % es sobre el mismo mes del año anterior):'
+        : 'Menores por mes:');
+    }
+    mnCoberturaTexto = 'Datos hasta: ' + hasta + ' — foto del ' + mnFechaCorta(fuentes[0].actualizado)
+      + '. Lo más reciente está INCOMPLETO: los órganos tardan semanas o meses en publicar.';
+    mnPintaCobertura();
+  }
+  // Fecha del último menor del ÓRGANO filtrado. Se pregunta en vivo (49 ms por el índice
+  // órgano+fecha) y no se guarda en la tabla: así nunca está vieja.
+  const mnUltimaOrgano = new Map();
+  async function mnFechaOrgano(organo){
+    if(mnUltimaOrgano.has(organo)) return mnUltimaOrgano.get(organo);
+    let v = null, fallo = false;
+    try {
+      const r = await supabase.from('menores').select('fecha_adjudicacion')
+        .eq('organo_contratacion', organo)
+        .order('fecha_adjudicacion', { ascending: false, nullsFirst: false }).limit(1);
+      if(r.error) fallo = true;
+      else if(r.data && r.data.length) v = r.data[0].fecha_adjudicacion || null;
+    } catch(e){ fallo = true; }
+    // Un fallo NO se guarda: si se cachea, un timeout suelto deja ese órgano sin fecha para
+    // el resto de la sesión. Se reintenta en la siguiente búsqueda.
+    if(!fallo) mnUltimaOrgano.set(organo, v);
+    return v;
+  }
+
   function mnParams(){
     const f = mnFiltros;
     const partes = (f.orden || 'fecha_adjudicacion:desc').split(':');
@@ -4319,6 +4456,7 @@ JS_MENORES_UI = r"""
       modo: modo,
       nichoCpv: modo === 'nicho' ? MN_NICHO_CPV : undefined,
       nichoKw:  modo === 'nicho' ? MN_NICHO_KW  : undefined,
+      nichoExcl: modo === 'nicho' ? MN_NICHO_EXCL : undefined,
       cifsSeguidos: unCif || (modo === 'cifs' ? MN_CIFS : undefined),
       cpvPrefijo: f.cpvPrefijo.length ? f.cpvPrefijo.slice() : undefined,
       texto: mnTexto ? mnTexto.value : '',
@@ -4650,10 +4788,29 @@ JS_MENORES_UI = r"""
     if(!sesionActiva){ mnActualizarGate(); return; }
     if(mnCargando){ mnPendiente = true; return; }   // no se pierde: se relanza al terminar
     mnCargando = true; mnYaBuscado = true;
+    const miSecuencia = ++mnSecuencia;
+    // Los parámetros se leen UNA vez, al lanzar: la página y su recuento tienen que ser de la
+    // MISMA búsqueda aunque el usuario teclee mientras viaja (el texto tiene debounce).
+    const params = mnParams();
+    const conCif = !!mnFiltros.cif;
     if(mnMsg){ mnMsg.hidden=false; mnMsg.textContent='Buscando…'; }
     if(mnPag){ mnPag.hidden=true; if(mnPagInfo) mnPagInfo.textContent=''; }
+    if(mnAvisoOrden) mnAvisoOrden.hidden = true;
+    mnCargaCobertura();                       // una sola vez por sesión
+    // Hasta cuándo llega el órgano filtrado (el SAS se quedó el 27/04/2026 aunque la fuente
+    // siga trayendo menores de junio). Va aparte de la búsqueda: si tarda, no la retrasa.
+    if(params.organo){
+      // Se limpia SIEMPRE al empezar: al saltar del órgano A al B, la línea no puede quedarse
+      // enseñando la fecha de A mientras llega la de B (o si la de B falla).
+      if(mnCoberturaOrgano){ mnCoberturaOrgano = ''; mnPintaCobertura(); }
+      mnFechaOrgano(params.organo).then(function(f){
+        if(miSecuencia !== mnSecuencia) return;
+        mnCoberturaOrgano = f ? (params.organo + ': su último menor publicado es del ' + mnFechaCorta(f) + '.') : '';
+        mnPintaCobertura();
+      });
+    } else if(mnCoberturaOrgano){ mnCoberturaOrgano = ''; mnPintaCobertura(); }
     let r;
-    try { r = await mnBuscarFn(mnParams()); }
+    try { r = await mnBuscarFn(params); }
     catch(e){ r = { error: e }; }
     mnCargando = false;
     // Si mientras viajaba esta consulta se pidió otra (típico: «Ver sus N menores» desde la
@@ -4671,26 +4828,87 @@ JS_MENORES_UI = r"""
     const filas = r.filas || [];
     if(!filas.length){
       if(mnRes) mnRes.innerHTML='';
-      if(mnMsg){ mnMsg.hidden=false; mnMsg.textContent='Sin resultados. Prueba con otros filtros.'; }
+      if(mnMsg){
+        mnMsg.hidden=false;
+        mnMsg.textContent = mnPagina > 1 ? 'No hay más resultados: esta página ya está vacía.'
+                                         : 'Sin resultados. Prueba con otros filtros.';
+      }
       if(mnCont) mnCont.textContent='';
-      if(mnPag) mnPag.hidden=true;
+      // Con «más de 10.000» no se sabe cuál es la última página y se puede uno pasar. Si eso
+      // ocurre, la barra SE QUEDA para poder volver: sin ella no había manera de retroceder.
+      if(mnPag){
+        if(mnPagina > 1){
+          mnPag.hidden = false;
+          if(mnPagInfo) mnPagInfo.textContent = 'Página ' + mnPagina;
+          if(mnPrev) mnPrev.disabled = false;
+          if(mnNext) mnNext.disabled = true;
+        } else {
+          mnPag.hidden = true;
+        }
+      }
       return;
     }
     if(mnMsg) mnMsg.hidden = true;
     if(mnRes) mnRes.innerHTML = filas.map(mnTarjeta).join('');
     mnIntroCoherente(filas);
+    // ORDEN POR IMPORTE DESACTIVADO: las filas llegan por fecha y se dice por qué. Con un
+    // adjudicatario filtrado no se sugiere «Solo mi nicho»: esa pastilla quita el filtro de
+    // la empresa y enseñaría otra cosa.
+    if(mnAvisoOrden){
+      mnAvisoOrden.hidden = !r.ordenImporteDesactivado;
+      if(r.ordenImporteDesactivado){
+        const acotar = conCif ? 'el texto, el CPV o las fechas' : '«Solo mi nicho», el texto, el CPV o las fechas';
+        mnAvisoOrden.textContent = (r.motivoOrden === 'grande'
+          ? 'Con estos filtros hay más de ' + Number(r.umbral || 10000).toLocaleString('es-ES') + ' menores y no se pueden ordenar por importe'
+          : 'Con estos filtros ordenar por importe tarda demasiado')
+          + ': se muestran por fecha. Acota con ' + acotar + ' para ordenarlos por importe.';
+      }
+    }
+    // CONTADOR Y PAGINACIÓN. Nunca se enseña la estimación del planner (llegó a decir
+    // «≈ 10.074» con 2.947 de verdad): número exacto, «más de 10.000» o «Contando…». El
+    // recuento se guarda con la clave de los FILTROS: cambiar de página u orden no lo repite.
+    if(r.total != null){
+      mnRecuento = { clave: r.clave, total: r.total, topado: !!r.topado };
+      mnPintaTotal(r.total, r.topado, false, filas.length);
+    } else if(mnRecuento.clave === r.clave){
+      mnPintaTotal(mnRecuento.total, mnRecuento.topado, false, filas.length);
+    } else if(r.sinRecuento){
+      // Ni la sonda cupo en su tiempo: contar tampoco cabría. No se lanza otra consulta pesada.
+      mnPintaTotal(null, false, false, filas.length, true);
+    } else {
+      mnPintaTotal(null, false, true, filas.length);
+      mnContarFn(params, r.estimado).then(function(c){
+        if(miSecuencia !== mnSecuencia) return;     // ya hay otra búsqueda: este recuento caducó
+        if(c.error || c.total == null){ mnPintaTotal(null, false, false, filas.length, true); return; }
+        mnRecuento = { clave: r.clave, total: c.total, topado: !!c.topado };
+        mnPintaTotal(c.total, c.topado, false, filas.length);
+      });
+    }
+  }
+
+  function mnPintaTotal(total, topado, pendiente, nFilasPagina, sinRecuento){
     if(mnCont){
-      const aprox = r.aproximado ? '≈ ' : '';
-      mnCont.textContent = aprox + (r.total||0).toLocaleString('es-ES') + ' menor' + ((r.total===1)?'':'es');
+      if(pendiente) mnCont.textContent = 'Contando…';
+      else if(sinRecuento) mnCont.textContent = 'No se pudo contar';
+      else if(topado) mnCont.textContent = 'más de ' + Number(total||0).toLocaleString('es-ES') + ' menores';
+      else mnCont.textContent = Number(total||0).toLocaleString('es-ES') + ' menor' + (total === 1 ? '' : 'es');
     }
-    // Paginación.
-    const totalPag = Math.max(1, Math.ceil((r.total||0) / MN_POR_PAGINA));
     if(mnPag){
+      const conocido = !pendiente && !sinRecuento && !topado && total != null;
+      const totalPag = conocido ? Math.max(1, Math.ceil(total / MN_POR_PAGINA)) : null;
       mnPag.hidden = false;
-      if(mnPagInfo) mnPagInfo.textContent = 'Página ' + mnPagina + (r.aproximado ? '' : ' de ' + totalPag);
+      if(mnPagInfo) mnPagInfo.textContent = 'Página ' + mnPagina + (conocido ? ' de ' + totalPag : '');
       if(mnPrev) mnPrev.disabled = mnPagina <= 1;
-      if(mnNext) mnNext.disabled = filas.length < MN_POR_PAGINA;
+      if(mnNext) mnNext.disabled = conocido ? mnPagina >= totalPag : nFilasPagina < MN_POR_PAGINA;
     }
+  }
+
+  // AVISO DE EXCLUSIONES mal escritas: visible en la vista, no solo en el log de
+  // publicación. Sin esto, un grupo con una errata dejaba el nicho con ruido en silencio.
+  if(mnAvisoExcl && MN_NICHO_AVISO){
+    mnAvisoExcl.hidden = false;
+    mnAvisoExcl.textContent = 'Exclusiones del nicho: ' + MN_NICHO_AVISO
+      + '. Hasta arreglarlo en data/menores_nicho_exclusiones.json, «Solo mi nicho» trae más ruido del debido.';
   }
 
   // --- Eventos ---------------------------------------------------------------
@@ -5337,26 +5555,22 @@ except (OSError, yaml.YAMLError):
 # v2: no se etiqueta en la ingesta, así ampliarlo = editar intereses.yaml y regenerar,
 # sin re-backfill). Sale de criticas + a_revisar (NUNCA 'pruebas'). Las palabras van
 # SIN TILDES y unidas por ' or ' (websearch) para casar el tsv (guardado con unaccent).
-def _nicho_menores(criterios):
-    import unicodedata
-    def sin_tildes(t):
-        return "".join(c for c in unicodedata.normalize("NFD", str(t).lower())
-                       if unicodedata.category(c) != "Mn")
-    cpv, kws = [], []
-    for grupo in ("criticas", "a_revisar"):
-        crit = (criterios or {}).get(grupo) or {}
-        for c in crit.get("cpv") or []:
-            s = str(c).strip()
-            if s and s not in cpv:
-                cpv.append(s)
-        for p in crit.get("palabras_clave") or []:
-            s = sin_tildes(p).strip()
-            if s and s not in kws:
-                kws.append(s)
-    return cpv, " or ".join(kws)
+# Se construye en menores_nicho.py, el MISMO sitio del que lo toma medir_menores.py: así
+# la web y la medición no pueden separarse. Las exclusiones (data/menores_nicho_
+# exclusiones.json) quitan la ventilación clínica y otros falsos positivos SOLO a lo que
+# entra por su palabra; si el fichero falta o está mal, el nicho sale sin exclusiones y
+# se avisa, pero la web se publica igual.
+import menores_nicho
 
-
-MENORES_NICHO_CPV, MENORES_NICHO_KW = _nicho_menores(criterios_defecto)
+_NICHO_MENORES = menores_nicho.nicho(criterios_defecto)
+if _NICHO_MENORES["aviso"]:
+    print("AVISO (nicho de menores): " + _NICHO_MENORES["aviso"])
+MENORES_NICHO_CPV = _NICHO_MENORES["cpv"]
+MENORES_NICHO_KW = _NICHO_MENORES["palabras"]        # solo las palabras SIN exclusión
+MENORES_NICHO_EXCL = _NICHO_MENORES["excl"]          # [{kw, excluye: [websearch, ...]}]
+# Los grupos mal escritos que se han ignorado se ven TAMBIÉN en la web: si solo salen en el
+# log de publicación, el nicho trae ruido y nadie se entera hasta que lo nota alguien.
+MENORES_NICHO_AVISO = _NICHO_MENORES["aviso"] or ""
 
 # CIFS_SEGUIDOS: lista curada (ROADMAP.md) de competidores + LODEPA. Se usa para el
 # modo «solo competidores seguidos» y el badge. Son datos públicos (CIF de empresas).
@@ -5409,7 +5623,13 @@ MENORES_FUENTES = _fuentes_menores()
 # bloque ya no cierra, y la página entera se quedaba sin JavaScript (probado en Chrome).
 DATOS_MENORES_JS = (
     "window.__MENORES_NICHO_CPV = " + json.dumps(MENORES_NICHO_CPV) + ";\n"
-    "window.__MENORES_NICHO_KW = " + json.dumps(MENORES_NICHO_KW, ensure_ascii=False) + ";\n"
+    "window.__MENORES_NICHO_KW = "
+    + json.dumps(MENORES_NICHO_KW, ensure_ascii=False).replace("<", "\\u003c") + ";\n"
+    # Se escapan todos los «<» (un término con «<!--» o «</script» cortaría el bloque de
+    # datos), igual que __MENORES_FUENTES.
+    "window.__MENORES_NICHO_EXCL = " + json.dumps(MENORES_NICHO_EXCL, ensure_ascii=False).replace("<", "\\u003c") + ";\n"
+    "window.__MENORES_NICHO_AVISO = "
+    + json.dumps(MENORES_NICHO_AVISO, ensure_ascii=False).replace("<", "\\u003c") + ";\n"
     "window.__MENORES_CIFS = " + json.dumps(MENORES_CIFS_SEGUIDOS) + ";\n"
     "window.__MENORES_FUENTES = "
     + json.dumps(MENORES_FUENTES, ensure_ascii=False).replace("<", "\\u003c") + ";\n"
@@ -5773,6 +5993,7 @@ pagina = f"""<!DOCTYPE html>
       <div id="mn-gate" class="bg-gate" hidden>🔒 Inicia sesión para explorar los contratos menores.</div>
       <div id="mn-panel" hidden>
         <p class="mn-intro">Contratos <strong>menores</strong> (adjudicación directa<span id="mn-intro-fuentes">{MENORES_INTRO_FUENTES}</span>). Explora quién capta el gasto de tu nicho y qué órganos compran tu tipo de servicio.</p>
+        <div id="mn-aviso-excl" class="mn-aviso-orden" hidden></div>
         <div class="bg-barra">
           <input id="mn-texto" class="bg-input" type="search" autocomplete="off"
                  placeholder="Título del contrato u órgano… (formaldehído, calidad del aire) · o el nombre o el CIF de una empresa">
@@ -5826,6 +6047,8 @@ pagina = f"""<!DOCTYPE html>
           <button id="mn-limpiar" class="bg-limpiar" type="button" hidden>Limpiar filtros</button>
         </div>
         <div id="mn-estado-msg" class="bg-msg" hidden></div>
+        <div id="mn-aviso-orden" class="mn-aviso-orden" hidden></div>
+        <p id="mn-cobertura" class="mn-cobertura" hidden></p>
         <div id="mn-resultados" class="grid"></div>
         <div id="mn-paginacion" class="bg-pag" hidden>
           <button id="mn-prev" class="bg-pag-btn" type="button">‹ Anterior</button>
