@@ -103,6 +103,14 @@ RPC_REFRESCAR_DESIERTAS = "refrescar_desiertas"
 # FASE M: recalcula public.menores_cobertura (hasta dónde llega cada fuente y tamaño de los
 # órganos grandes). Ver menores_cobertura.sql. Solo LEE menores; no toca el catálogo.
 RPC_COBERTURA_MENORES = "menores_cobertura_refresca"
+# Deja constancia de CADA intento de refresco (bueno o malo) en public.refrescos, para
+# que la web pueda decir «último intento: falló el 17» en vez de enseñar datos viejos
+# como si estuvieran al día. Ver refrescos_y_desiertas.sql.
+RPC_REFRESCO_MARCA = "refresco_marca"
+# Ventana por defecto del refresco de desiertas: solo se recalculan las licitaciones
+# cuyas adjudicaciones se han tocado en estos días. Es la red de seguridad: si un día
+# falla, al siguiente esos ids siguen dentro de la ventana (una semana de margen).
+DIAS_DESIERTAS = 7
 LIMITE_GRATIS_MB = 500          # plan gratuito de Supabase (~500 MB de base de datos)
 BASE = "https://contrataciondelsectorpublico.gob.es/sindicacion"
 
@@ -723,6 +731,7 @@ def refrescar_competidores(sesion, url_base, headers, reintentos=4):
                     n = None
                 print(f"  Competidores (Fase E) refrescados: "
                       + (f"{n:,} CIF" if n is not None else "(ok)"))
+                marca_refresco(sesion, url_base, headers, "competidores", True, filas=n)
                 return n
             if r.status_code == 404 or "PGRST202" in r.text or "Could not find the function" in r.text:
                 print(f"  AVISO: la RPC public.{RPC_REFRESCAR_COMPETIDORES} no existe todavía "
@@ -740,6 +749,7 @@ def refrescar_competidores(sesion, url_base, headers, reintentos=4):
             time.sleep(espera)
     print(f"  AVISO: no pude refrescar competidores ({ultimo}); salto (se reintenta en la "
           f"próxima ingesta; es un rebuild idempotente).")
+    marca_refresco(sesion, url_base, headers, "competidores", False, error=str(ultimo)[:300])
     return None
 
 
@@ -762,6 +772,13 @@ def refrescar_cobertura_menores(sesion, url_base, headers, reintentos=3):
         else:
             if r.status_code == 200:
                 print(f"  Cobertura de menores refrescada: {r.text.strip()[:200]}")
+                detalle = None
+                try:
+                    detalle = json.loads(r.text)
+                except ValueError:
+                    detalle = None
+                marca_refresco(sesion, url_base, headers, "menores_cobertura", True,
+                               filas=(detalle or {}).get("organos"), detalle=detalle)
                 return True
             if r.status_code == 404 or "PGRST202" in r.text or "Could not find the function" in r.text:
                 print(f"  AVISO: la RPC public.{RPC_COBERTURA_MENORES} no existe todavía "
@@ -779,6 +796,7 @@ def refrescar_cobertura_menores(sesion, url_base, headers, reintentos=3):
             time.sleep(espera)
     print(f"  AVISO: no pude refrescar la cobertura de menores ({ultimo}); salto (se reintenta "
           f"en la próxima ingesta; es idempotente).")
+    marca_refresco(sesion, url_base, headers, "menores_cobertura", False, error=str(ultimo)[:300])
     return False
 
 
@@ -805,33 +823,62 @@ def refrescar_competidores_oneshot():
 
 
 # --- DESIERTAS · agregado por licitación (estado_adjudicacion) ---------------
-def _rpc_desiertas(sesion, url, headers, lote, reintentos=4):
-    """Una llamada a public.refrescar_desiertas(p_lote). Devuelve el nº de licitaciones
-    ACTUALIZADAS en esta tanda, o None si la RPC no está desplegada / falló sin remedio
-    (ya avisado). Mismo criterio que refrescar_competidores: 404/PGRST202 -> saltar;
-    5xx/red -> reintentar."""
+def marca_refresco(sesion, url_base, headers, clave, ok, filas=None, detalle=None, error=None):
+    """Anota en public.refrescos el ÚLTIMO INTENTO de un agregado, salga bien o mal (ver
+    refrescos_y_desiertas.sql). Nunca es fatal ni reintenta: si la tabla aún no existe,
+    avisa y sigue. Lo hace el cargador y no la RPC porque un fallo por statement_timeout
+    deshace la transacción de la RPC: no podría dejar constancia de su propio fallo."""
+    url = f"{url_base}/rest/v1/rpc/{RPC_REFRESCO_MARCA}"
+    h = {k: v for k, v in headers.items() if k != "Prefer"}
+    cuerpo = {"p_clave": clave, "p_ok": bool(ok), "p_filas": filas, "p_detalle": detalle,
+              "p_error": (str(error)[:500] if error else None)}
+    try:
+        r = sesion.post(url, headers=h, json=cuerpo, timeout=30)
+    except requests.RequestException as e:
+        print(f"  AVISO: no pude anotar el refresco «{clave}» ({e}); sigo.")
+        return False
+    if r.status_code in (200, 204):
+        return True
+    if r.status_code == 404 or "PGRST202" in r.text:
+        print(f"  AVISO: la RPC public.{RPC_REFRESCO_MARCA} no existe todavía. "
+              f"¿Ejecutaste refrescos_y_desiertas.sql? La web no podrá decir de cuándo "
+              f"son los datos de «{clave}».")
+        return False
+    print(f"  AVISO: no pude anotar el refresco «{clave}» (HTTP {r.status_code}); sigo.")
+    return False
+
+
+def _rpc_desiertas(sesion, url, headers, lote, reintentos=4, dias=DIAS_DESIERTAS):
+    """Una llamada a public.refrescar_desiertas(p_lote, p_dias). Devuelve
+    (nº de licitaciones ACTUALIZADAS en esta tanda, None) o (None, motivo) si la RPC no
+    está desplegada / falló sin remedio (ya avisado). El motivo se anota luego en
+    public.refrescos. Mismo criterio que refrescar_competidores: 404/PGRST202 -> saltar;
+    5xx/red -> reintentar.
+
+    dias > 0: solo las licitaciones tocadas esos días (4-7 s medidos). dias = 0: escaneo
+    completo (20,4 s), que es lo que hace falta para el backfill y el repaso de seguridad."""
     h = {k: v for k, v in headers.items() if k != "Prefer"}
     ultimo = None
     for intento in range(1, reintentos + 1):
         try:
-            r = sesion.post(url, headers=h, json={"p_lote": lote}, timeout=300)
+            r = sesion.post(url, headers=h, json={"p_lote": lote, "p_dias": dias}, timeout=300)
         except requests.RequestException as e:
             ultimo = e
         else:
             if r.status_code == 200:
                 try:
-                    return int(r.text.strip())
+                    return int(r.text.strip()), None
                 except (ValueError, AttributeError):
-                    return 0
+                    return 0, None
             if r.status_code == 404 or "PGRST202" in r.text or "Could not find the function" in r.text:
                 print(f"  AVISO: la RPC public.{RPC_REFRESCAR_DESIERTAS} no existe todavía "
                       f"(HTTP {r.status_code}). ¿Ejecutaste desiertas_schema.sql? SALTO el "
                       f"refresco de desiertas (el resto de la ingesta va con normalidad).")
-                return None
+                return None, f"la RPC no existe (HTTP {r.status_code})"
             if 400 <= r.status_code < 500 and r.status_code != 429:
                 print(f"  AVISO: {RPC_REFRESCAR_DESIERTAS} devolvió HTTP {r.status_code}: "
                       f"{r.text[:300]}; salto.")
-                return None
+                return None, f"HTTP {r.status_code}: {r.text[:200]}"
             ultimo = RuntimeError(f"HTTP {r.status_code}: {r.text[:200]}")
         if intento < reintentos:
             espera = 2 ** intento
@@ -839,10 +886,11 @@ def _rpc_desiertas(sesion, url, headers, lote, reintentos=4):
             time.sleep(espera)
     print(f"  AVISO: no pude refrescar desiertas ({ultimo}); salto (se reintenta en la "
           f"próxima ingesta; es idempotente).")
-    return None
+    return None, str(ultimo)[:300]
 
 
-def refrescar_desiertas_bucle(sesion, url_base, headers, lote=5000, verboso=False):
+def refrescar_desiertas_bucle(sesion, url_base, headers, lote=5000, verboso=False,
+                              dias=DIAS_DESIERTAS):
     """DESIERTAS · pone al día licitaciones.estado_adjudicacion / n_lotes_desiertos desde
     public.adjudicaciones. Se llama tras sube_adjudicaciones, junto a refrescar_competidores.
     NO es fatal (si la RPC no está desplegada, avisa y salta).
@@ -857,28 +905,35 @@ def refrescar_desiertas_bucle(sesion, url_base, headers, lote=5000, verboso=Fals
     url = f"{url_base}/rest/v1/rpc/{RPC_REFRESCAR_DESIERTAS}"
     total, tanda = 0, 0
     while True:
-        n = _rpc_desiertas(sesion, url, headers, lote)
-        if n is None:
-            return None            # RPC ausente o fallo: ya avisado
+        n, motivo = _rpc_desiertas(sesion, url, headers, lote, dias=dias)
+        if n is None:              # RPC ausente o fallo: ya avisado
+            marca_refresco(sesion, url_base, headers, "desiertas", False, error=motivo)
+            return None
         if n == 0:
             break
         total += n
         tanda += 1
         if verboso:
             print(f"  tanda {tanda}: {n:,} actualizadas  ·  acumulado: {total:,}")
-    print(f"  Desiertas: agregado al día ({total:,} licitaciones actualizadas).")
+    ventana = f"{dias} días" if dias and dias > 0 else "todo"
+    print(f"  Desiertas: agregado al día ({total:,} licitaciones actualizadas · ventana: {ventana}).")
+    marca_refresco(sesion, url_base, headers, "desiertas", True, filas=total,
+                   detalle={"tandas": tanda, "dias": dias, "lote": lote})
     return total
 
 
 def refrescar_desiertas_oneshot(lote=5000):
     """DESIERTAS · backfill/refresco manual del agregado, sin reingerir:
         python backfill_catalogo.py --refrescar-desiertas
-    Es lo que POBLA la columna la primera vez (~326.822 licitaciones)."""
+    Es lo que POBLA la columna la primera vez (~326.822 licitaciones) y el REPASO COMPLETO
+    de seguridad: aquí NO se usa la ventana de días (dias=0), así que mira todas las
+    licitaciones, incluidas las que se hubieran quedado fuera por un fallo antiguo."""
     sesion, headers, _endpoint, url_base = _preparar_upsert()
     print("=" * 78)
     print(f"REFRESCAR DESIERTAS — agregado por licitación · lotes de {lote:,} (repito hasta 0)")
+    print("  (escaneo COMPLETO: ~20 s de lectura por tanda)")
     print("=" * 78)
-    total = refrescar_desiertas_bucle(sesion, url_base, headers, lote, verboso=True)
+    total = refrescar_desiertas_bucle(sesion, url_base, headers, lote, verboso=True, dias=0)
     if total is None:
         sys.exit("Refresco de desiertas no ejecutado (ver AVISO arriba).")
     if total:
@@ -1282,8 +1337,13 @@ def diario(fuentes):
         # adjudicaciones nuevas del día. Rebuild completo (~3.5 s); salta si no existe.
         refrescar_competidores(sesion, url_base, headers)
         # DESIERTAS: pone al día licitaciones.estado_adjudicacion con los resultados
-        # nuevos del día (el delta son unas pocas decenas de filas). Salta si no existe.
-        refrescar_desiertas_bucle(sesion, url_base, headers)
+        # nuevos del día. De lunes a viernes va por la VENTANA de días (4-7 s); los LUNES,
+        # repaso COMPLETO (20 s) como red de seguridad: recoge lo que se hubiera quedado
+        # fuera por un fallo largo y lo que cambió durante el fin de semana.
+        # Salta si la RPC no existe.
+        es_lunes = datetime.now(timezone.utc).weekday() == 0
+        refrescar_desiertas_bucle(sesion, url_base, headers,
+                                  dias=0 if es_lunes else DIAS_DESIERTAS)
 
 
 # --- PURGA de la ventana (vía RPC en Supabase) ------------------------------
