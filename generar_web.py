@@ -4830,8 +4830,12 @@ JS_MENORES_UI = r"""
       if(mnRes) mnRes.innerHTML='';
       if(mnMsg){
         mnMsg.hidden=false;
-        mnMsg.textContent = mnPagina > 1 ? 'No hay más resultados: esta página ya está vacía.'
-                                         : 'Sin resultados. Prueba con otros filtros.';
+        // tiempoAgotado NO es «sin resultados»: es que la base no ha podido contestar a
+        // tiempo. Decirlo con palabras, nunca un error rojo (ver menores_api.js).
+        mnMsg.textContent = r.tiempoAgotado
+          ? 'La base está tardando demasiado con estos filtros. Prueba otra vez en un momento, o acota con el texto, el CPV o las fechas.'
+          : (mnPagina > 1 ? 'No hay más resultados: esta página ya está vacía.'
+                          : 'Sin resultados. Prueba con otros filtros.');
       }
       if(mnCont) mnCont.textContent='';
       // Con «más de 10.000» no se sabe cuál es la última página y se puede uno pasar. Si eso

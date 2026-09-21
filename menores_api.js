@@ -398,6 +398,8 @@ export function crearMenores(supabase) {
   //                     null con conteoPendiente = true (la UI llama a contar(params, estimado)).
   //   sinRecuento       true si la sonda agotó su tiempo: la UI dice «No se pudo contar» sin
   //                     lanzar otra consulta pesada.
+  //   tiempoAgotado     true si NI la lista NI la página (dos intentos) cupieron en su tiempo:
+  //                     filas vacías y error null. La UI lo dice con palabras; nunca un error.
   //   ordenImporteDesactivado = true: se pidió orden por importe y no se puede; las filas
   //                     llegan por fecha (más recientes primero). motivoOrden: 'grande' (más
   //                     de 10.000 menores) o 'costosa' (la sonda o la lista agotaron su tiempo).
@@ -424,7 +426,7 @@ export function crearMenores(supabase) {
     const resultado = (data, extra) => Object.assign({
       filas: data ?? [], total: null, pagina, porPagina, topado: false, conteoPendiente: false,
       sinRecuento: false, estimado: null, ordenImporteDesactivado: false, motivoOrden: null,
-      umbral: M_UMBRAL, clave, error: null,
+      tiempoAgotado: false, umbral: M_UMBRAL, clave, error: null,
     }, extra || {});
     const fallo = (error) => resultado([], { total: 0, error });
 
@@ -481,7 +483,13 @@ export function crearMenores(supabase) {
     // y ordenando por importe casi siempre se acaba usando la lista.
     let pPaginaUna = null;
     const pPaginaFn = () => (pPaginaUna || (pPaginaUna = pideServidor().then((p) => ({ tipo: 'pagina', p }))));
-    if (!porImporte) {
+    // EL NICHO POR FECHA NO PASA POR LA PÁGINA DEL SERVIDOR. Casa 1 de cada 700 filas, así
+    // que ordenar por fecha en el servidor obliga a recorrer el índice de fechas hasta juntar
+    // 25 filas: 12.325 páginas (~96 MB) medidas, 0,2 s con todo en caché y 6,5-8 s en frío o
+    // con el servidor ocupado. La sonda + la lista resuelven lo mismo en ~2 s y sin ese
+    // recorrido. Si algún día el nicho pasara del tope, la sonda lo dice y se usa la página.
+    const porFechaLigero = !porImporte && n.modo !== 'nicho';
+    if (porFechaLigero) {
       // Por fecha, primero se le deja un momento a la página del servidor: si contesta, ya
       // está (y no se lanza la sonda). El recuento lo pedirá luego la UI con contar().
       const primero = await Promise.race([pPaginaFn(), new Promise((res) => setTimeout(res, M_RETRASO_SONDA_MS, { tipo: 'espera' }))]);
@@ -499,7 +507,14 @@ export function crearMenores(supabase) {
 
     const { s } = await pSonda;
     if (!s.error && !s.supera && await trataLista()) return paginaAqui();
-    return deServidor((await pPaginaFn()).p);
+    const primera = (await pPaginaFn()).p;
+    if (!primera.error) return deServidor(primera);
+    // La página no cupo en su tiempo. Se repite UNA vez: el primer intento deja las páginas
+    // en la caché del servidor (medido: 6,5 s -> 0,97 s), así que el segundo suele entrar.
+    const segunda = await pideServidor();
+    if (!segunda.error) return deServidor(segunda);
+    // Ni así. NUNCA un error en pantalla: resultado vacío y la UI lo explica.
+    return resultado([], { sinRecuento: true, tiempoAgotado: true });
   }
 
   return { buscar, contar, pistas };

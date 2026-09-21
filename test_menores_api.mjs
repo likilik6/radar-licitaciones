@@ -364,5 +364,50 @@ const esSonda = (q) => q.rango && q.rango[0] === 10000;
     !r.error && r.total === 2 && !sb.registro.some(esPaginaServidor), sb.registro.map((q) => q.select));
 }
 
+// 18) EL NICHO POR FECHA no pide la página cara del servidor: sonda + lista y se ordena aquí.
+//     (Su página por fecha recorre el índice de fechas entero: 96 MB para 25 filas.)
+{
+  const filas = [fila(1, 5, '2026-01-01'), fila(2, 6, '2026-03-02'), fila(3, 7, null)];
+  const sb = clienteFalso(filas);
+  const r = await crearMenores(sb).buscar({ modo: 'nicho', nichoKw: 'x' });
+  comprueba('nicho por fecha: cero páginas del servidor, orden hecho aquí',
+    !r.error && r.total === 3 && !sb.registro.some(esPaginaServidor)
+    && r.filas.map((f) => f.licitacion_id).join() === 'and:000002,and:000001,and:000003',
+    { selects: sb.registro.map((q) => q.select), ids: r.filas.map((f) => f.licitacion_id) });
+}
+
+// 19) Con OTRO filtro por fecha, la página del servidor sigue yendo primero (es la rápida).
+{
+  const filas = [fila(1, 5, '2026-01-01')];
+  const sb = clienteFalso(filas);
+  const r = await crearMenores(sb).buscar({ organo: 'SAS' });
+  comprueba('órgano por fecha: la página del servidor sigue siendo la primera',
+    !r.error && sb.registro.some(esPaginaServidor), sb.registro.map((q) => q.select));
+}
+
+// 20) REGRESIÓN (21/09/2026): con el servidor saturado se caían la sonda Y la página, y la
+//     vista enseñaba «Error en la búsqueda». Ahora la página se reintenta una vez y, si
+//     tampoco, sale resultado VACÍO SIN error, con tiempoAgotado para que la UI lo explique.
+{
+  const filas = [fila(1, 5, '2026-01-01')];
+  const sb = clienteFalso(filas, { falla: (q) => esSonda(q) || esPaginaServidor(q) });
+  const r = await crearMenores(sb).buscar({ organo: 'SAS', texto: 'salud' });
+  const paginas = sb.registro.filter(esPaginaServidor).length;
+  comprueba('todo agotado: sin error, filas vacías, tiempoAgotado y DOS intentos de página',
+    r.error === null && r.filas.length === 0 && r.tiempoAgotado === true && r.sinRecuento === true && paginas === 2,
+    { paginas, r });
+}
+
+// 21) Si el segundo intento de página SÍ contesta (la primera pasada dejó la caché caliente),
+//     se usa: nada de mensaje de «tardando demasiado» cuando hay datos que enseñar.
+{
+  const filas = [fila(1, 5, '2026-01-01'), fila(2, 6, '2026-01-02')];
+  let vistas = 0;
+  const sb = clienteFalso(filas, { falla: (q) => esSonda(q) || (esPaginaServidor(q) && ++vistas === 1) });
+  const r = await crearMenores(sb).buscar({ organo: 'SAS', texto: 'salud' });
+  comprueba('el segundo intento de página se aprovecha',
+    !r.error && !r.tiempoAgotado && r.filas.length === 2 && sb.registro.filter(esPaginaServidor).length === 2, r);
+}
+
 console.log(`\n${fallos.length ? 'HAY FALLOS ✘' : 'TODO OK ✔'} (${ok} de ${ok + fallos.length})`);
 process.exit(fallos.length ? 1 : 0);
