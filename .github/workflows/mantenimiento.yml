@@ -1,0 +1,82 @@
+# MANTENIMIENTO SEMANAL · repaso completo del agregado de DESIERTAS.
+#
+# Por qué existe este workflow y no un paso más de la ingesta:
+#   El día a día (radar.yml -> backfill_catalogo.py --diario) recalcula desiertas por la
+#   VENTANA de 7 días: 7,6 s en frío y 0,3-1,0 s después (medido el 22/09/2026). Eso cubre
+#   todo lo que cambia, y nunca ha fallado.
+#   El repaso COMPLETO —el que recoge lo que se hubiera quedado descolgado hace más de una
+#   semana— cuesta 17,2 s en frío con la base tranquila, pero DENTRO de la ingesta se pasó
+#   de los 120 s de service_role y murió (21/09/2026 16:59, con 57014). La ingesta multiplica
+#   por más de cuatro el coste de cualquier consulta: acababa de escribir 16.000 filas y de
+#   reconstruir los 83.139 CIF de competidores.
+#   Así que el repaso se hace aquí, los domingos de madrugada, cuando no corre nada más.
+#
+# Cuándo: domingos a las 06:17 UTC. Lejos del Radar (L-V, 10:30-11:45 UTC) y de la carga de
+# menores autonómicos (sáb/dom 03:15 UTC, que tarda entre media hora y hora y media).
+#
+# Qué hace exactamente: `--refrescar-desiertas --lote 0`, o sea el escaneo completo en una
+# sola llamada sin límite de filas. Es idempotente (solo escribe lo que DIFIERE) y deja
+# constancia en public.refrescos, así que si falla se ve en la web, no solo en este log.
+#
+# Requisito previo: refrescos_y_desiertas.sql ejecutado en el SQL Editor. Si no está, el
+# paso avisa y sale sin escribir.
+
+name: Mantenimiento semanal
+
+on:
+  schedule:
+    - cron: "17 6 * * 0"        # domingos, 06:17 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: mantenimiento
+  cancel-in-progress: false
+
+jobs:
+  desiertas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read        # para que `gh run list` pueda ver si hay algo corriendo
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar librerías
+        run: pip install -r requirements.txt
+
+      - name: Esperar si hay otra cosa corriendo
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Nada de medir fuerzas con el Radar o con la carga de menores: si alguno está en
+          # marcha, se espera hasta 30 minutos. Si sigue ocupado, se sigue igualmente: el
+          # repaso no es fatal y quedará anotado en public.refrescos si se pasa de tiempo.
+          for i in $(seq 1 10); do
+            ocupado=$(gh run list --repo "$GITHUB_REPOSITORY" --status in_progress \
+                        --json workflowName --jq '[.[] | select(.workflowName != "Mantenimiento semanal")] | length')
+            if [ "${ocupado:-0}" -eq 0 ]; then
+              echo "No hay nada más corriendo; adelante."
+              break
+            fi
+            echo "Hay $ocupado workflow(s) en marcha; espero 3 minutos (intento $i/10)."
+            sleep 180
+          done
+
+      - name: Repaso completo de desiertas
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE" ]; then
+            echo "Faltan los secrets SUPABASE_URL y/o SUPABASE_SERVICE_ROLE." >&2
+            exit 1
+          fi
+          echo "Ejecutando: python backfill_catalogo.py --refrescar-desiertas --lote 0"
+          python backfill_catalogo.py --refrescar-desiertas --lote 0

@@ -1336,14 +1336,13 @@ def diario(fuentes):
         # Fase E: reconstruye el agregado por CIF (public.competidores) con las
         # adjudicaciones nuevas del día. Rebuild completo (~3.5 s); salta si no existe.
         refrescar_competidores(sesion, url_base, headers)
-        # DESIERTAS: pone al día licitaciones.estado_adjudicacion con los resultados
-        # nuevos del día. De lunes a viernes va por la VENTANA de días (4-7 s); los LUNES,
-        # repaso COMPLETO (20 s) como red de seguridad: recoge lo que se hubiera quedado
-        # fuera por un fallo largo y lo que cambió durante el fin de semana.
-        # Salta si la RPC no existe.
-        es_lunes = datetime.now(timezone.utc).weekday() == 0
-        refrescar_desiertas_bucle(sesion, url_base, headers,
-                                  dias=0 if es_lunes else DIAS_DESIERTAS)
+        # DESIERTAS: pone al día licitaciones.estado_adjudicacion con los resultados nuevos
+        # del día, SIEMPRE por la ventana de días (7,6 s en frío; 0,3-1,0 s después). Aquí
+        # NO se hace nunca el repaso completo: se probó los lunes y, con la ingesta recién
+        # terminada, sus 17 s se convirtieron en más de los 120 s del rol y murió
+        # (21/09/2026, error 57014). El repaso completo vive en su propio hueco, los
+        # domingos de madrugada (.github/workflows/mantenimiento.yml). Salta si no existe.
+        refrescar_desiertas_bucle(sesion, url_base, headers, dias=DIAS_DESIERTAS)
 
 
 # --- PURGA de la ventana (vía RPC en Supabase) ------------------------------
