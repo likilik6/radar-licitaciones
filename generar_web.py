@@ -15,6 +15,7 @@ import requests      # para leer la config del radar (dias_nuevo) desde Supabase
 from pathlib import Path
 from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo   # para mostrar la hora en la zona horaria de España
+from utiles import credencial_config, en_actions, get_con_reintentos  # leer radar_config
 
 # Hacemos que la consola muestre acentos y "ñ" correctamente en Windows.
 sys.stdout.reconfigure(encoding="utf-8")
@@ -24,28 +25,57 @@ TITULO_PAGINA = "Radar de licitaciones — LODEPA"
 DIAS_NUEVO = 7   # por defecto: "NUEVO" = detectado en los últimos 7 días (el panel
                  # de ajustes puede cambiar este número; ver lee_dias_nuevo()).
 
-# Conexión a Supabase (la MISMA clave publishable pública que usa el JS del panel).
-# Solo la usamos para LEER la config del radar (dias_nuevo); todo lo demás es local.
+# Conexión a Supabase. Solo se usa para LEER la config del radar; todo lo demás
+# es local. La clave de abajo es la publishable (pública), que desde sept. 2026 es
+# únicamente el respaldo: la lectura va con SUPABASE_SERVICE_ROLE o
+# SUPABASE_SECRET_KEY (ver credencial_config en utiles.py y la nota de filtrar.py).
 SUPABASE_URL = "https://uzktrhpgkyctlnqgdsys.supabase.co"
 SUPABASE_KEY = "sb_publishable_3J3pFbMlNzu-NUDs1-740g_lu8YsRv_"
 
 
 def lee_config_radar():
-    """Lee la config del radar (Supabase, tabla radar_config). Devuelve el dict de
-    config, o {} si no se puede (Supabase caído, tabla vacía, sin red)."""
+    """Lee la config del radar (Supabase, tabla radar_config).
+
+    Misma regla que en filtrar.py (ver allí la explicación larga): se lee con
+    SUPABASE_SERVICE_ROLE en Actions o SUPABASE_SECRET_KEY en local, y si no se
+    puede leer, en Actions se ABORTA con exit 1.
+
+    OJO al "except Exception: pass" que había aquí antes: se comía el error sin
+    imprimir NADA, así que la web se publicaba con los criterios de intereses.yaml
+    y el log de Actions salía verde y mudo. Esa era la parte peligrosa.
+    """
+    clave, origen = credencial_config(SUPABASE_KEY)
     try:
-        r = requests.get(
+        r = get_con_reintentos(
             f"{SUPABASE_URL}/rest/v1/radar_config",
             params={"id": "eq.1", "select": "config"},
-            headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"},
+            headers={"apikey": clave, "Authorization": f"Bearer {clave}"},
             timeout=20,
         )
-        r.raise_for_status()
         filas = r.json()
-        if filas and isinstance(filas[0].get("config"), dict):
-            return filas[0]["config"]
-    except Exception:
-        pass
+        if not filas:
+            raise RuntimeError(
+                "radar_config no devolvió ninguna fila: o la credencial no tiene "
+                "permiso, o la fila no existe"
+            )
+        config = filas[0].get("config")
+        if config is None:
+            # Columna vacía: significa lo mismo que {} (perfil aún sin configurar).
+            # No es motivo para tirar la publicación del día.
+            print("AVISO: radar_config existe pero no tiene configuración; uso intereses.yaml.")
+            return {}
+        if not isinstance(config, dict):
+            raise RuntimeError("radar_config devolvió una fila sin 'config' utilizable")
+        print(f"Config del radar leída de Supabase (credencial: {origen}).")
+        return config
+    except Exception as error:
+        detalle = f"no se pudo leer radar_config de Supabase ({error}); credencial: {origen}."
+        if en_actions():
+            print(f"ERROR: {detalle}")
+            print("Esto NO se ignora en GitHub Actions: la web se generaría con los")
+            print("criterios de intereses.yaml en lugar de los del panel. Se aborta.")
+            sys.exit(1)
+        print(f"AVISO: {detalle} Uso intereses.yaml.")
     return {}
 
 
@@ -1136,6 +1166,9 @@ JS_SUPABASE = """
   // sin esperar a la próxima recogida del robot. Las ocultas siguen en el DOM y
   // reaparecen si reactivas. Si no hay config (cfgFiltro=null), no oculta nada.
   let cfgFiltro = null;
+  // Dos apoyos para releer la config sin hacer daño (ver recargarConfigRadar):
+  let cfgGeneracion = 0;         // gana la lectura MÁS RECIENTE, no la más lenta
+  let cfgVistaAplicada = false;  // ¿ya se fijó la vista (por config o por el usuario)?
   function normalizaJS(s) {
     return String(s || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');
   }
@@ -1269,12 +1302,16 @@ JS_SUPABASE = """
       const btn = e.target.closest('.tab');
       if (!btn) return;
       if (vistaActiva === 'observacion') return;   // el tablist no gobierna 'En observación'
+      cfgVistaAplicada = true;                     // ha elegido él: ya no le imponemos nada
       seleccionarPestana(btn.dataset.pestana);
     });
   }
   // Cambiar el desplegable de orden: solo re-ordena (filtro y contadores no cambian).
   if (selectOrden) {
-    selectOrden.addEventListener('change', function () { ordenar(ordenActual()); });
+    selectOrden.addEventListener('change', function () {
+      cfgVistaAplicada = true;                     // ídem: manda lo que elija el usuario
+      ordenar(ordenActual());
+    });
   }
   // Cambiar el desplegable de CPV: re-aplica el filtro (la pestaña activa y los
   // contadores globales no cambian; solo qué tarjetas se ven dentro de la pestaña).
@@ -1696,6 +1733,9 @@ JS_SUPABASE = """
       // cargarDecisiones y haría PARPADEAR badges/estrellas/colores. Lo evitamos.
       if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
         cargarDecisiones(session);
+        // Relee la config YA CON SESIÓN: recupera el filtro del ⚙ si la lectura de
+        // arranque no pudo hacerse. No toca la pestaña ni el orden (ver la función).
+        recargarConfigRadar().catch(function (e) { console.warn('Radar: fallo al releer la configuración:', e); });
         if (vistaActiva === 'cartera') cargarCartera();        // si ya estábamos en la Cartera
         if (vistaActiva === 'calendario') cargarCalendario();  // o en el Calendario
       }
@@ -3494,11 +3534,26 @@ JS_SUPABASE = """
     }
     return out;
   }
-  async function ajLeerConfig() {
+  // Lectura cruda: separa "no hay configuración" (vacía) de "no he podido leerla"
+  // (error). Hasta ahora las dos cosas devolvían {} y eran indistinguibles, que es
+  // como se cuela un fallo mudo: con {} el radar deja de filtrar y no avisa nadie.
+  async function leerConfigRadar() {
     try {
-      const { data } = await supabase.from('radar_config').select('config').eq('id', 1).maybeSingle();
-      return (data && data.config) || {};
-    } catch (e) { return {}; }
+      const { data, error } = await supabase.from('radar_config').select('config').eq('id', 1).maybeSingle();
+      if (error) {
+        console.warn('Radar: no se pudo leer la configuración del panel:', error.message || error);
+        return { config: null, error: error };
+      }
+      return { config: (data && data.config) || {}, error: null };
+    } catch (e) {
+      console.warn('Radar: no se pudo leer la configuración del panel:', e);
+      return { config: null, error: e };
+    }
+  }
+  // El panel ⚙ sigue llamando a ésta, con el contrato de siempre: devuelve el objeto.
+  async function ajLeerConfig() {
+    const r = await leerConfigRadar();
+    return r.config || {};
   }
   async function ajAbrir() {
     ajMsg.textContent = ''; ajMsg.className = 'aj-msg';
@@ -3597,14 +3652,44 @@ JS_SUPABASE = """
     else if (vista.pestana_inicial) seleccionarPestana(vista.pestana_inicial);
     else actualizarVista();
   }
-  // Al cargar la página: lee la config (lectura pública), monta el filtro de vista
-  // por config (oculta lo que ya no encaja) y aplica los ajustes de vista guardados.
-  (async function () {
-    const g = await ajLeerConfig();
+  // Aplica la configuración del panel. Se llama DOS veces: al cargar la página y
+  // otra vez en cuanto hay sesión (onAuthStateChange). Hace falta llamarla dos
+  // veces porque la primera puede ocurrir sin sesión —y cuando se cierre la lectura
+  // pública de radar_config, esa primera devolverá un error—, pero repetirla tiene
+  // tres trampas, y las tres están tapadas aquí:
+  //
+  //  1. CARRERA. Las dos lecturas viajan a la vez y gana la que CONTESTE la última,
+  //     que puede ser la anónima (el cliente reintenta los GET con esperas de
+  //     1+2+4 s, así que la ventana es de segundos, no de milisegundos). Si ganara
+  //     la fallida, el radar se quedaría SIN filtro y enseñando lo que el usuario
+  //     había desactivado en el ⚙, sin avisar. Lo evita el contador de generación.
+  //  2. LECTURA FALLIDA. Si falla, NO se toca nada: más vale quedarse con lo que
+  //     hubiera que pisarlo con un filtro vacío.
+  //  3. AJUSTES DE VISTA. La pestaña y el orden son INICIALES: re-imponerlos con la
+  //     página en uso le cambia la pestaña y el orden al usuario por debajo, y si
+  //     está en "En observación" lo deja en un estado del que no puede salir. Se
+  //     aplican una sola vez y solo si sigue en el Radar. Ojo: SIGNED_IN también
+  //     llega por eco de otra pestaña, así que esto no es un caso rebuscado.
+  //
+  // El filtro por categorías (cfgFiltro), en cambio, sí se refresca siempre: es
+  // justo lo que hay que recuperar cuando la primera lectura no pudo hacerse.
+  async function recargarConfigRadar() {
+    const mia = ++cfgGeneracion;
+    const r = await leerConfigRadar();
+    if (mia !== cfgGeneracion) return;    // ha salido otra lectura después: manda ésa
+    if (r.error) return;                  // no pisamos lo aplicado con una lectura rota
+    const g = r.config || {};
     cfgFiltro = construyeFiltroConfig(g);
-    if (g && g.vista) aplicarVistaInicial(g.vista);
+    const esLaPrimera = !cfgVistaAplicada;
+    cfgVistaAplicada = true;
+    if (esLaPrimera && g.vista && vistaActiva === 'radar') aplicarVistaInicial(g.vista);
     else actualizarVista();
-  })();
+  }
+
+  // Al cargar la página. Sin sesión el Radar está oculto, así que aquí el usuario
+  // todavía no ha podido tocar ni pestaña ni orden: es el momento bueno para
+  // aplicar sus ajustes de vista.
+  recargarConfigRadar().catch(function (e) { console.warn('Radar: fallo al aplicar la configuración:', e); });
 """
 
 

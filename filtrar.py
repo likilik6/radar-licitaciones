@@ -25,7 +25,7 @@ from datetime import datetime
 from collections import Counter
 
 # normaliza() vive en utiles.py para compartirla con generar_web.py sin duplicarla.
-from utiles import normaliza
+from utiles import normaliza, credencial_config, en_actions, get_con_reintentos
 # La lista de feeds, el extractor (descarga + paginación) y la extracción de
 # campos CODICE de cada entrada (extrae_entrada) viven en feeds.py, para
 # compartirlos con fetch.py y con el backfill del buscador sin duplicar nada.
@@ -38,10 +38,13 @@ sys.stdout.reconfigure(encoding="utf-8")
 # en feeds.py (extrae_entrada), compartidos con el backfill del buscador.
 
 # --- Configuración del radar guardada en Supabase ---------------------------
-# El panel web (con tu login) escribe la config; el robot la LEE aquí con la clave
-# "publishable" (pública, la MISMA que ya usa generar_web.py en su JS). Leerla solo
-# necesita permiso de lectura, que es público por diseño (la config no es secreta:
-# equivale a que intereses.yaml, que ya es público, defina qué busca el radar).
+# El panel web (con tu login) escribe la config; el robot la LEE aquí.
+#
+# CAMBIÓ EN SEPT. 2026: antes se leía con la clave "publishable" (pública), porque
+# radar_config tenía lectura para todo el mundo. Al preparar el segundo perfil esa
+# lectura se cierra —cada perfil solo ve su fila— y el robot pasa a identificarse
+# con SUPABASE_SERVICE_ROLE (Actions) o SUPABASE_SECRET_KEY (.env local).
+# La clave publishable se queda abajo solo como respaldo mientras dure la transición.
 SUPABASE_URL = "https://uzktrhpgkyctlnqgdsys.supabase.co"
 SUPABASE_KEY = "sb_publishable_3J3pFbMlNzu-NUDs1-740g_lu8YsRv_"
 
@@ -80,22 +83,52 @@ def _lista(config, clave):
 
 def lee_config_radar():
     """Lee la configuración del radar desde Supabase (tabla radar_config, fila id=1).
-    Devuelve el dict de config, o {} si no se puede leer (Supabase caído, tabla aún
-    no creada, sin conexión...). En ese caso el resto del programa cae a intereses.yaml
-    y a todas las fuentes, así que el robot NUNCA se rompe por esto."""
+
+    CREDENCIAL: ya no se lee con la clave pública. Al abrir el segundo perfil, cada
+    perfil solo puede ver su propia fila, así que el robot se identifica con
+    SUPABASE_SERVICE_ROLE (Actions) o SUPABASE_SECRET_KEY (.env local).
+
+    SI FALLA:
+      · En GitHub Actions -> se PARA con exit 1. Antes seguía con intereses.yaml, y
+        eso publicaba el radar con los criterios equivocados y el workflow en verde:
+        un fallo mudo. Más vale no publicar que publicar mal.
+      · En tu portátil -> avisa y sigue con intereses.yaml, para poder trabajar sin red.
+
+    Que la fila exista pero traiga la config VACÍA ({}) no es un fallo: es como
+    arranca un perfil nuevo antes de tocar el panel. En ese caso se usa intereses.yaml.
+    """
+    clave, origen = credencial_config(SUPABASE_KEY)
     try:
-        respuesta = requests.get(
+        respuesta = get_con_reintentos(
             f"{SUPABASE_URL}/rest/v1/radar_config",
             params={"id": "eq.1", "select": "config"},
-            headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"},
+            headers={"apikey": clave, "Authorization": f"Bearer {clave}"},
             timeout=30,
         )
-        respuesta.raise_for_status()
         filas = respuesta.json()
-        if filas and isinstance(filas[0].get("config"), dict):
-            return filas[0]["config"]
+        if not filas:
+            raise RuntimeError(
+                "radar_config no devolvió ninguna fila: o la credencial no tiene "
+                "permiso, o la fila no existe"
+            )
+        config = filas[0].get("config")
+        if config is None:
+            # Columna vacía: significa lo mismo que {} (perfil aún sin configurar).
+            # No es motivo para tirar la publicación del día.
+            print("AVISO: radar_config existe pero no tiene configuración; uso intereses.yaml.")
+            return {}
+        if not isinstance(config, dict):
+            raise RuntimeError("radar_config devolvió una fila sin 'config' utilizable")
+        print(f"Config del radar leída de Supabase (credencial: {origen}).")
+        return config
     except Exception as error:
-        print(f"AVISO: no se pudo leer radar_config de Supabase ({error}); uso intereses.yaml.")
+        detalle = f"no se pudo leer radar_config de Supabase ({error}); credencial: {origen}."
+        if en_actions():
+            print(f"ERROR: {detalle}")
+            print("Esto NO se ignora en GitHub Actions: el radar se publicaría con los")
+            print("criterios de intereses.yaml en lugar de los del panel. Se aborta.")
+            sys.exit(1)
+        print(f"AVISO: {detalle} Uso intereses.yaml.")
     return {}
 
 
