@@ -14,6 +14,12 @@ on:
     - cron: "0 6 * * 1-5"
   # Botón para lanzarlo a mano desde la pestaña "Actions" (útil para probar).
   workflow_dispatch:
+    inputs:
+      ejecutar_catalogo:
+        description: "Ejecutar también el catálogo del Buscador (ingesta diaria + purga). Tarda 20-50 min y escribe en producción. Déjalo desmarcado para probar solo la publicación del Radar."
+        type: boolean
+        default: false
+        required: false
 
 # Concurrency recomendada por GitHub Pages: no cancelar un despliegue en curso.
 concurrency:
@@ -103,6 +109,11 @@ jobs:
   # falla NO impide que el Radar se publique. NO toca data/licitaciones.json ni la
   # cortina de login: es otro destino (la base consultable del buscador en Supabase).
   catalogo:
+    # En la ejecución automática de cada mañana (schedule) se hace SIEMPRE.
+    # Lanzándolo a mano solo si se marca la casilla: probar un cambio de la web no
+    # tiene por qué disparar una segunda ingesta y una segunda purga del día sobre
+    # la base de producción.
+    if: github.event_name != 'workflow_dispatch' || inputs.ejecutar_catalogo
     runs-on: ubuntu-latest
     # Solo lectura del repo (checkout). Las credenciales van por secrets, no por el repo.
     permissions:
