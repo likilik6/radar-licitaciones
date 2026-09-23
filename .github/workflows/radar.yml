@@ -43,11 +43,20 @@ jobs:
         run: pip install -r requirements.txt
 
       # 4. Descarga el feed y clasifica (actualiza data/licitaciones.json).
+      #    NECESITA la credencial de servicio para leer radar_config (la config del
+      #    panel ⚙). Antes se leía con la clave pública, pero esa lectura se cierra
+      #    al separar los perfiles. Si no puede leerla, el paso FALLA a propósito:
+      #    publicar el radar con los criterios equivocados es peor que no publicarlo.
       - name: Filtrar licitaciones
+        env:
+          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
         run: python filtrar.py
 
       # 5. Regenera la web (docs/index.html) a partir del JSON.
+      #    Misma credencial y mismo motivo: también lee radar_config.
       - name: Generar la web
+        env:
+          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
         run: python generar_web.py
 
       # 6. Guarda SOLO la persistencia (data/licitaciones.json) con commit+push.
