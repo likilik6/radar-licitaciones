@@ -29,7 +29,7 @@
 
 
 -- ############################################################################
--- BLOQUE 1 — EJECUTABLE YA. No depende de ningún cambio de código.
+-- BLOQUE 1 — EJECUTADO el 23/09/2026.
 -- ############################################################################
 
 -- FOTO DE ANTES, por si hay que volver atrás (permisos actuales de las 6 tablas):
@@ -95,7 +95,7 @@ grant execute on function public.refrescar_competidores() to service_role;
 
 
 -- ############################################################################
--- BLOQUE 2 — listo para ejecutar (las condiciones se cumplieron el 24/09/2026).
+-- BLOQUE 2 — EJECUTADO el 24/09/2026. Queda como registro y para el rollback.
 --
 -- Esta única línea era la que podía romper la publicación del Radar, y además
 -- lo habría hecho EN SILENCIO (el workflow saldría en verde publicando la web
@@ -130,6 +130,17 @@ grant execute on function public.refrescar_competidores() to service_role;
 -- ############################################################################
 
 revoke all privileges on table public.radar_config from anon;
+
+-- COMPROBADO DESPUÉS DE EJECUTARLO (24/09/2026, en Chrome):
+--   · Anónimo con la clave publishable: radar_config, decisiones, cartera y
+--     licitaciones responden 401 (42501, permission denied). Antes, radar_config
+--     devolvía la configuración entera a cualquiera que tuviese la clave.
+--   · Con sesión: el panel ⚙ lee (200) y guarda ("Guardado ✓").
+--   · Cerrar sesión y recargar: la lectura de arranque da 401 y sale el aviso
+--     amarillo en consola. Es lo esperado: el navegador ya no lee como anónimo.
+--   · Entrar SIN recargar: la relectura responde 200 en menos de un segundo, los
+--     contadores quedan idénticos (119/2/6/2/25/429/569) y se respetan pestaña y
+--     orden. O sea: la relectura tras el login hace su trabajo.
 
 -- ROLLBACK DEL BLOQUE 2:
 -- grant all privileges on table public.radar_config to anon;
