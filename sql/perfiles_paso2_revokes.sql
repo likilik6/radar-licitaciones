@@ -95,11 +95,11 @@ grant execute on function public.refrescar_competidores() to service_role;
 
 
 -- ############################################################################
--- BLOQUE 2 — ¡ALTO! NO EJECUTAR TODAVÍA.
+-- BLOQUE 2 — listo para ejecutar (las condiciones se cumplieron el 24/09/2026).
 --
--- Esta única línea es la que puede romper la publicación del Radar, y además
--- lo haría EN SILENCIO (el workflow saldría en verde publicando la web con
--- los criterios equivocados).
+-- Esta única línea era la que podía romper la publicación del Radar, y además
+-- lo habría hecho EN SILENCIO (el workflow saldría en verde publicando la web
+-- con los criterios equivocados). Por eso fue lo último de este fichero.
 --
 -- radar_config es la ÚNICA tabla que un anónimo lee de verdad hoy, y tiene
 -- TRES lectores anónimos:
@@ -108,18 +108,28 @@ grant execute on function public.refrescar_competidores() to service_role;
 --     · generar_web.py:38             (ídem, y su error se traga con
 --                                      "except Exception: pass", sin avisar)
 --
--- NO SE EJECUTA HASTA QUE LAS TRES COSAS ESTÉN HECHAS Y PROBADAS:
---   1. filtrar.py y generar_web.py leen la configuración con
---      SUPABASE_SERVICE_ROLE, y fallan con exit 1 en Actions si no pueden.
---   2. radar.yml pasa ese secreto a los pasos "Filtrar licitaciones" y
---      "Generar la web" (hoy no lo reciben).
---   3. El navegador vuelve a leer la configuración DESPUÉS del login
---      (generar_web.py:1696), para no depender de la lectura anónima.
---   4. Y se ha lanzado radar.yml a mano (workflow_dispatch) en verde, sin
---      la línea "AVISO: no se pudo leer radar_config".
+-- CONDICIONES CUMPLIDAS EL 24/09/2026 (PR #25 mergeado). Se deja escrito lo que
+-- se comprobó, porque es lo que hace seguro este revoke:
+--   [x] 1. filtrar.py y generar_web.py leen la configuración con
+--          SUPABASE_SERVICE_ROLE y abortan con exit 1 en Actions si no pueden.
+--   [x] 2. radar.yml pasa ese secreto a los pasos "Filtrar licitaciones" y
+--          "Generar la web".
+--   [x] 3. El navegador vuelve a leer la configuración DESPUÉS del login, con
+--          tres cautelas: gana la lectura más reciente, una lectura fallida no
+--          pisa lo aplicado, y los ajustes de vista no se re-imponen.
+--   [x] 4. workflow_dispatch desde master en verde, con la línea
+--          "Config del radar leída de Supabase (credencial: SUPABASE_SERVICE_ROLE)."
+--          en los DOS pasos, y la web publicada con las etiquetas de siempre.
+--
+-- COMPROBADO ADEMÁS, justo antes de ejecutarlo (24/09/2026):
+--   · authenticated conserva select/insert/update sobre radar_config, y la
+--     política de lectura es {public} —que lo incluye—, así que la sesión del
+--     navegador sigue leyendo y guardando igual. Lo único que se cierra es anon.
+--   · Las otras cinco privadas ya tienen a anon cerrado (bloque 1), y las tres
+--     funciones SECURITY DEFINER ya no las puede ejecutar authenticated.
 -- ############################################################################
 
--- revoke all privileges on table public.radar_config from anon;
+revoke all privileges on table public.radar_config from anon;
 
 -- ROLLBACK DEL BLOQUE 2:
 -- grant all privileges on table public.radar_config to anon;
