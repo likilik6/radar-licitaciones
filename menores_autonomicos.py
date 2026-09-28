@@ -1257,13 +1257,39 @@ def _motivo(respuesta, con_mensaje):
     return f"[{cuerpo.get('code')}]"
 
 
+def _del_env_local(nombre):
+    """Lee una variable del fichero .env del repo (nunca se sube: está en .gitignore).
+    En Actions no existe y manda el entorno; en el PC evita tener que exportar nada a mano
+    antes de cada carga. Devuelve None si no está."""
+    ruta = Path(__file__).resolve().parent / ".env"
+    if not ruta.exists():
+        return None
+    try:
+        for linea in ruta.read_text(encoding="utf-8").splitlines():
+            linea = linea.strip()
+            if not linea or linea.startswith("#") or "=" not in linea:
+                continue
+            clave, valor = linea.split("=", 1)
+            if clave.strip() == nombre:
+                return valor.strip().strip('"').strip("'") or None
+    except OSError:
+        return None
+    return None
+
+
 def cliente_desde_entorno():
     """Cliente con SUPABASE_SERVICE_ROLE y SUPABASE_URL (como backfill_catalogo.py). None
-    si no hay service_role: modo simulación local."""
-    token = os.environ.get("SUPABASE_SERVICE_ROLE")
+    si no hay service_role: modo simulación local.
+
+    Orden: el ENTORNO manda (es lo que usa Actions); si no está, se mira el .env del repo,
+    donde la clave vive con el nombre SUPABASE_SECRET_KEY. Así la carga a mano desde el PC
+    —la única vía mientras la Junta bloquee a GitHub— es un solo comando."""
+    token = (os.environ.get("SUPABASE_SERVICE_ROLE")
+             or _del_env_local("SUPABASE_SERVICE_ROLE")
+             or _del_env_local("SUPABASE_SECRET_KEY"))
     if not token:
         return None
-    url = os.environ.get("SUPABASE_URL")
+    url = os.environ.get("SUPABASE_URL") or _del_env_local("SUPABASE_URL")
     if not url:
         from backfill_catalogo import SUPABASE_URL as url   # el mismo valor por defecto
     return ClienteSupabase(url, token)
@@ -1797,7 +1823,8 @@ def procesa(args):
 
     cliente = cliente_desde_entorno()
     if args.cargar and cliente is None:
-        sys.exit("ERROR: --cargar necesita SUPABASE_SERVICE_ROLE (y SUPABASE_URL) en el entorno. "
+        sys.exit("ERROR: --cargar necesita la service_role en el entorno (SUPABASE_SERVICE_ROLE) "
+                 "o en el .env del repo (SUPABASE_SERVICE_ROLE o SUPABASE_SECRET_KEY). "
                  "Sin --cargar se simula sin escribir nada.")
     modo = "carga" if args.cargar else "simulación"
     estado = lee_estado(args.estado)
