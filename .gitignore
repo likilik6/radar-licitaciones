@@ -41,3 +41,4 @@ informes/
 # por año). Reproducibles: nunca al repo.
 cache_menores/
 .estado_menores/
+data/estado_fuentes.json

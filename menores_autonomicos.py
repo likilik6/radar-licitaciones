@@ -1988,8 +1988,31 @@ def procesa(args):
             print("  RECUERDA: tras una carga grande, VACUUM (ANALYZE) public.menores en el SQL Editor.")
         if not (fuentes.get(fuente) or {}).get("cargada"):
             print(f"  RECUERDA: '{fuente}' sigue con cargada=false en data/menores_fuentes.json.")
+    # BLOQUEO CONOCIDO (la Junta no deja conectar desde GitHub desde el 26/09/2026): eso no
+    # es un fallo NUESTRO ni tiene arreglo por nuestra parte, así que sale VERDE con un
+    # aviso bien visible en vez de rojo. Cualquier otro error sigue en rojo: un workflow que
+    # siempre sale verde deja de mirarse.
+    if codigo_salida and _PORTAL_INACCESIBLE and _solo_falla_el_portal(informe):
+        print(f"\nAVISO: el portal de la Junta no acepta conexiones desde aquí "
+              f"({_PORTAL_INACCESIBLE}). No es un fallo del cargador: desde un PC normal el "
+              f"mismo sitio contesta en algo más de un segundo.")
+        print("       No se ha cargado nada y no hay nada que arreglar por nuestra parte.")
+        print("       Mientras dure, la carga se hace a mano (ver la cabecera de este fichero).")
+        print("       Para comprobar si el bloqueo ha pasado: --comprobar-red.")
+        print("=" * 78)
+        return 0
     print("=" * 78)
     return codigo_salida
+
+
+def _solo_falla_el_portal(informe):
+    """¿TODOS los errores de esta ejecución son del portal inaccesible? Si hay uno solo de
+    otra cosa (un CSV roto, la base que rechaza un lote...), el run tiene que salir rojo."""
+    errores = informe.get("errores") or []
+    if not errores:
+        return False
+    return all(("no pude leer" in e and ("ConnectTimeout" in e or "ConnectionError" in e
+                                         or "no reintento" in e)) for e in errores)
 
 
 def _marca_refresco(cliente, ok, filas=None, detalle=None, error=None):

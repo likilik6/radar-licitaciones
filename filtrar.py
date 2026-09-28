@@ -29,7 +29,7 @@ from utiles import normaliza, credencial_config, en_actions, get_con_reintentos
 # La lista de feeds, el extractor (descarga + paginación) y la extracción de
 # campos CODICE de cada entrada (extrae_entrada) viven en feeds.py, para
 # compartirlos con fetch.py y con el backfill del buscador sin duplicar nada.
-from feeds import FEEDS, descarga_entradas, extrae_entrada
+from feeds import FEEDS, ATOM_NS, descarga_entradas, extrae_entrada
 
 # Hacemos que la consola muestre los acentos y la "ñ" correctamente.
 sys.stdout.reconfigure(encoding="utf-8")
@@ -226,6 +226,11 @@ resultados = {nombre: [] for nombre in intereses_efectivos}
 # y cada licitación queda etiquetada con su "fuente" para poder distinguirla.
 total_entradas = 0           # cuántas entradas hemos leído en total (todos los feeds)
 leidas_por_fuente = {}       # cuántas entradas trajo cada feed (para el log)
+# Fecha de la entrada MÁS RECIENTE que trae cada feed. Con esto se detecta una fuente MUDA:
+# un feed que sigue contestando pero lleva días sin publicar nada nuevo. Pasó con el estatal
+# del 22 al 28/09/2026 y no se notó hasta que alguien preguntó: en el log, un feed congelado
+# se ve igual que un día sin novedades.
+ultima_entrada_por_fuente = {}
 
 for feed in FEEDS:
     fuente = feed["fuente"]
@@ -243,6 +248,16 @@ for feed in FEEDS:
 
     aviso_tope = "  [TOPE de páginas alcanzado: puede faltar histórico]" if tope else ""
     print(f"Feed «{fuente}»: {len(entradas)} entradas en {paginas} página(s){aviso_tope}")
+
+    # La más reciente de TODAS las entradas leídas (hayan pasado el filtro o no): es la
+    # señal de si la fuente sigue publicando.
+    fechas_feed = []
+    for entrada_cruda in entradas:
+        marca = entrada_cruda.find("atom:updated", ATOM_NS)
+        if marca is not None and marca.text:
+            fechas_feed.append(marca.text.strip())
+    if fechas_feed:
+        ultima_entrada_por_fuente[fuente] = max(fechas_feed)[:19]
 
     # --- Recorremos las licitaciones de ESTE feed una a una -----------------
     for entrada in entradas:
@@ -292,6 +307,40 @@ print(f"Resumen: {detalle}; sobre {total_entradas} licitaciones leídas en total
 # Cuántas entradas trajo cada feed (antes de filtrar).
 detalle_feeds = ", ".join(f"{n} de {fuente}" for fuente, n in leidas_por_fuente.items())
 print(f"Entradas leídas por fuente: {detalle_feeds}.")
+
+# --- 4 bis. ¿HAY ALGUNA FUENTE MUDA? ---------------------------------------
+# Se avisa a partir de 2 días sin entradas nuevas: un fin de semana no cuenta como avería,
+# pero tres días sin publicar nada ya es raro y hay que mirarlo. El estado se guarda para
+# que la web lo diga también (la generación la hace generar_web.py).
+DIAS_PARA_AVISAR = 2
+estado_fuentes = {}
+hoy_fecha = datetime.now().date()
+for feed_info in FEEDS:
+    nombre_fuente = feed_info["fuente"]
+    ultima = ultima_entrada_por_fuente.get(nombre_fuente)
+    dias = None
+    if ultima:
+        try:
+            dias = (hoy_fecha - datetime.fromisoformat(ultima).date()).days
+        except ValueError:
+            dias = None
+    estado_fuentes[nombre_fuente] = {
+        "ultima_entrada": ultima,
+        "dias_sin_novedad": dias,
+        "muda": bool(dias is not None and dias > DIAS_PARA_AVISAR),
+        "leidas": leidas_por_fuente.get(nombre_fuente, 0),
+        "comprobado": datetime.now().isoformat(timespec="seconds"),
+    }
+    if estado_fuentes[nombre_fuente]["muda"]:
+        print(f"AVISO: la fuente «{nombre_fuente}» lleva {dias} días sin publicar nada nuevo "
+              f"(su última entrada es del {ultima}). El feed contesta, pero no trae novedades: "
+              f"míralo antes de dar por hecho que no hay licitaciones.")
+    elif dias is not None:
+        print(f"Fuente «{nombre_fuente}»: al día (última entrada del {ultima}).")
+
+Path("data").mkdir(parents=True, exist_ok=True)
+with open(Path("data") / "estado_fuentes.json", "w", encoding="utf-8") as f:
+    json.dump(estado_fuentes, f, ensure_ascii=False, indent=1)
 
 # --- 5. Guardamos las licitaciones en data/licitaciones.json ----------------
 # Juntamos en una sola lista todas las que han pasado el filtro (todas las categorías,
