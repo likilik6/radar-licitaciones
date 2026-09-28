@@ -40,3 +40,4 @@ informes/
 # Caché de CSV descargados por menores_autonomicos.py (Junta de Andalucía, hasta 224 MB
 # por año). Reproducibles: nunca al repo.
 cache_menores/
+.estado_menores/
