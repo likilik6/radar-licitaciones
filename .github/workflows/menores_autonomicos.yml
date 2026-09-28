@@ -55,6 +55,11 @@ on:
         required: false
         type: boolean
         default: false
+      comprobar_red:
+        description: "SOLO diagnóstico (1 min): ¿deja entrar la Junta desde aquí, por el API y por la descarga? No carga nada."
+        required: false
+        type: boolean
+        default: false
 
 # Propio y sin cancelar: dos cargas a la vez pisarían el estado, y cortar una a medias
 # obliga a repetir su año entero. NO se comparte el grupo 'pages' del Radar: GitHub
@@ -142,9 +147,18 @@ jobs:
           CARGAR: ${{ inputs.cargar }}
           CPV_PORTAL: ${{ inputs.cpv_portal }}
           FORZAR: ${{ inputs.forzar }}
+          COMPROBAR_RED: ${{ inputs.comprobar_red }}
           CPV_PROGRAMADO: ${{ vars.MENORES_AUTONOMICOS_CPV }}
         run: |
           mkdir -p .estado_menores informes_menores
+          # DIAGNÓSTICO y fuera: no descarga el CSV entero (pide 2 MB) ni escribe nada.
+          if [ "$COMPROBAR_RED" = "true" ]; then
+            args=(--fuente andalucia --comprobar-red)
+            if [ -n "$ANIOS" ]; then args+=(--anios "$ANIOS"); fi
+            echo "Ejecutando: python menores_autonomicos.py ${args[*]}"
+            python menores_autonomicos.py "${args[@]}"
+            exit 0
+          fi
           # En los programados no hay inputs: carga siempre, sin forzar y con la ventana.
           if [ "$EVENTO" = "schedule" ]; then
             CARGAR=true; FORZAR=false; ANIOS=""
