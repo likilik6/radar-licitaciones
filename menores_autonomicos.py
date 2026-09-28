@@ -800,9 +800,27 @@ def lee_fichero_andalucia(ruta, desde_iso, ya_vistos=None, etiqueta=""):
 # ============================================================================
 # DESCARGA (CKAN de la Junta, reanudable con Range)
 # ============================================================================
+# El 26, 27 y 28/09/2026 la Junta dejó de aceptar conexiones DESDE GITHUB ACTIONS: la
+# conexión TCP ni se abre (ConnectTimeout), mientras el mismo sitio contesta en 1,3 s desde
+# una máquina normal. Insistir no sirve de nada y sale caro: con 4 intentos de 60 s por año,
+# cada run tardaba 21 minutos en no hacer nada y le lanzaba 16 conexiones al servidor. En
+# cuanto una conexión se queda colgada se da el portal por inaccesible y los años que
+# quedan se saltan al instante: un run bloqueado pasa de 21 minutos a menos de uno.
+_PORTAL_INACCESIBLE = None          # None = aún no lo sabemos; str = motivo
+
+
+def _es_de_conexion(e):
+    """¿El error es «no he podido ni conectar»? (bloqueo, caída o red cortada)."""
+    return isinstance(e, (requests.ConnectTimeout, requests.ConnectionError))
+
+
 def _get_con_reintentos(url, params=None, intentos=4, timeout=60):
     """GET sencillo (API de CKAN) con reintentos y espera creciente. Devuelve también el
-    404: CKAN contesta así ({"success": false}) a un paquete que aún no existe."""
+    404: CKAN contesta así ({"success": false}) a un paquete que aún no existe.
+    Si el portal ya se ha dado por inaccesible en esta ejecución, ni lo intenta."""
+    global _PORTAL_INACCESIBLE
+    if _PORTAL_INACCESIBLE:
+        raise RuntimeError(f"no pude leer {url} ({_PORTAL_INACCESIBLE}; no reintento)")
     ultimo = None
     for intento in range(1, intentos + 1):
         try:
@@ -814,6 +832,11 @@ def _get_con_reintentos(url, params=None, intentos=4, timeout=60):
                 break
         except requests.RequestException as e:
             ultimo = type(e).__name__
+            if _es_de_conexion(e) and intento >= 2:
+                # Dos intentos sin poder ni abrir la conexión: no es un tropiezo, es que no
+                # nos dejan entrar. Se marca para toda la ejecución.
+                _PORTAL_INACCESIBLE = ultimo
+                break
         if intento < intentos:
             time.sleep(10 * intento)
     raise RuntimeError(f"no pude leer {url} ({ultimo})")
@@ -827,11 +850,87 @@ def url_descarga(package_id, resource_id, url_ckan):
     return f"{PORTAL_DATOS}/dataset/{package_id}/resource/{resource_id}/download/{fichero}"
 
 
+def comprobar_red(anio=2026):
+    """Diagnóstico de 1 minuto: ¿nos deja entrar la Junta, y por dónde?
+
+    Prueba las dos puertas por separado, porque el arreglo depende de cuál esté cerrada:
+      · el API del catálogo (CKAN), que es lo que usa el descubrimiento;
+      · la descarga del CSV, pidiendo solo 2 MB con Range, con los identificadores que ya
+        verificamos en F0 (RECURSOS_VERIFICADOS), o sea SIN pasar por el API.
+    Si el API está cerrado y la descarga abierta, se puede seguir automático guardando los
+    identificadores. Si están las dos cerradas, es bloqueo del dominio entero y la carga
+    tiene que salir de otra máquina. No escribe nada y siempre devuelve 0."""
+    print("=" * 78)
+    print(f"COMPROBACIÓN DE RED · Junta de Andalucía · año {anio}")
+    print("=" * 78)
+    salida = {"anio": anio}
+
+    t0 = time.time()
+    try:
+        r = requests.get(CKAN_API + "package_show",
+                         params={"id": PAQUETE_ANDALUCIA.format(anio=anio)},
+                         headers=CABECERAS, timeout=20)
+        salida["api"] = {"ok": r.status_code == 200, "http": r.status_code,
+                         "segundos": round(time.time() - t0, 1)}
+        print(f"  API del catálogo ....... HTTP {r.status_code} en {time.time() - t0:.1f} s")
+    except requests.RequestException as e:
+        salida["api"] = {"ok": False, "error": type(e).__name__,
+                         "segundos": round(time.time() - t0, 1)}
+        print(f"  API del catálogo ....... {type(e).__name__} tras {time.time() - t0:.1f} s")
+
+    verificado = RECURSOS_VERIFICADOS.get(anio)
+    if not verificado:
+        print(f"  Descarga del CSV ....... no hay identificadores verificados para {anio}")
+        return salida
+    # SIN nombre de fichero: el nombre real lleva versión y fecha («menores_2023-v1_
+    # 20240418.csv.zip») y cambia con cada publicación. CKAN acepta /download a secas y
+    # respeta el Range (comprobado el 28/09/2026: HTTP 206).
+    enlace = f"{PORTAL_DATOS}/dataset/{verificado[0]}/resource/{verificado[1]}/download"
+    t0 = time.time()
+    try:
+        cab = dict(CABECERAS)
+        cab["Range"] = "bytes=0-2097151"        # 2 MB: para saber si deja, no para cargar
+        leido = 0
+        with requests.get(enlace, headers=cab, stream=True, timeout=(20, 60)) as r:
+            for trozo in r.iter_content(262144):
+                leido += len(trozo)
+        seg = max(time.time() - t0, 0.001)
+        salida["descarga"] = {"ok": r.status_code in (200, 206), "http": r.status_code,
+                              "bytes": leido, "kb_s": round(leido / seg / 1024),
+                              "segundos": round(seg, 1)}
+        print(f"  Descarga del CSV ....... HTTP {r.status_code} · {leido/1e6:.1f} MB "
+              f"en {seg:.1f} s ({leido/seg/1024:.0f} KB/s)")
+    except requests.RequestException as e:
+        salida["descarga"] = {"ok": False, "error": type(e).__name__,
+                              "segundos": round(time.time() - t0, 1)}
+        print(f"  Descarga del CSV ....... {type(e).__name__} tras {time.time() - t0:.1f} s")
+
+    api_ok = bool(salida.get("api", {}).get("ok"))
+    csv_ok = bool(salida.get("descarga", {}).get("ok"))
+    print("-" * 78)
+    if api_ok and csv_ok:
+        print("  VEREDICTO: nos dejan entrar por las dos puertas. El bloqueo ha pasado.")
+    elif csv_ok:
+        print("  VEREDICTO: el API está cerrado pero el CSV SE BAJA. Se puede seguir")
+        print("             automático usando los identificadores guardados (F0) y mirando")
+        print("             las cabeceras de la descarga para saber si el fichero cambió.")
+    elif api_ok:
+        print("  VEREDICTO: raro: contesta el API y no la descarga. Mirar la URL del recurso.")
+    else:
+        print("  VEREDICTO: dominio bloqueado desde aquí. La carga tiene que salir de otra")
+        print("             máquina (desde un PC normal el mismo sitio contesta en 1,3 s).")
+    print("=" * 78)
+    return salida
+
+
 def recurso_andalucia(anio):
     """Metadatos del CSV de un año en CKAN: {package_id, resource_id, last_modified, size,
     url, fichero}. None si el paquete de ese año aún no existe."""
+    # Espera corta a propósito: el catálogo contesta en 1-2 s cuando deja entrar, así que
+    # 20 s ya son señal de que no va a contestar (ver _PORTAL_INACCESIBLE).
     r = _get_con_reintentos(CKAN_API + "package_show",
-                            params={"id": PAQUETE_ANDALUCIA.format(anio=anio)})
+                            params={"id": PAQUETE_ANDALUCIA.format(anio=anio)},
+                            intentos=3, timeout=20)
     try:
         datos = r.json()
     except ValueError:
@@ -1828,10 +1927,13 @@ def procesa(args):
                                             descripcion="refresco de cobertura")
                     informe["cobertura"] = cobertura
                     print(f"  cobertura: {compacto(cobertura or {})} · {time.time() - t_cob:.1f} s")
+                    _marca_refresco(cliente, True, filas=(cobertura or {}).get("organos"),
+                                    detalle=cobertura)
                 except Exception as e:  # noqa: BLE001 — la cobertura no puede tumbar una carga buena
                     informe["cobertura"] = {"error": str(e)[:300]}
                     print(f"  AVISO: no se pudo refrescar la cobertura ({e}). "
                           f"¿Está ejecutado menores_cobertura.sql?")
+                    _marca_refresco(cliente, False, error=str(e))
             informe["peticiones_supabase"] = dict(cliente.peticiones)
         else:
             informe["puerta_organos"] = {"puerta": "saltada: sin credenciales (simulación local)"}
@@ -1861,6 +1963,20 @@ def procesa(args):
             print(f"  RECUERDA: '{fuente}' sigue con cargada=false en data/menores_fuentes.json.")
     print("=" * 78)
     return codigo_salida
+
+
+def _marca_refresco(cliente, ok, filas=None, detalle=None, error=None):
+    """Deja constancia en public.refrescos de ESTE refresco de cobertura (ver
+    refrescos_y_desiertas.sql). Sin esto, la web decía que la cobertura era del último día
+    laborable aunque la carga del fin de semana la hubiera refrescado. Nunca es fatal."""
+    try:
+        cliente.rpc("refresco_marca",
+                    {"p_clave": "menores_cobertura", "p_ok": bool(ok),
+                     "p_filas": filas, "p_detalle": detalle,
+                     "p_error": (str(error)[:500] if error else None)},
+                    descripcion="anotar el refresco")
+    except Exception as e:  # noqa: BLE001
+        print(f"  AVISO: no pude anotar el refresco de cobertura ({str(e)[:120]}); sigo.")
 
 
 def _escribe_salidas(args, informe):
@@ -1897,7 +2013,15 @@ def main():
     ap.add_argument("--csv-local", nargs="+", action="extend", default=None, metavar="AÑO=RUTA",
                     help="Usa un fichero ya descargado para ese año en vez de bajarlo.")
     ap.add_argument("--cache", default=None, help="Carpeta de descargas (por defecto cache_menores/).")
+    ap.add_argument("--comprobar-red", action="store_true",
+                    help="Diagnóstico de 1 minuto: ¿deja entrar la Junta, por el API y por la descarga? "
+                         "No descarga el CSV entero (pide 2 MB) ni escribe nada.")
     args = ap.parse_args()
+    if args.comprobar_red:
+        anios = [int(a) for a in (args.anios or "2026").split(",") if a.strip().isdigit()]
+        for anio in anios or [2026]:
+            comprobar_red(anio)
+        sys.exit(0)
     sys.exit(procesa(args))
 
 

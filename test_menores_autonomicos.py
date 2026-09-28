@@ -799,7 +799,7 @@ finally:
 
 print("\n== CKAN: size como texto ==")
 get_ckan = ma._get_con_reintentos
-ma._get_con_reintentos = lambda url, params=None: RespuestaFalsa(200, {"success": True, "result": {
+ma._get_con_reintentos = lambda url, params=None, **kw: RespuestaFalsa(200, {"success": True, "result": {
     "id": "pkg", "resources": [{"id": ma.RECURSOS_VERIFICADOS[2025][1], "format": "CSV", "size": "224440205",
                                 "last_modified": "2026-07-07T11:31:44", "url": "https://h/download/m.csv"}]}})
 try:
