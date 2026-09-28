@@ -19,6 +19,7 @@
 import sys
 import json
 import yaml
+import argparse
 import requests
 from pathlib import Path
 from datetime import datetime
@@ -166,6 +167,30 @@ def categorias_desde_config(config):
     return efectivas or None
 
 
+# --- 0. Cómo se ha pedido esta ejecución -----------------------------------
+# Sin argumentos: el trabajo de siempre (los dos feeds en vivo). Con --zip: RECUPERACIÓN
+# desde el ZIP mensual de Datos Abiertos de las fuentes que se digan, y NADA más (no se
+# tocan las otras fuentes). Por defecto simula: hay que pedir --escribir para guardar.
+_ap = argparse.ArgumentParser(
+    description="Filtra las licitaciones de la PCSP con los criterios del panel. "
+                "Con --zip, recupera desde el ZIP de Datos Abiertos en vez del feed en vivo.")
+_ap.add_argument("--zip", default="", metavar="FUENTES",
+                 help="RECUPERACIÓN: fuentes a leer del ZIP mensual, separadas por comas "
+                      "(p. ej. 'estatal'). Solo se procesan esas.")
+_ap.add_argument("--mes", default=None, metavar="AAAAMM",
+                 help="Mes del ZIP (por defecto, el del día de hoy).")
+_ap.add_argument("--desde", default=None, metavar="AAAA-MM-DD",
+                 help="Recuperar solo entradas actualizadas desde esta fecha (incluida).")
+_ap.add_argument("--hasta", default=None, metavar="AAAA-MM-DD",
+                 help="Recuperar solo entradas actualizadas hasta esta fecha (incluida).")
+_ap.add_argument("--escribir", action="store_true",
+                 help="Guardar de verdad. Sin esto, la recuperación SIMULA y solo cuenta.")
+ARGS = _ap.parse_args()
+FUENTES_ZIP = [x.strip() for x in ARGS.zip.split(",") if x.strip()]
+MODO_RECUPERACION = bool(FUENTES_ZIP)
+# En el trabajo diario se escribe siempre (es lo de siempre). En recuperación, solo si se pide.
+ESCRIBIR = (not MODO_RECUPERACION) or ARGS.escribir
+
 # --- 1. Cargamos los criterios desde intereses.yaml -------------------------
 # Lo abrimos con encoding utf-8 porque tiene acentos y "ñ".
 with open("intereses.yaml", encoding="utf-8") as f:
@@ -222,9 +247,51 @@ def pasa_territorio(plataforma_lic, region_codigo_lic):
 resultados = {nombre: [] for nombre in intereses_efectivos}
 
 # --- 2. Recorremos la LISTA de feeds (estatal + agregadas) ------------------
+# --- RECUPERACIÓN desde el ZIP de Datos Abiertos ----------------------------
+def _entradas_del_zip(fuente, mes=None, desde=None, hasta=None):
+    """Entradas ATOM del ZIP mensual de esa fuente, filtradas por fecha si se pide.
+
+    Reutiliza lo que ya usa el catálogo del Buscador (backfill_catalogo): misma URL, misma
+    descarga reanudable (si el ZIP ya está en cache_backfill/, no se vuelve a bajar) y el
+    mismo recorrido de los .atom de dentro. Devuelve (entradas, cuentas_por_dia)."""
+    from backfill_catalogo import url_zip, descarga_zip, itera_atoms, CACHE_DIR
+    from lxml import etree
+    from collections import Counter as _Counter
+
+    periodo = mes or datetime.now().strftime("%Y%m")
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    destino = CACHE_DIR / f"{fuente}_{periodo}.zip"
+    print(f"  Recuperación «{fuente}»: ZIP de {periodo} (Datos Abiertos)")
+    descarga_zip(url_zip(fuente, periodo), destino)
+
+    entradas, por_dia, total_zip = [], _Counter(), 0
+    for _nombre, blob in itera_atoms(destino):
+        try:
+            raiz = etree.fromstring(blob)
+        except etree.XMLSyntaxError:
+            continue
+        for entrada_zip in raiz.findall("atom:entry", ATOM_NS):
+            total_zip += 1
+            marca = entrada_zip.find("atom:updated", ATOM_NS)
+            dia = (marca.text or "")[:10] if marca is not None and marca.text else ""
+            if desde and dia < desde:
+                continue
+            if hasta and dia > hasta:
+                continue
+            por_dia[dia] += 1
+            entradas.append(entrada_zip)
+    rango = f" entre {desde or 'el principio'} y {hasta or 'el final'}" if (desde or hasta) else ""
+    print(f"  Recuperación «{fuente}»: {total_zip:,} entradas en el ZIP, "
+          f"{len(entradas):,} en el rango{rango}.")
+    for dia, n in sorted(por_dia.items()):
+        print(f"      {dia}: {n:,}")
+    return entradas, por_dia
+
+
 # Cada feed se descarga y pagina con el MISMO extractor (feeds.descarga_entradas)
 # y cada licitación queda etiquetada con su "fuente" para poder distinguirla.
 total_entradas = 0           # cuántas entradas hemos leído en total (todos los feeds)
+cuentas_zip = {}             # en recuperación: entradas del ZIP por día y fuente (control)
 leidas_por_fuente = {}       # cuántas entradas trajo cada feed (para el log)
 # Fecha de la entrada MÁS RECIENTE que trae cada feed. Con esto se detecta una fuente MUDA:
 # un feed que sigue contestando pero lleva días sin publicar nada nuevo. Pasó con el estatal
@@ -235,19 +302,30 @@ ultima_entrada_por_fuente = {}
 for feed in FEEDS:
     fuente = feed["fuente"]
 
+    # En recuperación solo se procesan las fuentes pedidas: las demás ni se tocan.
+    if MODO_RECUPERACION and fuente not in FUENTES_ZIP:
+        print(f"Feed «{fuente}»: omitido (recuperación de {', '.join(FUENTES_ZIP)}).")
+        leidas_por_fuente[fuente] = 0
+        continue
+
     # Si la config limita las fuentes y esta no está, nos saltamos el feed entero.
     if fuentes_config and fuente not in fuentes_config:
         print(f"Feed «{fuente}»: omitido (no está en la config del radar).")
         leidas_por_fuente[fuente] = 0
         continue
 
-    # Descarga + paginación rel="next" (hasta agotarla o hasta el tope de páginas).
-    entradas, paginas, tope = descarga_entradas(feed["url"])
+    if MODO_RECUPERACION:
+        entradas, cuentas_zip[fuente] = _entradas_del_zip(fuente, ARGS.mes, ARGS.desde, ARGS.hasta)
+        paginas, tope = 0, False
+    else:
+        # Descarga + paginación rel="next" (hasta agotarla o hasta el tope de páginas).
+        entradas, paginas, tope = descarga_entradas(feed["url"])
     leidas_por_fuente[fuente] = len(entradas)
     total_entradas += len(entradas)
 
     aviso_tope = "  [TOPE de páginas alcanzado: puede faltar histórico]" if tope else ""
-    print(f"Feed «{fuente}»: {len(entradas)} entradas en {paginas} página(s){aviso_tope}")
+    origen = "el ZIP de Datos Abiertos" if MODO_RECUPERACION else f"{paginas} página(s)"
+    print(f"Feed «{fuente}»: {len(entradas)} entradas en {origen}{aviso_tope}")
 
     # La más reciente de TODAS las entradas leídas (hayan pasado el filtro o no): es la
     # señal de si la fuente sigue publicando.
@@ -314,6 +392,9 @@ print(f"Entradas leídas por fuente: {detalle_feeds}.")
 # que la web lo diga también (la generación la hace generar_web.py).
 DIAS_PARA_AVISAR = 2
 estado_fuentes = {}
+# En una recuperación no se mira el feed en vivo, así que no hay nada que juzgar sobre si
+# está mudo: avisar aquí sería con datos del ZIP y filtrados por rango. Se calla.
+_avisar_mudas = not MODO_RECUPERACION
 hoy_fecha = datetime.now().date()
 for feed_info in FEEDS:
     nombre_fuente = feed_info["fuente"]
@@ -331,6 +412,8 @@ for feed_info in FEEDS:
         "leidas": leidas_por_fuente.get(nombre_fuente, 0),
         "comprobado": datetime.now().isoformat(timespec="seconds"),
     }
+    if not _avisar_mudas:
+        continue
     if estado_fuentes[nombre_fuente]["muda"]:
         print(f"AVISO: la fuente «{nombre_fuente}» lleva {dias} días sin publicar nada nuevo "
               f"(su última entrada es del {ultima}). El feed contesta, pero no trae novedades: "
@@ -338,9 +421,12 @@ for feed_info in FEEDS:
     elif dias is not None:
         print(f"Fuente «{nombre_fuente}»: al día (última entrada del {ultima}).")
 
-Path("data").mkdir(parents=True, exist_ok=True)
-with open(Path("data") / "estado_fuentes.json", "w", encoding="utf-8") as f:
-    json.dump(estado_fuentes, f, ensure_ascii=False, indent=1)
+# En una recuperación NO se toca: ese fichero cuenta cómo van los feeds EN VIVO, y aquí no
+# se han mirado (o se ha mirado solo una fuente). Pisarlo apagaría la alarma de fuente muda.
+if not MODO_RECUPERACION:
+    Path("data").mkdir(parents=True, exist_ok=True)
+    with open(Path("data") / "estado_fuentes.json", "w", encoding="utf-8") as f:
+        json.dump(estado_fuentes, f, ensure_ascii=False, indent=1)
 
 # --- 5. Guardamos las licitaciones en data/licitaciones.json ----------------
 # Juntamos en una sola lista todas las que han pasado el filtro (todas las categorías,
@@ -358,6 +444,10 @@ if ruta_json.exists():
         datos = json.load(f)
 else:
     datos = {}
+
+# Cuántas había ANTES de tocar nada: es el control de que una recuperación solo puede
+# sumar. Si al final hay menos, algo ha ido mal y no se escribe.
+TOTAL_ANTES = len(datos)
 
 # Momento de esta ejecución, como texto en formato ISO (ej: "2026-06-22T18:30:00.123").
 ahora = datetime.now().isoformat()
@@ -452,10 +542,26 @@ for clave in list(datos.keys()):
     else:
         reg["categoria"] = categoria_reev   # refresca el grupo por si cambió
 
+# --- CONTROL antes de escribir ----------------------------------------------
+# Una recuperación solo puede SUMAR: si el total baja, es que la poda ha quitado cosas
+# (criterios cambiados) y eso no debe pasar de tapadillo mientras se recupera.
+_baja = len(datos) < TOTAL_ANTES
+if MODO_RECUPERACION and _baja:
+    print("=" * 70)
+    print(f"CONTROL: el total BAJARÍA de {TOTAL_ANTES} a {len(datos)} ({podadas} podadas).")
+    print("Una recuperación no puede quitar licitaciones. NO se escribe nada.")
+    print("Si de verdad quieres podar, hazlo con una ejecución normal del radar.")
+    print("=" * 70)
+    sys.exit(2)
+
 # Guardamos el diccionario completo.
 # ensure_ascii=False -> conserva tildes y "ñ"; indent=2 -> deja el diff de Git legible.
-with open(ruta_json, "w", encoding="utf-8") as f:
-    json.dump(datos, f, ensure_ascii=False, indent=2)
+if ESCRIBIR:
+    with open(ruta_json, "w", encoding="utf-8") as f:
+        json.dump(datos, f, ensure_ascii=False, indent=2)
+else:
+    print("=" * 70)
+    print("SIMULACIÓN: no se ha escrito nada. Añade --escribir para guardar de verdad.")
 
 # --- 6. Resumen de la persistencia ------------------------------------------
 print("=" * 70)
@@ -468,3 +574,29 @@ print(f"Podadas (ya no encajan con la config actual): {podadas}")
 print(f"Nuevas en esta ejecución: {len(nuevas)}")
 for lic in nuevas:
     print(f"  - [{lic['fuente']}/{lic['categoria']}] {lic['titulo']}")
+
+# --- CONTROL de la recuperación ---------------------------------------------
+# Tres comprobaciones, con los números a la vista: que el total no baja, que lo leído
+# cuadra con lo que dice el ZIP, y en qué día cae cada licitación nueva.
+if MODO_RECUPERACION:
+    from datetime import date as _date
+    print("=" * 70)
+    print("CONTROL DE LA RECUPERACIÓN")
+    print(f"  Total en el archivo: {TOTAL_ANTES} antes -> {len(datos)} después "
+          f"({len(datos) - TOTAL_ANTES:+d}) · podadas {podadas}")
+    for _fuente, _cuentas in cuentas_zip.items():
+        _leidas = sum(_cuentas.values())
+        print(f"  ZIP «{_fuente}»: {_leidas:,} entradas en el rango, "
+              f"{leidas_por_fuente.get(_fuente, 0):,} procesadas "
+              f"({'cuadra' if _leidas == leidas_por_fuente.get(_fuente, 0) else 'NO CUADRA'})")
+    _por_dia_nuevas = Counter((lic.get("fecha_publicacion") or "?")[:10] for lic in nuevas)
+    if _por_dia_nuevas:
+        print("  Nuevas por fecha de publicación: "
+              + " · ".join(f"{d} {n}" for d, n in sorted(_por_dia_nuevas.items())))
+    _hoy = _date.today().isoformat()
+    _en_plazo = [lic for lic in nuevas if (lic.get("fecha_fin_plazo") or "") >= _hoy]
+    print(f"  De las nuevas, EN PLAZO hoy: {len(_en_plazo)}")
+    for lic in sorted(_en_plazo, key=lambda x: x.get("fecha_fin_plazo") or ""):
+        print(f"    hasta {lic.get('fecha_fin_plazo')} · [{lic.get('categoria')}] "
+              f"{(lic.get('titulo') or '')[:80]}")
+    print("=" * 70)
