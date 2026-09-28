@@ -237,6 +237,7 @@ CSS = """
   .mn-intro { font-size:.9rem; color:var(--suave); margin:0 0 12px; }
   /* Aviso de «orden por importe desactivado» (resultado de más de 10.000 menores). El
      [hidden] explícito: si algún día este bloque lleva display:flex, no debe anularlo. */
+  .aviso-muda { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; border-radius:10px; padding:8px 12px; margin:8px 0 0; font-size:.88rem; }
   .mn-cobertura { font-size:.82rem; color:var(--suave); margin:-4px 0 12px; line-height:1.55; }
   .mn-cobertura[hidden] { display:none; }
   .mn-cobertura span { display:block; }
@@ -5784,6 +5785,29 @@ else:
     MENORES_INTRO_FUENTES = "; fuentes: " + html.escape(
         ", ".join(_etiquetas_cargadas[:-1]) + " y " + _etiquetas_cargadas[-1])
 
+# FUENTE MUDA: filtrar.py deja en data/estado_fuentes.json la fecha de la última entrada
+# que trajo cada feed. Si alguna lleva más de dos días sin publicar nada, se dice AQUÍ, en
+# la cabecera del Radar: un feed que contesta pero no trae novedades se ve, si no, igual que
+# un día tranquilo. (Del 24 al 28/09/2026 el estatal estuvo así y no se notó.)
+_ruta_estado_fuentes = Path("data") / "estado_fuentes.json"
+AVISO_FUENTE_MUDA = ""
+if _ruta_estado_fuentes.exists():
+    try:
+        _estado_fuentes = json.loads(_ruta_estado_fuentes.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        _estado_fuentes = {}
+    _mudas = [(f, d) for f, d in _estado_fuentes.items() if isinstance(d, dict) and d.get("muda")]
+    if _mudas:
+        _trozos = []
+        for _fuente, _datos in sorted(_mudas):
+            _nombre = {"estatal": "la Plataforma del Estado",
+                       "agregadas": "las plataformas autonómicas"}.get(_fuente, _fuente)
+            _trozos.append(f"{html.escape(_nombre)} lleva {_datos.get('dias_sin_novedad')} días "
+                           f"sin publicar nada nuevo (su última licitación es del "
+                           f"{html.escape(str(_datos.get('ultima_entrada') or '?'))[:10]})")
+        AVISO_FUENTE_MUDA = ('<p class="meta aviso-muda">⚠ ' + "; ".join(_trozos)
+                             + '. El radar sigue funcionando: es la fuente la que no trae novedades.</p>')
+
 # CPV ACTIVOS (prefijos) para limitar el desplegable "Filtrar por CPV" a solo los
 # CPV que el radar tiene activos ahora mismo (los de la config; o los del YAML si
 # aún no hay config). Vacío = no filtrar (mostrar todos los presentes).
@@ -5989,6 +6013,7 @@ pagina = f"""<!DOCTYPE html>
       <div class="titulos">
         <h1 id="titulo-seccion">{titulo_seccion}</h1>
         <p class="meta" id="meta-radar">Generado el {generado} <span class="badge">{total} licitaciones</span></p>
+        {AVISO_FUENTE_MUDA}
       </div>
       <div class="conectado" id="conectado">
         <span class="conectado-tx">Conectado como <b id="conectado-email"></b></span>
