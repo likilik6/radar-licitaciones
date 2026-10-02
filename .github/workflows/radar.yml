@@ -11,7 +11,12 @@ on:
   # cambio de hora). Las ejecuciones programadas pueden retrasarse algunos
   # minutos cuando GitHub está cargado; es normal.
   schedule:
-    - cron: "0 6 * * 1-5"
+    # Fuera del minuto 0: GitHub recomienda no programar en punto porque ahí se junta
+    # todo el mundo y los programados de repos públicos se retrasan. Medido del 22/09 al
+    # 02/10: con "0 6" el run se CREABA entre las 10:28 y las 12:23 UTC, o sea 4 h 28 min
+    # a 6 h 23 min tarde, y empeorando. Y no es un paso lento: startedAt == createdAt en
+    # los nueve runs, el retraso es íntegramente la cola de GitHub.
+    - cron: "23 5 * * 1-5"
   # Botón para lanzarlo a mano desde la pestaña "Actions" (útil para probar).
   workflow_dispatch:
     inputs:
