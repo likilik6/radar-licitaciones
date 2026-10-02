@@ -16,6 +16,69 @@ def normaliza(texto):
     return "".join(c for c in texto if not unicodedata.combining(c))
 
 
+def busca_coincidencia(cpvs, titulo_normalizado, criterios):
+    """Comprueba si una licitación encaja con un grupo de criterios.
+    'criterios' es un bloque con dos listas: 'cpv' y 'palabras_clave'.
+    Devuelve un texto explicando QUÉ criterio coincidió, o None si no coincide nada.
+
+    Vive aquí (y no en filtrar.py) porque lo necesitan el robot, la poda y las pruebas;
+    tenerlo en el script obligaba a copiarlo para probarlo, y una copia se desincroniza.
+    """
+    # 1) ¿Algún CPV de la licitación EMPIEZA por alguno de los CPV buscados?
+    #    (usar "empieza por" permite, por ejemplo, que "9073" cace a "90731100").
+    for prefijo in criterios.get("cpv", []) or []:
+        for cpv in cpvs:
+            if cpv.startswith(prefijo):
+                return f"CPV {cpv} (coincide con {prefijo})"
+
+    # 2) ¿El título contiene alguna de las palabras clave? (ignorando mayúsculas/tildes)
+    for palabra in criterios.get("palabras_clave", []) or []:
+        if normaliza(palabra) in titulo_normalizado:
+            return f"palabra clave «{palabra}»"
+
+    # Si no coincidió ni por CPV ni por palabra, devolvemos None.
+    return None
+
+
+# ---------------------------------------------------------------------------
+# PRIORIDAD de las categorías: por qué está en el código y no en el panel
+#
+# Una licitación se queda en la PRIMERA categoría que casa, así que el orden ES la
+# prioridad. Durante meses ese orden salía del diccionario de radar_config... y eso
+# no era controlable desde el panel: la columna radar_config.config es JSONB, y
+# jsonb guarda las claves de cada objeto ordenadas por (longitud, bytes). Guardar
+# {criticas, a_revisar, pruebas} devuelve {pruebas, criticas, a_revisar}.
+#
+# Consecuencia real, medida el 02/10/2026: «pruebas» ganaba a «criticas» porque su
+# nombre tiene una letra menos, y por eso 11 tarjetas buenas estaban enterradas en
+# el cajón de pruebas (entre ellas 2 M€ de Bioseguridad de Murcia Oeste y los 779
+# monitores de calidad del aire del CIBER). La prioridad la decidía la longitud del
+# nombre del grupo. Por eso ahora se declara aquí, explícita y comprobada.
+#
+# Regla: primero las conocidas en este orden; después las que no conozcamos, en el
+# orden en que vengan (determinista); y «pruebas» SIEMPRE al final, porque es el
+# cajón de pruebas y no debe ganarle a nada.
+# ---------------------------------------------------------------------------
+ORDEN_CATEGORIAS = ("criticas", "a_revisar")
+CATEGORIA_ULTIMA = "pruebas"
+
+
+def ordena_categorias(categorias):
+    """Devuelve las categorías en orden de PRIORIDAD (un dict nuevo, mismo contenido).
+
+    No inventa ni descarta grupos: si una categoría conocida no está, se la salta; y
+    si aparece una nueva en el panel, entra en medio (nunca por delante de 'criticas'
+    ni por detrás de 'pruebas'), para que añadir un grupo no cambie en silencio lo que
+    ya funcionaba."""
+    if not isinstance(categorias, dict) or not categorias:
+        return {}
+    orden = [n for n in ORDEN_CATEGORIAS if n in categorias]
+    orden += [n for n in categorias if n not in ORDEN_CATEGORIAS and n != CATEGORIA_ULTIMA]
+    if CATEGORIA_ULTIMA in categorias:
+        orden.append(CATEGORIA_ULTIMA)
+    return {n: categorias[n] for n in orden}
+
+
 # ---------------------------------------------------------------------------
 # Credencial para leer radar_config (la configuración del panel ⚙)
 #
