@@ -461,13 +461,13 @@
     "categoria": "criticas",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
-    "presupuesto_sin_iva": 18019820.7,
-    "valor_estimado": 24026427.6,
+    "presupuesto_sin_iva": 18239306.7,
+    "valor_estimado": 24319075.6,
     "fecha_fin_plazo": "2027-07-31",
-    "fecha_publicacion": "2026-01-23",
-    "fecha_actualizacion": "2026-08-25T08:41:21.551+02:00",
+    "fecha_publicacion": "2026-10-01",
+    "fecha_actualizacion": "2026-10-01T08:41:31.279+02:00",
     "primera_vez": "2026-06-25T09:04:28.410821",
-    "ultima_vez": "2026-09-25T11:23:13.154967",
+    "ultima_vez": "2026-10-02T12:51:25.768496",
     "num_expediente": "CE18196HO01/24"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19071782": {
@@ -845,7 +845,7 @@
     "fecha_publicacion": "2026-03-12",
     "fecha_actualizacion": "2026-09-21T11:56:38.729+02:00",
     "primera_vez": "2026-06-26T09:05:39.995142",
-    "ultima_vez": "2026-10-01T12:42:41.220983",
+    "ultima_vez": "2026-10-02T12:51:25.768496",
     "num_expediente": "252-2025"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19172138": {
@@ -1066,10 +1066,10 @@
     "presupuesto_sin_iva": 30000.0,
     "valor_estimado": 30000.0,
     "fecha_fin_plazo": "2026-07-17",
-    "fecha_publicacion": "2026-09-21",
-    "fecha_actualizacion": "2026-09-28T08:36:34.686+02:00",
+    "fecha_publicacion": "2026-10-01",
+    "fecha_actualizacion": "2026-10-01T08:05:27.407+02:00",
     "primera_vez": "2026-07-01T07:46:59.271918",
-    "ultima_vez": "2026-10-01T12:42:41.220983",
+    "ultima_vez": "2026-10-02T12:51:25.768496",
     "num_expediente": "2026/290091"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18536025": {
@@ -1610,7 +1610,7 @@
     "fecha_publicacion": "2026-07-06",
     "fecha_actualizacion": "2026-09-30T15:04:47.500+02:00",
     "primera_vez": "2026-07-06T10:30:31.860266",
-    "ultima_vez": "2026-10-01T12:42:41.220983",
+    "ultima_vez": "2026-10-02T12:51:25.768496",
     "num_expediente": "LICT/99/024/2025/0180"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/17916056": {
@@ -2503,9 +2503,9 @@
     "valor_estimado": 2212094.4,
     "fecha_fin_plazo": "2026-09-28",
     "fecha_publicacion": "2026-09-11",
-    "fecha_actualizacion": "2026-09-11T10:05:12.103+02:00",
+    "fecha_actualizacion": "2026-10-01T13:35:44.911+02:00",
     "primera_vez": "2026-07-23T08:37:52.945152",
-    "ultima_vez": "2026-09-17T14:43:25.297552"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19522257": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19522257",
@@ -2724,7 +2724,7 @@
     "fecha_publicacion": "2026-07-29",
     "fecha_actualizacion": "2026-09-29T14:42:13.918+02:00",
     "primera_vez": "2026-07-30T08:28:46.435722",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19709723": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19709723",
@@ -2807,7 +2807,7 @@
     "fecha_publicacion": "2026-07-16",
     "fecha_actualizacion": "2026-09-29T16:04:12.344+02:00",
     "primera_vez": "2026-07-30T08:28:46.435722",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19817800": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19817800",
@@ -2986,9 +2986,9 @@
     "valor_estimado": 58680694.61,
     "fecha_fin_plazo": "2026-08-14",
     "fecha_publicacion": "2026-07-31",
-    "fecha_actualizacion": "2026-09-25T11:50:23.608+02:00",
+    "fecha_actualizacion": "2026-09-29T12:14:00.281+02:00",
     "primera_vez": "2026-08-04T08:44:03.149840",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19499583": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19499583",
@@ -3301,10 +3301,10 @@
     "presupuesto_sin_iva": 86594.0,
     "valor_estimado": 156712.45,
     "fecha_fin_plazo": "2026-03-06",
-    "fecha_publicacion": "2026-02-19",
-    "fecha_actualizacion": "2026-09-08T13:55:01.157+02:00",
+    "fecha_publicacion": "2026-10-01",
+    "fecha_actualizacion": "2026-10-01T12:09:34.184+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-09-25T11:23:13.154967"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20276210": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20276210",
@@ -3405,7 +3405,7 @@
     "fecha_publicacion": "2026-08-25",
     "fecha_actualizacion": "2026-09-29T14:17:24.124+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20275228": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20275228",
@@ -3658,10 +3658,10 @@
     "presupuesto_sin_iva": 41959.91,
     "valor_estimado": 218191.53,
     "fecha_fin_plazo": "2026-09-10",
-    "fecha_publicacion": "2026-08-06",
-    "fecha_actualizacion": "2026-08-06T12:42:33.503+02:00",
+    "fecha_publicacion": "2026-08-07",
+    "fecha_actualizacion": "2026-10-01T11:26:08.172+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-08-14T11:28:59.155492"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20269659": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20269659",
@@ -3689,7 +3689,7 @@
     "fecha_publicacion": "2026-08-14",
     "fecha_actualizacion": "2026-09-30T15:54:39.098+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19910847": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19910847",
@@ -3711,9 +3711,9 @@
     "valor_estimado": 380100.0,
     "fecha_fin_plazo": "2026-08-24",
     "fecha_publicacion": "2026-08-14",
-    "fecha_actualizacion": "2026-09-04T09:37:31.021+02:00",
+    "fecha_actualizacion": "2026-10-01T10:18:35.992+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-09-25T11:23:13.154967"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20262116": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20262116",
@@ -3810,7 +3810,7 @@
     "fecha_publicacion": "2026-08-06",
     "fecha_actualizacion": "2026-09-29T13:38:30.401+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18712880": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18712880",
@@ -4010,7 +4010,7 @@
     "fecha_publicacion": "2026-07-29",
     "fecha_actualizacion": "2026-09-24T09:42:46.366+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19824804": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19824804",
@@ -4081,9 +4081,9 @@
     "valor_estimado": 194689.0,
     "fecha_fin_plazo": null,
     "fecha_publicacion": "2026-08-13",
-    "fecha_actualizacion": "2026-08-31T11:00:06.946+02:00",
+    "fecha_actualizacion": "2026-10-01T11:00:05.104+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-09-25T11:23:13.154967"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/17898497": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/17898497",
@@ -4348,7 +4348,7 @@
     "fecha_publicacion": "2026-07-24",
     "fecha_actualizacion": "2026-09-25T15:11:27.121+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19757480": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19757480",
@@ -4445,7 +4445,7 @@
     "fecha_publicacion": "2026-06-12",
     "fecha_actualizacion": "2026-09-30T14:09:30.863+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19935227": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19935227",
@@ -4493,7 +4493,7 @@
     "fecha_publicacion": "2026-06-12",
     "fecha_actualizacion": "2026-09-25T11:40:48.702+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19961041": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19961041",
@@ -4616,7 +4616,7 @@
     "fecha_publicacion": "2026-03-15",
     "fecha_actualizacion": "2026-09-30T17:11:08.517+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20244293": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20244293",
@@ -4688,7 +4688,7 @@
     "fecha_publicacion": "2026-07-08",
     "fecha_actualizacion": "2026-09-24T13:43:13.412+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/12130296": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/12130296",
@@ -4736,7 +4736,7 @@
     "fecha_publicacion": "2026-07-31",
     "fecha_actualizacion": "2026-09-23T20:00:49.871+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20132939": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20132939",
@@ -4761,7 +4761,7 @@
     "fecha_publicacion": "2026-07-10",
     "fecha_actualizacion": "2026-09-25T12:05:51.351+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20171853": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20171853",
@@ -5073,7 +5073,7 @@
     "fecha_publicacion": "2026-09-29",
     "fecha_actualizacion": "2026-09-29T09:18:30.134+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/15481666": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/15481666",
@@ -5721,7 +5721,7 @@
     "fecha_publicacion": "2026-08-13",
     "fecha_actualizacion": "2026-09-29T15:41:29.916+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20018880": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20018880",
@@ -5799,7 +5799,7 @@
     "fecha_publicacion": "2025-11-13",
     "fecha_actualizacion": "2026-09-29T14:04:17.139+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19676533": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19676533",
@@ -5846,9 +5846,9 @@
     "valor_estimado": 180000.0,
     "fecha_fin_plazo": "2026-07-13",
     "fecha_publicacion": "2026-06-26",
-    "fecha_actualizacion": "2026-08-18T14:09:06.369+02:00",
+    "fecha_actualizacion": "2026-10-01T12:07:06.004+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-09-25T11:23:13.154967"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19701086": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19701086",
@@ -5927,7 +5927,7 @@
     "fecha_publicacion": "2026-08-05",
     "fecha_actualizacion": "2026-09-29T10:09:11.744+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19953266": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19953266",
@@ -6222,9 +6222,9 @@
     "valor_estimado": 42955.0,
     "fecha_fin_plazo": "2026-08-31",
     "fecha_publicacion": "2026-08-14",
-    "fecha_actualizacion": "2026-09-14T08:59:18.127+02:00",
+    "fecha_actualizacion": "2026-10-01T12:30:33.881+02:00",
     "primera_vez": "2026-08-17T06:54:02.178190",
-    "ultima_vez": "2026-09-17T14:43:25.297552"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/17810402": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/17810402",
@@ -6455,7 +6455,7 @@
     "fecha_publicacion": "2026-07-23",
     "fecha_actualizacion": "2026-09-28T12:47:13.991+02:00",
     "primera_vez": "2026-08-17T06:54:02.178190",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19616609": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19616609",
@@ -6581,7 +6581,7 @@
     "fecha_publicacion": "2026-08-11",
     "fecha_actualizacion": "2026-09-28T11:44:28.257+02:00",
     "primera_vez": "2026-08-17T06:54:02.178190",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20287701": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20287701",
@@ -6605,7 +6605,7 @@
     "fecha_publicacion": "2026-09-28",
     "fecha_actualizacion": "2026-09-28T12:15:22.508+02:00",
     "primera_vez": "2026-08-17T06:54:02.178190",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20287720": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20287720",
@@ -6811,9 +6811,9 @@
     "valor_estimado": 345256.2,
     "fecha_fin_plazo": "2026-09-17",
     "fecha_publicacion": "2026-08-17",
-    "fecha_actualizacion": "2026-09-28T09:33:50.162+02:00",
+    "fecha_actualizacion": "2026-10-01T12:45:37.738+02:00",
     "primera_vez": "2026-08-17T06:54:02.178190",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19501391": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19501391",
@@ -7945,7 +7945,7 @@
     "fecha_publicacion": "2026-06-30",
     "fecha_actualizacion": "2026-09-29T12:42:28.141+02:00",
     "primera_vez": "2026-08-18T06:44:03.403621",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20305278": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20305278",
@@ -8245,7 +8245,7 @@
     "fecha_publicacion": "2026-08-18",
     "fecha_actualizacion": "2026-09-25T09:56:01.969+02:00",
     "primera_vez": "2026-08-19T06:42:44.236718",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20313665": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20313665",
@@ -8352,7 +8352,7 @@
     "fecha_publicacion": "2026-06-01",
     "fecha_actualizacion": "2026-09-21T12:04:31.513+02:00",
     "primera_vez": "2026-08-19T06:42:44.236718",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/17769200": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/17769200",
@@ -8583,7 +8583,7 @@
     "fecha_publicacion": "2026-08-18",
     "fecha_actualizacion": "2026-09-30T08:03:08.479+02:00",
     "primera_vez": "2026-08-20T06:46:48.284689",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18294267": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18294267",
@@ -8659,7 +8659,7 @@
     "fecha_publicacion": "2026-08-20",
     "fecha_actualizacion": "2026-09-28T14:11:36.708+02:00",
     "primera_vez": "2026-08-21T06:45:22.368884",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20324973": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20324973",
@@ -8683,7 +8683,7 @@
     "fecha_publicacion": "2026-08-20",
     "fecha_actualizacion": "2026-09-21T11:11:29.871+02:00",
     "primera_vez": "2026-08-21T06:45:22.368884",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/18223878": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/18223878",
@@ -8831,10 +8831,10 @@
     "presupuesto_sin_iva": 16719.74,
     "valor_estimado": 53221.94,
     "fecha_fin_plazo": "2026-09-09",
-    "fecha_publicacion": "2026-08-21",
-    "fecha_actualizacion": "2026-09-21T09:04:01.364+02:00",
+    "fecha_publicacion": "2026-10-01",
+    "fecha_actualizacion": "2026-10-01T12:50:20.276+02:00",
     "primera_vez": "2026-08-24T06:57:36.692906",
-    "ultima_vez": "2026-09-28T12:48:27.492359"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19870451": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19870451",
@@ -8862,7 +8862,7 @@
     "fecha_publicacion": "2026-06-15",
     "fecha_actualizacion": "2026-09-28T15:34:16.447+02:00",
     "primera_vez": "2026-08-24T06:57:36.692906",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20329062": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20329062",
@@ -9037,9 +9037,9 @@
     "valor_estimado": 508144.65,
     "fecha_fin_plazo": "2026-09-21",
     "fecha_publicacion": "2026-08-20",
-    "fecha_actualizacion": "2026-09-25T13:47:55.125+02:00",
+    "fecha_actualizacion": "2026-09-30T12:59:16.082+02:00",
     "primera_vez": "2026-08-24T06:57:36.692906",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/17474723": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/17474723",
@@ -9450,7 +9450,7 @@
     "fecha_publicacion": "2026-05-21",
     "fecha_actualizacion": "2026-09-28T11:59:55.362+02:00",
     "primera_vez": "2026-08-25T06:51:38.413648",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19404005": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19404005",
@@ -9593,7 +9593,7 @@
     "fecha_publicacion": "2026-08-24",
     "fecha_actualizacion": "2026-09-24T12:02:58.342+02:00",
     "primera_vez": "2026-08-25T06:51:38.413648",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20068251": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20068251",
@@ -9785,9 +9785,9 @@
     "valor_estimado": 35000.0,
     "fecha_fin_plazo": "2026-09-21",
     "fecha_publicacion": "2026-08-25",
-    "fecha_actualizacion": "2026-08-25T16:03:23.349+02:00",
+    "fecha_actualizacion": "2026-10-01T16:04:54.983+02:00",
     "primera_vez": "2026-08-26T06:48:22.397563",
-    "ultima_vez": "2026-09-25T11:23:13.154967"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20345657": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20345657",
@@ -9809,9 +9809,9 @@
     "valor_estimado": 59592.4,
     "fecha_fin_plazo": "2026-09-21",
     "fecha_publicacion": "2026-08-25",
-    "fecha_actualizacion": "2026-08-25T16:03:10.482+02:00",
+    "fecha_actualizacion": "2026-10-01T18:01:29.722+02:00",
     "primera_vez": "2026-08-26T06:48:22.397563",
-    "ultima_vez": "2026-09-25T11:23:13.154967"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20350260": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20350260",
@@ -9862,9 +9862,9 @@
     "valor_estimado": 515000.0,
     "fecha_fin_plazo": "2026-07-27",
     "fecha_publicacion": "2026-06-16",
-    "fecha_actualizacion": "2026-09-25T12:53:32.454+02:00",
+    "fecha_actualizacion": "2026-09-29T08:38:51.023+02:00",
     "primera_vez": "2026-08-27T17:22:06.832200",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20350625": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20350625",
@@ -9960,7 +9960,7 @@
     "fecha_publicacion": "2026-08-26",
     "fecha_actualizacion": "2026-09-26T00:25:53.515+02:00",
     "primera_vez": "2026-08-27T17:22:06.832200",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/15606195": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/15606195",
@@ -10019,7 +10019,7 @@
     "fecha_publicacion": "2026-07-14",
     "fecha_actualizacion": "2026-09-29T09:32:06.234+02:00",
     "primera_vez": "2026-08-27T17:22:06.832200",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20350510": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20350510",
@@ -10049,9 +10049,9 @@
     "valor_estimado": 405877.9,
     "fecha_fin_plazo": "2026-09-25",
     "fecha_publicacion": "2026-08-26",
-    "fecha_actualizacion": "2026-08-27T10:48:00.731+02:00",
+    "fecha_actualizacion": "2026-10-01T13:12:32.576+02:00",
     "primera_vez": "2026-08-27T17:22:06.832200",
-    "ultima_vez": "2026-09-23T10:57:39.604545"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18183431": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18183431",
@@ -10129,9 +10129,9 @@
     "valor_estimado": 28810.0,
     "fecha_fin_plazo": "2026-09-17",
     "fecha_publicacion": "2026-09-28",
-    "fecha_actualizacion": "2026-09-28T10:35:52.331+02:00",
+    "fecha_actualizacion": "2026-09-30T15:29:39.982+02:00",
     "primera_vez": "2026-08-28T18:14:22.079310",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20356559": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20356559",
@@ -10640,7 +10640,7 @@
     "fecha_publicacion": "2026-05-06",
     "fecha_actualizacion": "2026-09-28T12:30:19.736+02:00",
     "primera_vez": "2026-08-31T12:41:57.624741",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19957377": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19957377",
@@ -11346,9 +11346,9 @@
     "valor_estimado": 477530.5,
     "fecha_fin_plazo": "2026-07-14",
     "fecha_publicacion": "2026-06-16",
-    "fecha_actualizacion": "2026-09-22T09:07:10.544+02:00",
+    "fecha_actualizacion": "2026-10-01T12:13:08.141+02:00",
     "primera_vez": "2026-09-04T11:01:18.598009",
-    "ultima_vez": "2026-09-28T12:48:27.492359"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19187917": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19187917",
@@ -11859,9 +11859,9 @@
     "valor_estimado": 48335.18,
     "fecha_fin_plazo": "2026-07-29",
     "fecha_publicacion": "2026-07-14",
-    "fecha_actualizacion": "2026-09-07T14:47:25.308+02:00",
+    "fecha_actualizacion": "2026-10-01T10:00:02.572+02:00",
     "primera_vez": "2026-09-08T10:42:20.735981",
-    "ultima_vez": "2026-09-25T11:23:13.154967"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19404009": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19404009",
@@ -12031,7 +12031,7 @@
     "fecha_publicacion": "2026-05-08",
     "fecha_actualizacion": "2026-09-28T12:11:56.459+02:00",
     "primera_vez": "2026-09-08T10:42:20.735981",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20378720": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20378720",
@@ -12126,9 +12126,9 @@
     "valor_estimado": 508712.08,
     "fecha_fin_plazo": "2026-07-28",
     "fecha_publicacion": "2026-06-18",
-    "fecha_actualizacion": "2026-09-07T13:46:32.716+02:00",
+    "fecha_actualizacion": "2026-10-01T12:40:16.503+02:00",
     "primera_vez": "2026-09-08T10:42:20.735981",
-    "ultima_vez": "2026-09-25T11:23:13.154967"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18972523": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18972523",
@@ -12285,10 +12285,10 @@
     "presupuesto_sin_iva": 32103.93,
     "valor_estimado": 160519.65,
     "fecha_fin_plazo": "2026-07-23",
-    "fecha_publicacion": "2026-09-04",
-    "fecha_actualizacion": "2026-09-04T13:09:01.348+02:00",
+    "fecha_publicacion": "2026-10-01",
+    "fecha_actualizacion": "2026-10-01T09:43:44.594+02:00",
     "primera_vez": "2026-09-08T10:42:20.735981",
-    "ultima_vez": "2026-09-25T11:23:13.154967"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19430314": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19430314",
@@ -12475,7 +12475,7 @@
     "fecha_publicacion": "2026-06-05",
     "fecha_actualizacion": "2026-09-25T14:41:02.212+02:00",
     "primera_vez": "2026-09-10T10:40:51.097692",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20384058": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20384058",
@@ -12527,7 +12527,7 @@
     "fecha_publicacion": "2026-07-14",
     "fecha_actualizacion": "2026-09-25T14:05:14.691+02:00",
     "primera_vez": "2026-09-10T10:40:51.097692",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20390003": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20390003",
@@ -13008,7 +13008,7 @@
     "fecha_publicacion": "2026-09-09",
     "fecha_actualizacion": "2026-09-29T13:09:49.346+02:00",
     "primera_vez": "2026-09-14T18:53:10.600830",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20417837": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20417837",
@@ -13039,7 +13039,7 @@
     "fecha_publicacion": "2026-09-09",
     "fecha_actualizacion": "2026-09-29T14:14:52.506+02:00",
     "primera_vez": "2026-09-14T18:53:10.600830",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20417848": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20417848",
@@ -13116,9 +13116,9 @@
     "valor_estimado": 70862.76,
     "fecha_fin_plazo": "2026-07-22",
     "fecha_publicacion": "2026-06-29",
-    "fecha_actualizacion": "2026-09-28T09:24:46.523+02:00",
+    "fecha_actualizacion": "2026-09-29T10:01:30.382+02:00",
     "primera_vez": "2026-09-14T18:53:10.600830",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20415820": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20415820",
@@ -13277,7 +13277,7 @@
     "fecha_publicacion": "2026-09-14",
     "fecha_actualizacion": "2026-09-29T10:49:45.286+02:00",
     "primera_vez": "2026-09-14T18:53:10.600830",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20416400": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20416400",
@@ -13486,9 +13486,9 @@
     "valor_estimado": 42975.2,
     "fecha_fin_plazo": "2026-09-25",
     "fecha_publicacion": "2026-09-09",
-    "fecha_actualizacion": "2026-09-09T10:54:51.959+02:00",
+    "fecha_actualizacion": "2026-10-01T14:03:48.285+02:00",
     "primera_vez": "2026-09-14T18:53:10.600830",
-    "ultima_vez": "2026-09-14T21:43:59.716079"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20418272": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20418272",
@@ -13735,7 +13735,7 @@
     "fecha_publicacion": "2026-07-29",
     "fecha_actualizacion": "2026-09-18T14:42:01.892+02:00",
     "primera_vez": "2026-09-16T11:13:29.326900",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20430333": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20430333",
@@ -13757,9 +13757,9 @@
     "valor_estimado": 363000.0,
     "fecha_fin_plazo": "2026-10-26",
     "fecha_publicacion": "2026-09-15",
-    "fecha_actualizacion": "2026-09-15T13:55:54.303+02:00",
+    "fecha_actualizacion": "2026-10-01T14:56:05.883+02:00",
     "primera_vez": "2026-09-16T11:13:29.326900",
-    "ultima_vez": "2026-09-30T12:35:29.844363"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20430339": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20430339",
@@ -13807,7 +13807,7 @@
     "fecha_publicacion": "2026-09-09",
     "fecha_actualizacion": "2026-09-25T00:25:55.618+02:00",
     "primera_vez": "2026-09-16T11:13:29.326900",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19893596": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19893596",
@@ -13986,7 +13986,7 @@
     "fecha_publicacion": "2026-09-14",
     "fecha_actualizacion": "2026-09-30T09:24:09.589+02:00",
     "primera_vez": "2026-09-16T11:13:29.326900",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19424583": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19424583",
@@ -14013,7 +14013,7 @@
     "fecha_publicacion": "2026-04-09",
     "fecha_actualizacion": "2026-09-22T14:11:26.477+02:00",
     "primera_vez": "2026-09-16T11:13:29.326900",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20077907": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20077907",
@@ -14133,7 +14133,7 @@
     "fecha_publicacion": "2024-05-13",
     "fecha_actualizacion": "2026-09-24T09:56:14.814+02:00",
     "primera_vez": "2026-09-17T11:04:05.276173",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20434719": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20434719",
@@ -14181,7 +14181,7 @@
     "fecha_publicacion": "2026-09-07",
     "fecha_actualizacion": "2026-09-29T14:11:16.262+02:00",
     "primera_vez": "2026-09-17T11:04:05.276173",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20434773": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20434773",
@@ -14372,7 +14372,7 @@
     "fecha_publicacion": "2025-06-16",
     "fecha_actualizacion": "2026-09-21T10:26:04.372+02:00",
     "primera_vez": "2026-09-17T11:04:05.276173",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20438463": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20438463",
@@ -14400,7 +14400,7 @@
     "fecha_publicacion": "2026-09-03",
     "fecha_actualizacion": "2026-09-24T11:26:32.196+02:00",
     "primera_vez": "2026-09-17T11:04:05.276173",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20122842": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20122842",
@@ -14429,7 +14429,7 @@
     "fecha_publicacion": "2026-07-24",
     "fecha_actualizacion": "2026-09-21T16:04:41.733+02:00",
     "primera_vez": "2026-09-17T11:04:05.276173",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20447003": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20447003",
@@ -14528,7 +14528,7 @@
     "fecha_publicacion": "2026-09-17",
     "fecha_actualizacion": "2026-09-29T15:44:52.927+02:00",
     "primera_vez": "2026-09-18T10:34:06.559471",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20447199": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20447199",
@@ -14778,7 +14778,7 @@
     "fecha_publicacion": "2026-09-18",
     "fecha_actualizacion": "2026-09-22T08:26:17.912+02:00",
     "primera_vez": "2026-09-21T10:56:07.987167",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20480462": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20480462",
@@ -14874,9 +14874,9 @@
     "valor_estimado": 178512.4,
     "fecha_fin_plazo": "2026-06-26",
     "fecha_publicacion": "2026-06-02",
-    "fecha_actualizacion": "2026-09-28T10:14:40.225+02:00",
+    "fecha_actualizacion": "2026-09-30T10:19:21.244+02:00",
     "primera_vez": "2026-09-22T10:45:34.669825",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20480972": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20480972",
@@ -15002,7 +15002,7 @@
     "fecha_publicacion": "2026-09-04",
     "fecha_actualizacion": "2026-09-21T16:04:23.362+02:00",
     "primera_vez": "2026-09-22T10:45:34.669825",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/17551523": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/17551523",
@@ -15026,7 +15026,7 @@
     "fecha_publicacion": "2025-06-26",
     "fecha_actualizacion": "2026-09-21T11:11:32.942+02:00",
     "primera_vez": "2026-09-22T10:45:34.669825",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/13397840": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/13397840",
@@ -15181,7 +15181,7 @@
     "fecha_publicacion": "2026-09-02",
     "fecha_actualizacion": "2026-09-28T13:05:58.138+02:00",
     "primera_vez": "2026-09-22T10:45:34.669825",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20480125": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20480125",
@@ -15500,7 +15500,7 @@
     "fecha_publicacion": "2026-09-07",
     "fecha_actualizacion": "2026-09-22T14:42:12.210+02:00",
     "primera_vez": "2026-09-23T10:57:39.604545",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20497320": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20497320",
@@ -15554,7 +15554,7 @@
     "fecha_publicacion": "2026-09-02",
     "fecha_actualizacion": "2026-09-22T12:06:12.417+02:00",
     "primera_vez": "2026-09-23T10:57:39.604545",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20497060": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20497060",
@@ -15603,7 +15603,7 @@
     "fecha_publicacion": "2026-09-22",
     "fecha_actualizacion": "2026-09-22T22:00:06.611+02:00",
     "primera_vez": "2026-09-23T10:57:39.604545",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20498912": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20498912",
@@ -15627,7 +15627,7 @@
     "fecha_publicacion": "2026-09-08",
     "fecha_actualizacion": "2026-09-29T08:37:08.453+02:00",
     "primera_vez": "2026-09-23T19:44:21.734826",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20499577": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20499577",
@@ -15686,7 +15686,7 @@
     "fecha_publicacion": "2026-09-03",
     "fecha_actualizacion": "2026-09-28T14:57:45.170+02:00",
     "primera_vez": "2026-09-23T19:44:21.734826",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20499751": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20499751",
@@ -15710,7 +15710,7 @@
     "fecha_publicacion": "2026-09-03",
     "fecha_actualizacion": "2026-09-29T14:37:44.315+02:00",
     "primera_vez": "2026-09-23T19:44:21.734826",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20499891": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20499891",
@@ -15827,7 +15827,7 @@
     "fecha_publicacion": "2026-09-07",
     "fecha_actualizacion": "2026-09-28T14:19:51.785+02:00",
     "primera_vez": "2026-09-23T19:44:21.734826",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20499001": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20499001",
@@ -15983,10 +15983,10 @@
     "presupuesto_sin_iva": 49586.78,
     "valor_estimado": 99173.56,
     "fecha_fin_plazo": "2026-09-17",
-    "fecha_publicacion": "2026-09-02",
-    "fecha_actualizacion": "2026-09-22T08:58:22.855+02:00",
+    "fecha_publicacion": "2026-10-01",
+    "fecha_actualizacion": "2026-10-01T08:44:04.966+02:00",
     "primera_vez": "2026-09-23T19:44:21.734826",
-    "ultima_vez": "2026-09-28T12:48:27.492359"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20499944": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20499944",
@@ -16062,7 +16062,7 @@
     "fecha_publicacion": "2026-08-27",
     "fecha_actualizacion": "2026-09-30T15:11:22.919+02:00",
     "primera_vez": "2026-09-24T08:54:42.039758",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20508563": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20508563",
@@ -16886,7 +16886,7 @@
     "fecha_publicacion": "2026-09-25",
     "fecha_actualizacion": "2026-09-25T08:10:56.473+02:00",
     "primera_vez": "2026-09-28T12:48:27.492359",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/16610908": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/16610908",
@@ -16910,7 +16910,7 @@
     "fecha_publicacion": "2025-02-04",
     "fecha_actualizacion": "2026-09-23T10:26:25.472+02:00",
     "primera_vez": "2026-09-28T12:48:27.492359",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/17513269": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/17513269",
@@ -16934,7 +16934,7 @@
     "fecha_publicacion": "2025-06-19",
     "fecha_actualizacion": "2026-09-23T09:11:34.976+02:00",
     "primera_vez": "2026-09-28T12:48:27.492359",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20545226": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20545226",
@@ -16994,7 +16994,7 @@
     "fecha_publicacion": "2026-09-22",
     "fecha_actualizacion": "2026-09-30T08:56:32.908+02:00",
     "primera_vez": "2026-09-28T12:48:27.492359",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/14519952": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/14519952",
@@ -17049,7 +17049,7 @@
     "fecha_publicacion": "2025-10-03",
     "fecha_actualizacion": "2026-09-25T16:04:22.660+02:00",
     "primera_vez": "2026-09-28T12:48:27.492359",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20132745": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20132745",
@@ -17074,7 +17074,7 @@
     "fecha_publicacion": "2026-07-21",
     "fecha_actualizacion": "2026-09-23T12:08:11.113+02:00",
     "primera_vez": "2026-09-28T12:48:27.492359",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/16691266": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/16691266",
@@ -17098,7 +17098,7 @@
     "fecha_publicacion": "2025-02-14",
     "fecha_actualizacion": "2026-09-23T09:56:30.125+02:00",
     "primera_vez": "2026-09-28T12:48:27.492359",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20545639": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20545639",
@@ -17156,7 +17156,7 @@
     "fecha_publicacion": "2026-09-30",
     "fecha_actualizacion": "2026-09-30T08:05:20.853+02:00",
     "primera_vez": "2026-09-28T12:48:27.492359",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20571041": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20571041",
@@ -17184,7 +17184,7 @@
     "fecha_publicacion": "2026-09-28",
     "fecha_actualizacion": "2026-09-28T14:01:39.081+02:00",
     "primera_vez": "2026-09-29T12:35:07.841723",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20571143": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20571143",
@@ -17210,7 +17210,7 @@
     "fecha_publicacion": "2026-09-28",
     "fecha_actualizacion": "2026-09-28T13:14:37.344+02:00",
     "primera_vez": "2026-09-29T12:35:07.841723",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/17036450": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/17036450",
@@ -17282,7 +17282,7 @@
     "fecha_publicacion": "2025-04-01",
     "fecha_actualizacion": "2026-09-28T12:57:36.575+02:00",
     "primera_vez": "2026-09-29T12:35:07.841723",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20571513": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20571513",
@@ -17564,7 +17564,7 @@
     "fecha_publicacion": "2026-09-28",
     "fecha_actualizacion": "2026-09-28T12:11:55.247+02:00",
     "primera_vez": "2026-09-29T12:35:07.841723",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20580999": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20580999",
@@ -17588,7 +17588,7 @@
     "fecha_publicacion": "2026-09-28",
     "fecha_actualizacion": "2026-09-28T06:00:44.766+02:00",
     "primera_vez": "2026-09-29T12:35:07.841723",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20571163": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20571163",
@@ -17616,7 +17616,7 @@
     "fecha_publicacion": "2026-09-25",
     "fecha_actualizacion": "2026-09-28T13:02:41.138+02:00",
     "primera_vez": "2026-09-29T12:35:07.841723",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20571205": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20571205",
@@ -17645,7 +17645,7 @@
     "fecha_publicacion": "2026-09-28",
     "fecha_actualizacion": "2026-09-28T12:32:58.971+02:00",
     "primera_vez": "2026-09-29T12:35:07.841723",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20571258": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20571258",
@@ -17681,7 +17681,7 @@
     "fecha_publicacion": "2026-09-28",
     "fecha_actualizacion": "2026-09-28T12:02:47.384+02:00",
     "primera_vez": "2026-09-29T12:35:07.841723",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18396901": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18396901",
@@ -17964,9 +17964,9 @@
     "valor_estimado": 414738.97,
     "fecha_fin_plazo": null,
     "fecha_publicacion": "2026-09-23",
-    "fecha_actualizacion": "2026-09-23T09:42:01.769+02:00",
+    "fecha_actualizacion": "2026-10-01T13:47:42.084+02:00",
     "primera_vez": "2026-09-29T12:35:07.841723",
-    "ultima_vez": "2026-09-29T12:35:07.841723"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20571582": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20571582",
@@ -18073,7 +18073,7 @@
     "fecha_publicacion": "2024-10-03",
     "fecha_actualizacion": "2026-09-29T10:06:13.775+02:00",
     "primera_vez": "2026-09-30T12:35:29.844363",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20589281": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20589281",
@@ -18097,7 +18097,7 @@
     "fecha_publicacion": "2026-09-29",
     "fecha_actualizacion": "2026-09-29T13:11:20.751+02:00",
     "primera_vez": "2026-09-30T12:35:29.844363",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20589366": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20589366",
@@ -18121,7 +18121,7 @@
     "fecha_publicacion": "2026-09-29",
     "fecha_actualizacion": "2026-09-29T08:41:01.667+02:00",
     "primera_vez": "2026-09-30T12:35:29.844363",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/15745587": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/15745587",
@@ -18198,7 +18198,7 @@
     "fecha_publicacion": "2024-10-18",
     "fecha_actualizacion": "2026-09-29T15:47:28.267+02:00",
     "primera_vez": "2026-09-30T12:35:29.844363",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20585850": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20585850",
@@ -18226,7 +18226,7 @@
     "fecha_publicacion": "2026-09-29",
     "fecha_actualizacion": "2026-09-29T14:59:57.835+02:00",
     "primera_vez": "2026-09-30T12:35:29.844363",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19429551": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19429551",
@@ -18563,7 +18563,7 @@
     "fecha_publicacion": "2026-04-10",
     "fecha_actualizacion": "2026-09-29T12:30:21.142+02:00",
     "primera_vez": "2026-09-30T12:35:29.844363",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20586351": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20586351",
@@ -18589,7 +18589,7 @@
     "fecha_publicacion": "2026-09-29",
     "fecha_actualizacion": "2026-09-29T08:46:31.228+02:00",
     "primera_vez": "2026-09-30T12:35:29.844363",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19246193": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19246193",
@@ -18613,7 +18613,7 @@
     "fecha_publicacion": "2026-03-16",
     "fecha_actualizacion": "2026-09-30T14:42:18.021+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20593494": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20593494",
@@ -18648,7 +18648,7 @@
     "fecha_publicacion": "2026-09-30",
     "fecha_actualizacion": "2026-09-30T14:31:24.060+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20232573": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20232573",
@@ -18672,7 +18672,7 @@
     "fecha_publicacion": "2026-08-04",
     "fecha_actualizacion": "2026-09-30T13:36:11.169+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18964681": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18964681",
@@ -18697,7 +18697,7 @@
     "fecha_publicacion": "2026-02-03",
     "fecha_actualizacion": "2026-09-30T12:25:08.937+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/17644607": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/17644607",
@@ -18721,7 +18721,7 @@
     "fecha_publicacion": "2025-07-10",
     "fecha_actualizacion": "2026-09-30T11:38:51.497+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18024709": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18024709",
@@ -18748,7 +18748,7 @@
     "fecha_publicacion": "2025-11-17",
     "fecha_actualizacion": "2026-09-30T10:54:17.609+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19988194": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19988194",
@@ -18773,7 +18773,7 @@
     "fecha_publicacion": "2026-07-22",
     "fecha_actualizacion": "2026-09-30T09:28:00.166+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20597790": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20597790",
@@ -18797,7 +18797,7 @@
     "fecha_publicacion": "2026-09-30",
     "fecha_actualizacion": "2026-09-30T12:41:35.833+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20597812": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20597812",
@@ -18822,7 +18822,7 @@
     "fecha_publicacion": "2026-09-30",
     "fecha_actualizacion": "2026-09-30T11:41:37.753+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20597819": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20597819",
@@ -18846,7 +18846,7 @@
     "fecha_publicacion": "2026-09-30",
     "fecha_actualizacion": "2026-09-30T11:11:13.518+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19798970": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19798970",
@@ -18871,7 +18871,7 @@
     "fecha_publicacion": "2026-06-02",
     "fecha_actualizacion": "2026-09-30T13:44:09.705+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19715138": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19715138",
@@ -18897,7 +18897,7 @@
     "fecha_publicacion": "2026-05-20",
     "fecha_actualizacion": "2026-09-30T11:56:16.368+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20594106": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20594106",
@@ -18924,7 +18924,7 @@
     "fecha_publicacion": "2026-09-29",
     "fecha_actualizacion": "2026-09-29T21:05:45.096+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20597716": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20597716",
@@ -18948,7 +18948,7 @@
     "fecha_publicacion": "2026-09-30",
     "fecha_actualizacion": "2026-09-30T14:09:29.362+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20597843": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20597843",
@@ -18972,7 +18972,7 @@
     "fecha_publicacion": "2026-09-30",
     "fecha_actualizacion": "2026-09-30T10:03:50.649+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/17995641": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/17995641",
@@ -18996,6 +18996,272 @@
     "fecha_publicacion": "2025-09-16",
     "fecha_actualizacion": "2026-09-30T16:41:29.132+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-02T12:51:25.768496"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20603190": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20603190",
+    "titulo": "Servicio de mantenimiento preventivo y correctivo y la provisión de componentes de reemplazo periódico original del fabricante de los equipos de purificación de agua instalados en la Subdirección General de Laboratorios de Sanidad Animal y Vegetal, por un periodo de 24 meses",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=cy3kSZ9%2FKgY7u6%2B%2FR7DUoA%3D%3D",
+    "cpv": [
+      "50430000",
+      "50430000",
+      "50430000",
+      "50430000"
+    ],
+    "fuente": "estatal",
+    "num_expediente": "2026000180AA",
+    "organismo": "Junta de Contratación del Ministerio de Agricultura, Pesca y Alimentación",
+    "plataforma": null,
+    "region": "Madrid",
+    "region_codigo": "ES300",
+    "categoria": "pruebas",
+    "coincidencia": "palabra clave «purificación»",
+    "presupuesto_con_iva": 114018.3,
+    "presupuesto_sin_iva": 94230.0,
+    "valor_estimado": 94230.0,
+    "fecha_fin_plazo": "2026-10-19",
+    "fecha_publicacion": "2026-10-01",
+    "fecha_actualizacion": "2026-10-01T12:49:24.799+02:00",
+    "primera_vez": "2026-10-02T12:51:25.768496",
+    "ultima_vez": "2026-10-02T12:51:25.768496"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20603449": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20603449",
+    "titulo": "Suministro de un sistema de monitorización de pacientes de altas prestaciones para el servicio de UCI del Hospital Universitario Lluís Alcanyís de Xàtiva, departamento de salud Xàtiva-Ontinyent.",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=V54BwNgola%2B5HQrHoP3G5A%3D%3D",
+    "cpv": [
+      "33100000",
+      "33190000",
+      "33190000"
+    ],
+    "fuente": "estatal",
+    "num_expediente": "CESDA 1727 2026",
+    "organismo": "Departamento de Salud de Xàtiva-Ontinyent. Dirección Económica-Gerencia",
+    "plataforma": null,
+    "region": "Valencia/València",
+    "region_codigo": "ES523",
+    "categoria": "pruebas",
+    "coincidencia": "palabra clave «monitorización»",
+    "presupuesto_con_iva": 221000.0,
+    "presupuesto_sin_iva": 182644.63,
+    "valor_estimado": 182644.63,
+    "fecha_fin_plazo": "2026-09-07",
+    "fecha_publicacion": "2026-10-01",
+    "fecha_actualizacion": "2026-10-01T10:03:23.672+02:00",
+    "primera_vez": "2026-10-02T12:51:25.768496",
+    "ultima_vez": "2026-10-02T12:51:25.768496"
+  },
+  "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/18138235": {
+    "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/18138235",
+    "titulo": "Servicio de gestión, monitorización y respuesta ante incidencias de la infraestructura informática municipal.",
+    "enlace": "https://www.contratacion.euskadi.eus/webkpe00-kpeperfi/es/contenidos/anuncio_contratacion/expjaso646587/es_doc/index.html",
+    "cpv": [
+      "72500000"
+    ],
+    "fuente": "agregadas",
+    "num_expediente": "528K",
+    "organismo": "Ayuntamiento de Azpeitia-Alcaldía",
+    "plataforma": "Gobierno Vasco",
+    "region": null,
+    "region_codigo": "ES212",
+    "categoria": "pruebas",
+    "coincidencia": "palabra clave «monitorización»",
+    "presupuesto_con_iva": null,
+    "presupuesto_sin_iva": 18000.0,
+    "valor_estimado": 75600.0,
+    "fecha_fin_plazo": "2025-10-24",
+    "fecha_publicacion": "2025-10-09",
+    "fecha_actualizacion": "2026-10-01T11:12:13.598+02:00",
+    "primera_vez": "2026-10-02T12:51:25.768496",
+    "ultima_vez": "2026-10-02T12:51:25.768496"
+  },
+  "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20606831": {
+    "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20606831",
+    "titulo": "Servicio de administración de sistemas y monitorización de la web en AWS y el CDN del Servei Meteorològic de Catalunya",
+    "enlace": "https://contractaciopublica.cat/ca/detall-publicacio/1cd37a49-cb87-47a9-9f50-447b89212617/300895276",
+    "cpv": [
+      "72415000"
+    ],
+    "fuente": "agregadas",
+    "num_expediente": "SMC-2027-2",
+    "organismo": "Servei Meteorològic de Catalunya",
+    "plataforma": "Generalitat de Catalunya",
+    "region": null,
+    "region_codigo": "ES511",
+    "categoria": "pruebas",
+    "coincidencia": "palabra clave «monitorización»",
+    "presupuesto_con_iva": null,
+    "presupuesto_sin_iva": 113124.14,
+    "valor_estimado": 226248.28,
+    "fecha_fin_plazo": "2026-10-17",
+    "fecha_publicacion": "2026-10-01",
+    "fecha_actualizacion": "2026-10-01T06:01:19.252+02:00",
+    "primera_vez": "2026-10-02T12:51:25.768496",
+    "ultima_vez": "2026-10-02T12:51:25.768496"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20602947": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20602947",
+    "titulo": "Servicios de desratización, desratonización, desinsectación, desinfección y control de calidad de aguas en el municipio de Humanes de Madrid",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=fAeLeFmMQe7jHF5qKI4aaw%3D%3D",
+    "cpv": [
+      "90922000",
+      "90921000",
+      "90923000",
+      "90920000",
+      "71620000",
+      "90922000",
+      "90921000",
+      "90923000",
+      "71620000",
+      "90920000"
+    ],
+    "fuente": "estatal",
+    "num_expediente": "79/2026",
+    "organismo": "Alcaldía del Ayuntamiento de Humanes de Madrid",
+    "plataforma": null,
+    "region": "Madrid",
+    "region_codigo": "ES300",
+    "categoria": "criticas",
+    "coincidencia": "CPV 90920000 (coincide con 90920000)",
+    "presupuesto_con_iva": 21000.0,
+    "presupuesto_sin_iva": 17355.37,
+    "valor_estimado": 69421.48,
+    "fecha_fin_plazo": "2026-10-16",
+    "fecha_publicacion": "2026-10-01",
+    "fecha_actualizacion": "2026-10-01T15:38:55.097+02:00",
+    "primera_vez": "2026-10-02T12:51:25.768496",
+    "ultima_vez": "2026-10-02T12:51:25.768496"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20602997": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20602997",
+    "titulo": "Prestación del servicio de Oficina Técnica de Control (en adelante OTC), asesoría y asistencia técnica al Ayuntamiento de la Leal Villa de El Escorial",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=vl6m%2B0bett2S81gZFETWmA%3D%3D",
+    "cpv": [
+      "71700000",
+      "90714600",
+      "71356100",
+      "90714500"
+    ],
+    "fuente": "estatal",
+    "num_expediente": "8512/2026",
+    "organismo": "Junta de Gobierno del Ayuntamiento de la Leal Villa de El Escorial",
+    "plataforma": null,
+    "region": "Madrid",
+    "region_codigo": "ES300",
+    "categoria": "criticas",
+    "coincidencia": "CPV 71700000 (coincide con 71700000)",
+    "presupuesto_con_iva": 89996.36,
+    "presupuesto_sin_iva": 74377.16,
+    "valor_estimado": 148754.32,
+    "fecha_fin_plazo": "2026-10-16",
+    "fecha_publicacion": "2026-10-01",
+    "fecha_actualizacion": "2026-10-01T14:30:38.594+02:00",
+    "primera_vez": "2026-10-02T12:51:25.768496",
+    "ultima_vez": "2026-10-02T12:51:25.768496"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20603249": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20603249",
+    "titulo": "Servicios de computación (lote 1)  y servicios especializados de apoyo a la investigación clínica CRO.(lote2)",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=Y5xpFwjKnq2kU02jNGj1Fw%3D%3D",
+    "cpv": [
+      "72320000",
+      "71700000",
+      "72320000",
+      "71700000",
+      "72320000"
+    ],
+    "fuente": "estatal",
+    "num_expediente": "FIISA 2026_00021",
+    "organismo": "Fundación Instituto de Investigación Sanitaria Aragón",
+    "plataforma": null,
+    "region": "Zaragoza",
+    "region_codigo": "ES243",
+    "categoria": "criticas",
+    "coincidencia": "CPV 71700000 (coincide con 71700000)",
+    "presupuesto_con_iva": 85000.0,
+    "presupuesto_sin_iva": 70248.0,
+    "valor_estimado": 70248.0,
+    "fecha_fin_plazo": "2026-10-20",
+    "fecha_publicacion": "2026-10-01",
+    "fecha_actualizacion": "2026-10-01T12:11:43.133+02:00",
+    "primera_vez": "2026-10-02T12:51:25.768496",
+    "ultima_vez": "2026-10-02T12:51:25.768496"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20603377": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20603377",
+    "titulo": "Servicio de mantenimiento y reposición de unidades higiénico sanitarias, bacteriológicas y ambientales en la base de mantenimiento integral de madrid",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=Fs1C1SNH212qb7rCcv76BA%3D%3D",
+    "cpv": [
+      "90920000"
+    ],
+    "fuente": "estatal",
+    "num_expediente": "2026-04139",
+    "organismo": "Dirección General de Renfe Ingeniería y Mantenimiento Sociedad Mercantil Estatal, S.A.",
+    "plataforma": null,
+    "region": "ESPAÑA",
+    "region_codigo": "ES",
+    "categoria": "criticas",
+    "coincidencia": "CPV 90920000 (coincide con 90920000)",
+    "presupuesto_con_iva": 16125.67,
+    "presupuesto_sin_iva": 13327.0,
+    "valor_estimado": 13327.0,
+    "fecha_fin_plazo": "2026-10-14",
+    "fecha_publicacion": "2026-10-01",
+    "fecha_actualizacion": "2026-10-01T10:48:51.732+02:00",
+    "primera_vez": "2026-10-02T12:51:25.768496",
+    "ultima_vez": "2026-10-02T12:51:25.768496"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20603434": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20603434",
+    "titulo": "Higiene y Sanidad Ambiental",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=SZIJI6LRMrOkU02jNGj1Fw%3D%3D",
+    "cpv": [
+      "90733000",
+      "71900000",
+      "71620000",
+      "90714500"
+    ],
+    "fuente": "estatal",
+    "num_expediente": "CS 33/2026",
+    "organismo": "Alcaldía del Ayuntamiento de Torrejón del Rey",
+    "plataforma": null,
+    "region": "Guadalajara",
+    "region_codigo": "ES424",
+    "categoria": "criticas",
+    "coincidencia": "CPV 90714500 (coincide con 90714500)",
+    "presupuesto_con_iva": 91246.86,
+    "presupuesto_sin_iva": 75410.63,
+    "valor_estimado": 301642.52,
+    "fecha_fin_plazo": "2026-10-15",
+    "fecha_publicacion": "2026-10-01",
+    "fecha_actualizacion": "2026-10-01T10:11:46.543+02:00",
+    "primera_vez": "2026-10-02T12:51:25.768496",
+    "ultima_vez": "2026-10-02T12:51:25.768496"
+  },
+  "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20606790": {
+    "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20606790",
+    "titulo": "Suministro de productos químicos y servicio de mantenimiento de equipos de medición y análisis de las piscinas gestionadas por la Dirección General de Deportes",
+    "enlace": "https://contratos-publicos.comunidad.madrid/contrato-publico/suministro-productos-quimicos-servicio-mantenimiento-equipos-medicion-analisis-1",
+    "cpv": [
+      "90733000",
+      "50800000",
+      "24962000"
+    ],
+    "fuente": "agregadas",
+    "num_expediente": "C-336A/019-26 (A/SUM-030271/2026)",
+    "organismo": "Consejería de Cultura, Turismo y Deporte",
+    "plataforma": "Comunidad de Madrid",
+    "region": null,
+    "region_codigo": "ES300",
+    "categoria": "a_revisar",
+    "coincidencia": "CPV 90733000 (coincide con 9073)",
+    "presupuesto_con_iva": null,
+    "presupuesto_sin_iva": 321550.6,
+    "valor_estimado": 1286202.4,
+    "fecha_fin_plazo": "2026-10-30",
+    "fecha_publicacion": "2026-10-01",
+    "fecha_actualizacion": "2026-10-01T10:26:00.890+02:00",
+    "primera_vez": "2026-10-02T12:51:25.768496",
+    "ultima_vez": "2026-10-02T12:51:25.768496"
   }
 }
