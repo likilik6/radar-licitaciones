@@ -15,7 +15,8 @@ import requests      # para leer la config del radar (dias_nuevo) desde Supabase
 from pathlib import Path
 from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo   # para mostrar la hora en la zona horaria de España
-from utiles import credencial_config, en_actions, get_con_reintentos  # leer radar_config
+from utiles import (credencial_config, en_actions, get_con_reintentos,  # leer radar_config
+                    ORDEN_CATEGORIAS, CATEGORIA_ULTIMA)                # prioridad de grupos
 
 # Hacemos que la consola muestre acentos y "ñ" correctamente en Windows.
 sys.stdout.reconfigure(encoding="utf-8")
@@ -534,6 +535,7 @@ CSS = """
   .aj-sec:first-of-type { border-top:none; margin-top:6px; }
   .aj-h { margin:0 0 4px; font-size:1rem; }
   .aj-ayuda { margin:0 0 10px; color:var(--suave); font-size:.78rem; }
+  .aj-nota { color:var(--suave); font-size:.76rem; margin:0 0 10px; line-height:1.35; }
   .aj-grupo { margin-bottom:14px; }
   .aj-grupo-tit { font-weight:700; font-size:.82rem; text-transform:uppercase; letter-spacing:.03em; margin-bottom:6px; }
   .aj-sub2 { color:var(--suave); font-size:.72rem; font-weight:600; text-transform:uppercase; letter-spacing:.03em; margin:8px 0 4px; }
@@ -3530,7 +3532,10 @@ JS_SUPABASE = """
       '<button data-addbtn="' + tipo + '" data-g="' + ajEsc(grupo) + '">Añadir</button></div>';
   }
   function ajRenderGrupos() {
-    let h = '';
+    // Que quede DICHO en el panel: el orden es la prioridad y no se edita aquí. Sin este
+    // aviso, lo natural es pensar que arrastrando o reescribiendo grupos se cambia, y no.
+    let h = '<div class="aj-nota">Orden de <b>prioridad</b>: una licitación se queda en el ' +
+      'primer grupo que casa. Lo fija el código (utiles.py), no este panel.</div>';
     for (const g in ajCfg.categorias) {
       const cat = ajCfg.categorias[g];
       h += '<div class="aj-grupo"><div class="aj-grupo-tit">' + ajEsc(g.replace(/_/g, ' ')) + '</div>';
@@ -3565,12 +3570,25 @@ JS_SUPABASE = """
   }
   function ajRender() { ajRenderGrupos(); ajRenderChecks(); ajRenderVista(); }
 
+  // MISMA regla que utiles.ordena_categorias en el robot: las conocidas primero, las
+  // nuevas en medio y 'pruebas' al final. El orden importa porque una licitación se queda
+  // en la PRIMERA categoría que casa; aquí solo se PINTA, pero tiene que coincidir con lo
+  // que hace el robot, o el panel engaña (es lo que pasó hasta el 02/10/2026).
+  function ajOrdenaCats(nombres) {
+    const orden = window.RADAR_ORDEN_CATS || [];
+    if (!orden.length) return nombres;
+    const ultima = orden[orden.length - 1];
+    const conocidas = orden.slice(0, orden.length - 1);
+    return conocidas.filter(function (n) { return nombres.indexOf(n) !== -1; })
+      .concat(nombres.filter(function (n) { return conocidas.indexOf(n) === -1 && n !== ultima; }))
+      .concat(nombres.indexOf(ultima) !== -1 ? [ultima] : []);
+  }
   function ajNormalizaCats(cats) {
     const out = {};
-    for (const g in cats) {
+    ajOrdenaCats(Object.keys(cats || {})).forEach(function (g) {
       const c = cats[g] || {};
       out[g] = { cpv: (c.cpv || []).map(ajTerm), palabras_clave: (c.palabras_clave || []).map(ajTerm) };
-    }
+    });
     return out;
   }
   // Lectura cruda: separa "no hay configuración" (vacía) de "no he podido leerla"
@@ -5871,6 +5889,12 @@ regiones_panel = dict(sorted(_regiones.items(), key=lambda kv: kv[1].lower()))
 # aparte, antes del JS principal). json.dumps escapa solo lo necesario.
 DATOS_CONFIG_JS = (
     "window.RADAR_DEFAULTS = " + json.dumps(criterios_defecto, ensure_ascii=False) + ";\n"
+    # Orden de PRIORIDAD de las categorías, el mismo que aplica el robot (utiles.py).
+    # Va al JS para que el panel ⚙ ENSEÑE los grupos en ese orden: mientras los pintaba
+    # en el orden del jsonb, el panel ponía «pruebas» primero, no se podía cambiar desde
+    # ahí, y la prioridad real la decidía la longitud del nombre del grupo. Si lo que ves
+    # en el panel no es lo que hace el robot, el error es invisible.
+    "window.RADAR_ORDEN_CATS = " + json.dumps(list(ORDEN_CATEGORIAS) + [CATEGORIA_ULTIMA], ensure_ascii=False) + ";\n"
     "window.RADAR_PLATAFORMAS = " + json.dumps(plataformas_panel, ensure_ascii=False) + ";\n"
     "window.RADAR_REGIONES = " + json.dumps(regiones_panel, ensure_ascii=False) + ";\n"
     # Cuándo se genera la página, en formato máquina: con eso el navegador calcula AL ABRIRLA

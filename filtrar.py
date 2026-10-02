@@ -26,7 +26,8 @@ from datetime import datetime
 from collections import Counter
 
 # normaliza() vive en utiles.py para compartirla con generar_web.py sin duplicarla.
-from utiles import normaliza, credencial_config, en_actions, get_con_reintentos
+from utiles import (normaliza, credencial_config, en_actions, get_con_reintentos,
+                    busca_coincidencia, ordena_categorias)
 # La lista de feeds, el extractor (descarga + paginación) y la extracción de
 # campos CODICE de cada entrada (extrae_entrada) viven en feeds.py, para
 # compartirlos con fetch.py y con el backfill del buscador sin duplicar nada.
@@ -52,27 +53,6 @@ SUPABASE_KEY = "sb_publishable_3J3pFbMlNzu-NUDs1-740g_lu8YsRv_"
 
 # a_texto() y a_numero() (limpieza de textos/importes del feed) viven ahora en
 # feeds.py, junto al extractor que las usa.
-
-
-def busca_coincidencia(cpvs, titulo_normalizado, criterios):
-    """Comprueba si una licitación encaja con un grupo de criterios.
-    'criterios' es un bloque del YAML con dos listas: 'cpv' y 'palabras_clave'.
-    Devuelve un texto explicando QUÉ criterio coincidió, o None si no coincide nada."""
-
-    # 1) ¿Algún CPV de la licitación EMPIEZA por alguno de los CPV buscados?
-    #    (usar "empieza por" permite, por ejemplo, que "9073" cace a "90731100").
-    for prefijo in criterios.get("cpv", []) or []:
-        for cpv in cpvs:
-            if cpv.startswith(prefijo):
-                return f"CPV {cpv} (coincide con {prefijo})"
-
-    # 2) ¿El título contiene alguna de las palabras clave? (ignorando mayúsculas/tildes)
-    for palabra in criterios.get("palabras_clave", []) or []:
-        if normaliza(palabra) in titulo_normalizado:
-            return f"palabra clave «{palabra}»"
-
-    # Si no coincidió ni por CPV ni por palabra, devolvemos None.
-    return None
 
 
 def _lista(config, clave):
@@ -214,7 +194,12 @@ regiones_config = _lista(config_radar, "regiones")      # códigos NUTS (ES220..
 # desde el panel: mismos grupos criticas/a_revisar/pruebas, con sus CPV y palabras),
 # SUSTITUYEN por completo a las de intereses.yaml. Si no, usamos el YAML tal cual.
 categorias_panel = categorias_desde_config(config_radar)
-intereses_efectivos = categorias_panel or intereses
+# ordena_categorias: la PRIORIDAD (criticas > a_revisar > ... > pruebas) se declara en
+# utiles.py y no puede salir de la config, porque radar_config.config es jsonb y jsonb
+# reordena las claves por longitud. Ver el comentario largo allí. Afecta a los dos
+# recorridos de abajo -- el de clasificar y el de la poda -- porque los dos iteran este
+# mismo diccionario y se queda la PRIMERA categoría que casa.
+intereses_efectivos = ordena_categorias(categorias_panel or intereses)
 
 if config_radar:
     n_cpv = sum(len(crit["cpv"]) for crit in intereses_efectivos.values())
