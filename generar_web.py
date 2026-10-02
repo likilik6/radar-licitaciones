@@ -955,6 +955,44 @@ JS_SUPABASE = """
   const SUPABASE_KEY = "sb_publishable_3J3pFbMlNzu-NUDs1-740g_lu8YsRv_";
   const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+  // ====== ¿SE HA ACTUALIZADO EL RADAR? ======================================
+  // La alarma de fuente muda la escribe el robot: si el robot NO ARRANCA, no hay alarma que
+  // escribir y la web seguiría enseñando lo de ayer (o lo de la semana pasada) sin decir nada.
+  // Esto se calcula AQUÍ, al abrir la página, y no depende de que nada haya corrido.
+  //
+  // Se cuenta por DÍAS HÁBILES, no por horas: el lunes por la mañana lo último es del viernes
+  // y eso es NORMAL. Lo que no es normal es que se haya saltado un día laborable.
+  const RADAR_GENERADO = (typeof window.__RADAR_GENERADO === 'string') ? window.__RADAR_GENERADO : '';
+  function radarDiasHabilesPerdidos(generado, ahora) {
+    const g = new Date(generado);
+    if (isNaN(g.getTime())) return null;
+    let perdidos = 0;
+    const dia = new Date(g.getFullYear(), g.getMonth(), g.getDate() + 1);
+    const hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+    while (dia < hoy) {
+      const s = dia.getDay();
+      if (s >= 1 && s <= 5) perdidos++;
+      dia.setDate(dia.getDate() + 1);
+    }
+    // Y hoy mismo: si es laborable y han pasado las 16:00, ya tendría que haber una
+    // generación de hoy. Las 16:00 y no las 15:00 para no dar falsas alarmas: la pasada más
+    // tardía que hemos medido (28/09) acabó a las 15:03.
+    const s = hoy.getDay();
+    if (s >= 1 && s <= 5 && ahora.getHours() >= 16 && g < hoy) perdidos++;
+    return { perdidos: perdidos, horas: (ahora - g) / 3600000 };
+  }
+  (function avisaDesfase() {
+    const nodo = document.getElementById('aviso-desfase');
+    if (!nodo) return;
+    const r = radarDiasHabilesPerdidos(RADAR_GENERADO, new Date());
+    if (!r || r.perdidos < 1) return;
+    const horas = Math.round(r.horas);
+    const dias = r.perdidos === 1 ? 'un día laborable' : r.perdidos + ' días laborables';
+    nodo.hidden = false;
+    nodo.textContent = '⚠ El radar no se ha actualizado desde hace ' + horas + ' horas: se ha '
+      + 'saltado ' + dias + '. Lo que ves puede estar incompleto.';
+  })();
+
   // ====== FRESCURA DE LOS AGREGADOS (public.refrescos) ======================
   // Desiertas, competidores y la cobertura de menores se calculan en la ingesta. Si un día
   // falla, antes solo se veía en el log de Actions y la web seguía enseñando lo viejo como
@@ -5835,6 +5873,11 @@ DATOS_CONFIG_JS = (
     "window.RADAR_DEFAULTS = " + json.dumps(criterios_defecto, ensure_ascii=False) + ";\n"
     "window.RADAR_PLATAFORMAS = " + json.dumps(plataformas_panel, ensure_ascii=False) + ";\n"
     "window.RADAR_REGIONES = " + json.dumps(regiones_panel, ensure_ascii=False) + ";\n"
+    # Cuándo se genera la página, en formato máquina: con eso el navegador calcula AL ABRIRLA
+    # si el robot se ha saltado algún día laborable (ver avisaDesfase en el JS). Se calcula
+    # aquí mismo porque este bloque de datos se construye antes que la marca legible.
+    + "window.__RADAR_GENERADO = "
+    + json.dumps(datetime.now(ZoneInfo("Europe/Madrid")).isoformat(timespec="seconds")) + ";\n"
 )
 
 # Barra de PESTAÑAS por estado (filtra la vista en el navegador; la rellena/activa
@@ -5965,6 +6008,8 @@ titulo_seccion = html.escape(OPCIONES_MENU[0]["nombre"]) if OPCIONES_MENU else "
 # sistema (que en GitHub Actions es UTC); así se ajusta solo el horario de
 # verano/invierno y la web siempre muestra la hora correcta de aquí.
 generado = datetime.now(ZoneInfo("Europe/Madrid")).strftime("%d/%m/%Y %H:%M")
+# La misma marca en formato máquina: con ella el navegador calcula, al abrir la página,
+# si el robot se ha saltado algún día laborable (ver avisaDesfase en el JS).
 total = len(licitaciones)
 
 # Truco: {CSS}, {JS}, {menu_html}, {cuerpo}... se rellenan con las cadenas de arriba.
@@ -6014,6 +6059,7 @@ pagina = f"""<!DOCTYPE html>
         <h1 id="titulo-seccion">{titulo_seccion}</h1>
         <p class="meta" id="meta-radar">Generado el {generado} <span class="badge">{total} licitaciones</span></p>
         {AVISO_FUENTE_MUDA}
+        <p id="aviso-desfase" class="meta aviso-muda" hidden></p>
       </div>
       <div class="conectado" id="conectado">
         <span class="conectado-tx">Conectado como <b id="conectado-email"></b></span>

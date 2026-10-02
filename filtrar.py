@@ -298,6 +298,9 @@ leidas_por_fuente = {}       # cuántas entradas trajo cada feed (para el log)
 # del 22 al 28/09/2026 y no se notó hasta que alguien preguntó: en el log, un feed congelado
 # se ve igual que un día sin novedades.
 ultima_entrada_por_fuente = {}
+# Y la MÁS ANTIGUA que hemos leído: con ella se sabe si esta pasada enlaza con la anterior.
+primera_entrada_por_fuente = {}
+tope_por_fuente = {}
 
 for feed in FEEDS:
     fuente = feed["fuente"]
@@ -336,6 +339,8 @@ for feed in FEEDS:
             fechas_feed.append(marca.text.strip())
     if fechas_feed:
         ultima_entrada_por_fuente[fuente] = max(fechas_feed)[:19]
+        primera_entrada_por_fuente[fuente] = min(fechas_feed)[:19]
+    tope_por_fuente[fuente] = bool(tope)
 
     # --- Recorremos las licitaciones de ESTE feed una a una -----------------
     for entrada in entradas:
@@ -392,6 +397,15 @@ print(f"Entradas leídas por fuente: {detalle_feeds}.")
 # que la web lo diga también (la generación la hace generar_web.py).
 DIAS_PARA_AVISAR = 2
 estado_fuentes = {}
+# El estado de la pasada ANTERIOR (lo escribió la ejecución pasada): hace falta para saber
+# hasta dónde llegamos la última vez y poder comprobar que esta pasada enlaza.
+estado_previo = {}
+_ruta_estado = Path("data") / "estado_fuentes.json"
+if _ruta_estado.exists():
+    try:
+        estado_previo = json.loads(_ruta_estado.read_text(encoding="utf-8")) or {}
+    except (ValueError, OSError):
+        estado_previo = {}
 # En una recuperación no se mira el feed en vivo, así que no hay nada que juzgar sobre si
 # está mudo: avisar aquí sería con datos del ZIP y filtrados por rango. Se calla.
 _avisar_mudas = not MODO_RECUPERACION
@@ -405,13 +419,39 @@ for feed_info in FEEDS:
             dias = (hoy_fecha - datetime.fromisoformat(ultima).date()).days
         except ValueError:
             dias = None
+    # ¿ENLAZA con la pasada anterior? Se compara la entrada más ANTIGUA que hemos leído
+    # ahora con la más RECIENTE que leímos la vez pasada. Si la más antigua de hoy es
+    # POSTERIOR, en medio quedó un tramo que nadie ha visto: eso es un hueco. Es la
+    # comprobación que de verdad importa, porque el aviso del tope de páginas está
+    # encendido siempre (el feed se remonta años) y por eso no informa de nada.
+    mas_antigua = primera_entrada_por_fuente.get(nombre_fuente)
+    ultima_anterior = (estado_previo.get(nombre_fuente) or {}).get("ultima_entrada")
+    hueco = bool(mas_antigua and ultima_anterior and mas_antigua > ultima_anterior)
+    horas_hueco = None
+    if hueco:
+        try:
+            horas_hueco = round(
+                (datetime.fromisoformat(mas_antigua) - datetime.fromisoformat(ultima_anterior))
+                .total_seconds() / 3600, 1)
+        except ValueError:
+            horas_hueco = None
     estado_fuentes[nombre_fuente] = {
         "ultima_entrada": ultima,
+        "mas_antigua_leida": mas_antigua,
         "dias_sin_novedad": dias,
         "muda": bool(dias is not None and dias > DIAS_PARA_AVISAR),
+        "tope_paginas": tope_por_fuente.get(nombre_fuente, False),
+        "enlaza": (None if not (mas_antigua and ultima_anterior) else not hueco),
+        "hueco_horas": horas_hueco,
         "leidas": leidas_por_fuente.get(nombre_fuente, 0),
         "comprobado": datetime.now().isoformat(timespec="seconds"),
     }
+    if hueco and _avisar_mudas:
+        print(f"AVISO GRAVE: la fuente «{nombre_fuente}» NO enlaza con la pasada anterior. "
+              f"Lo más antiguo que hemos leído es del {mas_antigua} y la vez pasada llegamos "
+              f"hasta el {ultima_anterior}: faltan unas {horas_hueco} horas de licitaciones "
+              f"que nadie ha visto. Hay que recuperarlas con "
+              f"«python filtrar.py --zip {nombre_fuente} --desde ... --hasta ...».")
     if not _avisar_mudas:
         continue
     if estado_fuentes[nombre_fuente]["muda"]:
