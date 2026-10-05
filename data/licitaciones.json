@@ -7,7 +7,7 @@
       "90920000",
       "90733000"
     ],
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 48400.0,
     "presupuesto_sin_iva": 40000.0,
@@ -458,7 +458,7 @@
     "plataforma": "Junta de Andalucía",
     "region": null,
     "region_codigo": "ES614",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 18239306.7,
@@ -467,7 +467,7 @@
     "fecha_publicacion": "2026-10-01",
     "fecha_actualizacion": "2026-10-01T08:41:31.279+02:00",
     "primera_vez": "2026-06-25T09:04:28.410821",
-    "ultima_vez": "2026-10-02T12:51:25.768496",
+    "ultima_vez": "2026-10-05T13:15:01.940033",
     "num_expediente": "CE18196HO01/24"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19071782": {
@@ -1069,7 +1069,7 @@
     "fecha_publicacion": "2026-10-01",
     "fecha_actualizacion": "2026-10-01T08:05:27.407+02:00",
     "primera_vez": "2026-07-01T07:46:59.271918",
-    "ultima_vez": "2026-10-02T12:51:25.768496",
+    "ultima_vez": "2026-10-05T13:15:01.940033",
     "num_expediente": "2026/290091"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18536025": {
@@ -1140,7 +1140,7 @@
     "plataforma": "Generalitat de Catalunya",
     "region": null,
     "region_codigo": "ES51",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90733400 (coincide con 9073)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 271736.5,
@@ -1610,7 +1610,7 @@
     "fecha_publicacion": "2026-07-06",
     "fecha_actualizacion": "2026-09-30T15:04:47.500+02:00",
     "primera_vez": "2026-07-06T10:30:31.860266",
-    "ultima_vez": "2026-10-02T12:51:25.768496",
+    "ultima_vez": "2026-10-05T13:15:01.940033",
     "num_expediente": "LICT/99/024/2025/0180"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/17916056": {
@@ -1663,9 +1663,9 @@
     "valor_estimado": 351820.0,
     "fecha_fin_plazo": "2026-08-03",
     "fecha_publicacion": "2026-07-03",
-    "fecha_actualizacion": "2026-09-11T07:56:13.462+02:00",
+    "fecha_actualizacion": "2026-10-02T12:41:23.004+02:00",
     "primera_vez": "2026-07-06T10:30:31.860266",
-    "ultima_vez": "2026-09-16T11:13:29.326900",
+    "ultima_vez": "2026-10-05T13:15:01.940033",
     "num_expediente": "CO-OE-26-018"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19265760": {
@@ -2026,7 +2026,7 @@
     "plataforma": null,
     "region": "Canarias",
     "region_codigo": "ES70",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90733000 (coincide con 9073)",
     "presupuesto_con_iva": 63671.47,
     "presupuesto_sin_iva": 59506.04,
@@ -2505,7 +2505,7 @@
     "fecha_publicacion": "2026-09-11",
     "fecha_actualizacion": "2026-10-01T13:35:44.911+02:00",
     "primera_vez": "2026-07-23T08:37:52.945152",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19522257": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19522257",
@@ -2637,7 +2637,7 @@
     "plataforma": null,
     "region": "Valencia/València",
     "region_codigo": "ES523",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90733000 (coincide con 9073)",
     "presupuesto_con_iva": 8722.5,
     "presupuesto_sin_iva": 7250.0,
@@ -2724,7 +2724,7 @@
     "fecha_publicacion": "2026-07-29",
     "fecha_actualizacion": "2026-09-29T14:42:13.918+02:00",
     "primera_vez": "2026-07-30T08:28:46.435722",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19709723": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19709723",
@@ -2807,7 +2807,7 @@
     "fecha_publicacion": "2026-07-16",
     "fecha_actualizacion": "2026-09-29T16:04:12.344+02:00",
     "primera_vez": "2026-07-30T08:28:46.435722",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19817800": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19817800",
@@ -2825,7 +2825,7 @@
     "plataforma": "Generalitat de Catalunya",
     "region": null,
     "region_codigo": "ES511",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90733000 (coincide con 9073)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 52532.2,
@@ -2988,7 +2988,7 @@
     "fecha_publicacion": "2026-07-31",
     "fecha_actualizacion": "2026-09-29T12:14:00.281+02:00",
     "primera_vez": "2026-08-04T08:44:03.149840",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19499583": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19499583",
@@ -3108,9 +3108,9 @@
     "valor_estimado": 3979681.41,
     "fecha_fin_plazo": "2026-04-20",
     "fecha_publicacion": "2026-03-20",
-    "fecha_actualizacion": "2026-09-25T09:13:53.636+02:00",
+    "fecha_actualizacion": "2026-10-02T09:09:45.317+02:00",
     "primera_vez": "2026-08-07T07:21:44.194161",
-    "ultima_vez": "2026-09-30T12:35:29.844363"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20269150": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20269150",
@@ -3201,9 +3201,9 @@
     "valor_estimado": 49929.73,
     "fecha_fin_plazo": "2026-08-25",
     "fecha_publicacion": "2026-08-10",
-    "fecha_actualizacion": "2026-08-28T11:43:12.957+02:00",
+    "fecha_actualizacion": "2026-10-02T13:55:21.805+02:00",
     "primera_vez": "2026-08-11T07:17:56.971769",
-    "ultima_vez": "2026-09-23T10:57:39.604545"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/17910456": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/17910456",
@@ -3304,7 +3304,7 @@
     "fecha_publicacion": "2026-10-01",
     "fecha_actualizacion": "2026-10-01T12:09:34.184+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20276210": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20276210",
@@ -3405,7 +3405,7 @@
     "fecha_publicacion": "2026-08-25",
     "fecha_actualizacion": "2026-09-29T14:17:24.124+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20275228": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20275228",
@@ -3661,7 +3661,7 @@
     "fecha_publicacion": "2026-08-07",
     "fecha_actualizacion": "2026-10-01T11:26:08.172+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20269659": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20269659",
@@ -3689,7 +3689,7 @@
     "fecha_publicacion": "2026-08-14",
     "fecha_actualizacion": "2026-09-30T15:54:39.098+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19910847": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19910847",
@@ -3713,7 +3713,7 @@
     "fecha_publicacion": "2026-08-14",
     "fecha_actualizacion": "2026-10-01T10:18:35.992+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20262116": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20262116",
@@ -3810,7 +3810,7 @@
     "fecha_publicacion": "2026-08-06",
     "fecha_actualizacion": "2026-09-29T13:38:30.401+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18712880": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18712880",
@@ -4010,7 +4010,7 @@
     "fecha_publicacion": "2026-07-29",
     "fecha_actualizacion": "2026-09-24T09:42:46.366+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19824804": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19824804",
@@ -4083,7 +4083,7 @@
     "fecha_publicacion": "2026-08-13",
     "fecha_actualizacion": "2026-10-01T11:00:05.104+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/17898497": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/17898497",
@@ -4348,7 +4348,7 @@
     "fecha_publicacion": "2026-07-24",
     "fecha_actualizacion": "2026-09-25T15:11:27.121+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19757480": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19757480",
@@ -4445,7 +4445,7 @@
     "fecha_publicacion": "2026-06-12",
     "fecha_actualizacion": "2026-09-30T14:09:30.863+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19935227": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19935227",
@@ -4493,7 +4493,7 @@
     "fecha_publicacion": "2026-06-12",
     "fecha_actualizacion": "2026-09-25T11:40:48.702+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19961041": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19961041",
@@ -4566,9 +4566,9 @@
     "valor_estimado": 24318.0,
     "fecha_fin_plazo": "2026-09-08",
     "fecha_publicacion": "2026-08-05",
-    "fecha_actualizacion": "2026-09-08T13:41:52.550+02:00",
+    "fecha_actualizacion": "2026-10-02T13:42:07.452+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-09-25T11:23:13.154967"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/14937052": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/14937052",
@@ -4616,7 +4616,7 @@
     "fecha_publicacion": "2026-03-15",
     "fecha_actualizacion": "2026-09-30T17:11:08.517+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20244293": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20244293",
@@ -4688,7 +4688,7 @@
     "fecha_publicacion": "2026-07-08",
     "fecha_actualizacion": "2026-09-24T13:43:13.412+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/12130296": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/12130296",
@@ -4736,7 +4736,7 @@
     "fecha_publicacion": "2026-07-31",
     "fecha_actualizacion": "2026-09-23T20:00:49.871+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20132939": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20132939",
@@ -4761,7 +4761,7 @@
     "fecha_publicacion": "2026-07-10",
     "fecha_actualizacion": "2026-09-25T12:05:51.351+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20171853": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20171853",
@@ -4834,7 +4834,7 @@
     "plataforma": null,
     "region": "Cáceres",
     "region_codigo": "ES432",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 1390986.0,
     "presupuesto_sin_iva": 1149575.21,
@@ -4858,7 +4858,7 @@
     "plataforma": null,
     "region": "Jaén",
     "region_codigo": "ES616",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 35962.77,
     "presupuesto_sin_iva": 29721.3,
@@ -4945,7 +4945,7 @@
     "plataforma": null,
     "region": "Canarias",
     "region_codigo": "ES70",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 557256.58,
     "presupuesto_sin_iva": 520800.54,
@@ -4969,7 +4969,7 @@
     "plataforma": null,
     "region": null,
     "region_codigo": "ES620",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 28249.87,
     "presupuesto_sin_iva": 23347.0,
@@ -5015,7 +5015,7 @@
     "plataforma": null,
     "region": "Madrid",
     "region_codigo": "ES300",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 19541500.0,
     "presupuesto_sin_iva": 16150000.0,
@@ -5039,7 +5039,7 @@
     "plataforma": null,
     "region": "Cádiz",
     "region_codigo": "ES612",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 14665.2,
     "presupuesto_sin_iva": 12120.0,
@@ -5140,7 +5140,7 @@
     "plataforma": null,
     "region": "Almería",
     "region_codigo": "ES611",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 3067350.0,
     "presupuesto_sin_iva": 2535000.0,
@@ -5164,7 +5164,7 @@
     "plataforma": null,
     "region": "A Coruña",
     "region_codigo": "ES111",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 131329.17,
     "presupuesto_sin_iva": 108536.5,
@@ -5188,7 +5188,7 @@
     "plataforma": null,
     "region": null,
     "region_codigo": "ES",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 33764.26,
     "presupuesto_sin_iva": 27904.35,
@@ -5283,7 +5283,7 @@
     "plataforma": null,
     "region": "Valencia/València",
     "region_codigo": "ES523",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 2772685.29,
     "presupuesto_sin_iva": 2291475.45,
@@ -5307,7 +5307,7 @@
     "plataforma": null,
     "region": "Pontevedra",
     "region_codigo": "ES114",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 340263.13,
     "presupuesto_sin_iva": 281209.2,
@@ -5332,7 +5332,7 @@
     "plataforma": null,
     "region": "Jaén",
     "region_codigo": "ES616",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 34533.4,
     "presupuesto_sin_iva": 28540.0,
@@ -5356,7 +5356,7 @@
     "plataforma": null,
     "region": "Mallorca",
     "region_codigo": "ES532",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 20574.89,
     "presupuesto_sin_iva": 17004.04,
@@ -5382,16 +5382,16 @@
     "plataforma": null,
     "region": null,
     "region_codigo": "ES705",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 208650.0,
     "presupuesto_sin_iva": 195000.0,
     "valor_estimado": 325000.0,
     "fecha_fin_plazo": "2026-09-07",
     "fecha_publicacion": "2026-08-06",
-    "fecha_actualizacion": "2026-09-28T09:29:30.981+02:00",
+    "fecha_actualizacion": "2026-10-02T10:00:17.682+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/10127001": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/10127001",
@@ -5406,7 +5406,7 @@
     "plataforma": null,
     "region": "Málaga",
     "region_codigo": "ES617",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 25321.48,
     "presupuesto_sin_iva": 20926.84,
@@ -5453,16 +5453,16 @@
     "plataforma": null,
     "region": "Madrid",
     "region_codigo": "ES300",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 621110.46,
     "presupuesto_sin_iva": 513314.43,
     "valor_estimado": 1063864.53,
     "fecha_fin_plazo": "2026-09-10",
     "fecha_publicacion": "2026-08-06",
-    "fecha_actualizacion": "2026-09-25T09:34:21.170+02:00",
+    "fecha_actualizacion": "2026-10-02T12:46:55.612+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-09-30T12:35:29.844363"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20049994": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20049994",
@@ -5480,7 +5480,7 @@
     "plataforma": null,
     "region": "Cuenca",
     "region_codigo": "ES423",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 37077.38,
     "presupuesto_sin_iva": 30642.46,
@@ -5508,7 +5508,7 @@
     "plataforma": null,
     "region": "Alicante/Alacant",
     "region_codigo": "ES521",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 105883.47,
     "presupuesto_sin_iva": 87507.0,
@@ -5532,7 +5532,7 @@
     "plataforma": null,
     "region": "León",
     "region_codigo": "ES413",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 14520.0,
     "presupuesto_sin_iva": 12000.0,
@@ -5556,7 +5556,7 @@
     "plataforma": null,
     "region": "Madrid",
     "region_codigo": "ES300",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 72600.0,
     "presupuesto_sin_iva": 60000.0,
@@ -5609,7 +5609,7 @@
     "plataforma": null,
     "region": "Badajoz",
     "region_codigo": "ES431",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 112746.72,
     "presupuesto_sin_iva": 93179.11,
@@ -5633,7 +5633,7 @@
     "plataforma": null,
     "region": "Madrid",
     "region_codigo": "ES300",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 34407.98,
     "presupuesto_sin_iva": 28436.35,
@@ -5661,7 +5661,7 @@
     "plataforma": null,
     "region": "Murcia",
     "region_codigo": "ES620",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 167859.52,
     "presupuesto_sin_iva": 138726.88,
@@ -5685,7 +5685,7 @@
     "plataforma": null,
     "region": "Aragón",
     "region_codigo": "ES24",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 123662.0,
     "presupuesto_sin_iva": 102200.0,
@@ -5712,7 +5712,7 @@
     "plataforma": "Junta de Andalucía",
     "region": null,
     "region_codigo": "ES61",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 123168.41,
@@ -5721,7 +5721,7 @@
     "fecha_publicacion": "2026-08-13",
     "fecha_actualizacion": "2026-09-29T15:41:29.916+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20018880": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20018880",
@@ -5739,7 +5739,7 @@
     "plataforma": "Junta de Andalucía",
     "region": null,
     "region_codigo": "ES611",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 94598.22,
@@ -5763,7 +5763,7 @@
     "plataforma": "Gobierno Vasco",
     "region": null,
     "region_codigo": "ES213",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 91209.1,
@@ -5799,7 +5799,7 @@
     "fecha_publicacion": "2025-11-13",
     "fecha_actualizacion": "2026-09-29T14:04:17.139+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19676533": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19676533",
@@ -5815,7 +5815,7 @@
     "plataforma": "Generalitat de Catalunya",
     "region": null,
     "region_codigo": "ES511",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 130370.0,
@@ -5839,7 +5839,7 @@
     "plataforma": "Generalitat de Catalunya",
     "region": null,
     "region_codigo": "ES511",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 50000.0,
@@ -5848,7 +5848,7 @@
     "fecha_publicacion": "2026-06-26",
     "fecha_actualizacion": "2026-10-01T12:07:06.004+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19701086": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19701086",
@@ -5866,7 +5866,7 @@
     "plataforma": "Generalitat de Catalunya",
     "region": null,
     "region_codigo": "ES514",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 32555.3,
@@ -5894,7 +5894,7 @@
     "plataforma": "Generalitat de Catalunya",
     "region": null,
     "region_codigo": "ES514",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 293711.36,
@@ -5927,7 +5927,7 @@
     "fecha_publicacion": "2026-08-05",
     "fecha_actualizacion": "2026-09-29T10:09:11.744+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19953266": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19953266",
@@ -5946,7 +5946,7 @@
     "plataforma": "Comunidad de Madrid",
     "region": null,
     "region_codigo": "ES300",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 1074181.86,
@@ -5970,7 +5970,7 @@
     "plataforma": "Gobierno Vasco",
     "region": null,
     "region_codigo": "ES212",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 19638.44,
@@ -6003,16 +6003,16 @@
     "plataforma": "Junta de Andalucía",
     "region": null,
     "region_codigo": "ES61",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 971358.64,
     "valor_estimado": 1403073.59,
     "fecha_fin_plazo": "2026-09-09",
-    "fecha_publicacion": "2026-08-28",
-    "fecha_actualizacion": "2026-09-17T15:42:03.961+02:00",
+    "fecha_publicacion": "2026-10-02",
+    "fecha_actualizacion": "2026-10-02T21:41:13.475+02:00",
     "primera_vez": "2026-08-14T11:28:59.155492",
-    "ultima_vez": "2026-10-01T12:42:41.220983"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19436420": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19436420",
@@ -6029,7 +6029,7 @@
     "plataforma": "Generalitat de Catalunya",
     "region": null,
     "region_codigo": "ES511",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 105217.42,
@@ -6054,7 +6054,7 @@
     "plataforma": "Generalitat de Catalunya",
     "region": null,
     "region_codigo": "ES511",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 145180.24,
@@ -6081,7 +6081,7 @@
     "plataforma": "Generalitat de Catalunya",
     "region": null,
     "region_codigo": "ES511",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 231404.96,
@@ -6105,7 +6105,7 @@
     "plataforma": "Junta de Andalucía",
     "region": null,
     "region_codigo": "ES613",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 23388.0,
@@ -6224,7 +6224,7 @@
     "fecha_publicacion": "2026-08-14",
     "fecha_actualizacion": "2026-10-01T12:30:33.881+02:00",
     "primera_vez": "2026-08-17T06:54:02.178190",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/17810402": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/17810402",
@@ -6453,9 +6453,9 @@
     "valor_estimado": 90044405.0,
     "fecha_fin_plazo": "2026-09-14",
     "fecha_publicacion": "2026-07-23",
-    "fecha_actualizacion": "2026-09-28T12:47:13.991+02:00",
+    "fecha_actualizacion": "2026-09-30T13:15:15.504+02:00",
     "primera_vez": "2026-08-17T06:54:02.178190",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19616609": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19616609",
@@ -6579,9 +6579,9 @@
     "valor_estimado": 440000.0,
     "fecha_fin_plazo": "2026-10-13",
     "fecha_publicacion": "2026-08-11",
-    "fecha_actualizacion": "2026-09-28T11:44:28.257+02:00",
+    "fecha_actualizacion": "2026-09-29T12:47:04.234+02:00",
     "primera_vez": "2026-08-17T06:54:02.178190",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20287701": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20287701",
@@ -6777,7 +6777,7 @@
     "plataforma": null,
     "region": "Cuenca",
     "region_codigo": "ES423",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 163350.0,
     "presupuesto_sin_iva": 135000.0,
@@ -6813,7 +6813,7 @@
     "fecha_publicacion": "2026-08-17",
     "fecha_actualizacion": "2026-10-01T12:45:37.738+02:00",
     "primera_vez": "2026-08-17T06:54:02.178190",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19501391": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19501391",
@@ -6830,7 +6830,7 @@
     "plataforma": null,
     "region": "Alicante/Alacant",
     "region_codigo": "ES521",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 38806.35,
     "presupuesto_sin_iva": 32071.36,
@@ -6854,7 +6854,7 @@
     "plataforma": null,
     "region": "Alicante/Alacant",
     "region_codigo": "ES521",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 188266.25,
     "presupuesto_sin_iva": 155591.94,
@@ -6878,7 +6878,7 @@
     "plataforma": null,
     "region": null,
     "region_codigo": "ES",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 3527.05,
     "presupuesto_sin_iva": 2914.92,
@@ -6904,7 +6904,7 @@
     "plataforma": null,
     "region": "Valencia/València",
     "region_codigo": "ES523",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 582.5,
     "presupuesto_sin_iva": 481.4,
@@ -6959,7 +6959,7 @@
     "plataforma": null,
     "region": "Valencia/València",
     "region_codigo": "ES523",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 35393.44,
     "presupuesto_sin_iva": 29990.0,
@@ -6991,7 +6991,7 @@
     "plataforma": null,
     "region": "Badajoz",
     "region_codigo": "ES431",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 71422.21,
     "presupuesto_sin_iva": 59026.62,
@@ -7035,7 +7035,7 @@
     "plataforma": null,
     "region": "Huelva",
     "region_codigo": "ES615",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 71442570.19,
     "presupuesto_sin_iva": 59043446.43,
@@ -7067,7 +7067,7 @@
     "plataforma": null,
     "region": "Asturias",
     "region_codigo": "ES120",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 305934.39,
     "presupuesto_sin_iva": 252838.34,
@@ -7093,7 +7093,7 @@
     "plataforma": null,
     "region": "Badajoz",
     "region_codigo": "ES431",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 76575.41,
     "presupuesto_sin_iva": 63285.46,
@@ -7120,7 +7120,7 @@
     "plataforma": null,
     "region": "La Palma",
     "region_codigo": "ES707",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 89880.0,
     "presupuesto_sin_iva": 84000.0,
@@ -7169,7 +7169,7 @@
     "plataforma": null,
     "region": "Valladolid",
     "region_codigo": "ES418",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 8466.37,
     "presupuesto_sin_iva": 6997.0,
@@ -7260,7 +7260,7 @@
     "plataforma": null,
     "region": "Huelva",
     "region_codigo": "ES615",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 283385.94,
     "presupuesto_sin_iva": 234203.26,
@@ -7284,7 +7284,7 @@
     "plataforma": null,
     "region": "Teruel",
     "region_codigo": "ES242",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 405350.0,
     "presupuesto_sin_iva": 335000.0,
@@ -7316,7 +7316,7 @@
     "plataforma": null,
     "region": null,
     "region_codigo": "ES521",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 2466402.52,
     "presupuesto_sin_iva": 2038349.2,
@@ -7402,7 +7402,7 @@
     "plataforma": null,
     "region": "Asturias",
     "region_codigo": "ES120",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 2005137.36,
     "presupuesto_sin_iva": 1657138.31,
@@ -7428,7 +7428,7 @@
     "plataforma": null,
     "region": "Madrid",
     "region_codigo": "ES300",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 168432.0,
     "presupuesto_sin_iva": 139200.0,
@@ -7453,7 +7453,7 @@
     "plataforma": null,
     "region": "Mallorca",
     "region_codigo": "ES532",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 196734.21,
     "presupuesto_sin_iva": 162590.26,
@@ -7480,7 +7480,7 @@
     "plataforma": null,
     "region": "Valencia/València",
     "region_codigo": "ES523",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 2095127.17,
     "presupuesto_sin_iva": 1731510.06,
@@ -7504,7 +7504,7 @@
     "plataforma": null,
     "region": null,
     "region_codigo": "ES",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 8024.25,
     "presupuesto_sin_iva": 6631.61,
@@ -7830,7 +7830,7 @@
     "plataforma": null,
     "region": "Comunitat Valenciana",
     "region_codigo": "ES52",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 448158135.84,
     "presupuesto_sin_iva": 370378624.66,
@@ -7855,7 +7855,7 @@
     "plataforma": null,
     "region": "Castellón/Castelló",
     "region_codigo": "ES522",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 18000.0,
     "presupuesto_sin_iva": 18000.0,
@@ -7884,7 +7884,7 @@
     "plataforma": null,
     "region": "Ciudad Real",
     "region_codigo": "ES422",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 1405659.59,
     "presupuesto_sin_iva": 1161702.14,
@@ -7945,7 +7945,7 @@
     "fecha_publicacion": "2026-06-30",
     "fecha_actualizacion": "2026-09-29T12:42:28.141+02:00",
     "primera_vez": "2026-08-18T06:44:03.403621",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20305278": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20305278",
@@ -8111,7 +8111,7 @@
     "plataforma": null,
     "region": "Ourense",
     "region_codigo": "ES113",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 119217.74,
     "presupuesto_sin_iva": 98527.06,
@@ -8245,7 +8245,7 @@
     "fecha_publicacion": "2026-08-18",
     "fecha_actualizacion": "2026-09-25T09:56:01.969+02:00",
     "primera_vez": "2026-08-19T06:42:44.236718",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20313665": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20313665",
@@ -8315,7 +8315,7 @@
     "plataforma": "Gobierno Vasco",
     "region": null,
     "region_codigo": "ES213",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 16000.0,
@@ -8343,7 +8343,7 @@
     "plataforma": "Generalitat de Catalunya",
     "region": null,
     "region_codigo": "ES51",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 0.0,
@@ -8574,7 +8574,7 @@
     "plataforma": null,
     "region": "Albacete",
     "region_codigo": "ES421",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 221384.61,
     "presupuesto_sin_iva": 182962.48,
@@ -8583,7 +8583,7 @@
     "fecha_publicacion": "2026-08-18",
     "fecha_actualizacion": "2026-09-30T08:03:08.479+02:00",
     "primera_vez": "2026-08-20T06:46:48.284689",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18294267": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18294267",
@@ -8599,7 +8599,7 @@
     "plataforma": null,
     "region": "Córdoba",
     "region_codigo": "ES613",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 40000.18,
     "presupuesto_sin_iva": 33058.0,
@@ -8625,7 +8625,7 @@
     "plataforma": null,
     "region": "Comunidad de Madrid",
     "region_codigo": "ES30",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 20812.0,
     "presupuesto_sin_iva": 17200.0,
@@ -8659,7 +8659,7 @@
     "fecha_publicacion": "2026-08-20",
     "fecha_actualizacion": "2026-09-28T14:11:36.708+02:00",
     "primera_vez": "2026-08-21T06:45:22.368884",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20324973": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20324973",
@@ -8681,9 +8681,9 @@
     "valor_estimado": 90400.0,
     "fecha_fin_plazo": "2026-09-25",
     "fecha_publicacion": "2026-08-20",
-    "fecha_actualizacion": "2026-09-21T11:11:29.871+02:00",
+    "fecha_actualizacion": "2026-10-02T09:11:25.223+02:00",
     "primera_vez": "2026-08-21T06:45:22.368884",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/18223878": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/18223878",
@@ -8699,7 +8699,7 @@
     "plataforma": "Generalitat de Catalunya",
     "region": null,
     "region_codigo": "ES514",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 73908.5,
@@ -8723,7 +8723,7 @@
     "plataforma": "Gobierno Vasco",
     "region": null,
     "region_codigo": "ES213",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 62727.27,
@@ -8834,7 +8834,7 @@
     "fecha_publicacion": "2026-10-01",
     "fecha_actualizacion": "2026-10-01T12:50:20.276+02:00",
     "primera_vez": "2026-08-24T06:57:36.692906",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19870451": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19870451",
@@ -8955,7 +8955,7 @@
     "plataforma": null,
     "region": "Gran Canaria",
     "region_codigo": "ES705",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 7230723.75,
     "presupuesto_sin_iva": 6757685.75,
@@ -8979,7 +8979,7 @@
     "plataforma": null,
     "region": "Asturias",
     "region_codigo": "ES120",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 15942.96,
     "presupuesto_sin_iva": 13464.0,
@@ -9013,9 +9013,9 @@
     "valor_estimado": 1005939.32,
     "fecha_fin_plazo": "2026-09-21",
     "fecha_publicacion": "2026-08-21",
-    "fecha_actualizacion": "2026-08-21T11:29:29.439+02:00",
+    "fecha_actualizacion": "2026-10-02T11:56:33.468+02:00",
     "primera_vez": "2026-08-24T06:57:36.692906",
-    "ultima_vez": "2026-08-28T18:14:22.079310"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20329014": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20329014",
@@ -9039,7 +9039,7 @@
     "fecha_publicacion": "2026-08-20",
     "fecha_actualizacion": "2026-09-30T12:59:16.082+02:00",
     "primera_vez": "2026-08-24T06:57:36.692906",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/17474723": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/17474723",
@@ -9082,7 +9082,7 @@
     "plataforma": null,
     "region": "Valladolid",
     "region_codigo": "ES418",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 1456909.28,
     "presupuesto_sin_iva": 1324462.98,
@@ -9132,7 +9132,7 @@
     "plataforma": null,
     "region": "Murcia",
     "region_codigo": "ES620",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 7534.67,
     "presupuesto_sin_iva": 6227.0,
@@ -9168,7 +9168,7 @@
     "plataforma": null,
     "region": "Cáceres",
     "region_codigo": "ES432",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 80440.8,
     "presupuesto_sin_iva": 66480.0,
@@ -9194,7 +9194,7 @@
     "plataforma": null,
     "region": "Pontevedra",
     "region_codigo": "ES114",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 160212.59,
     "presupuesto_sin_iva": 132407.1,
@@ -9218,7 +9218,7 @@
     "plataforma": null,
     "region": null,
     "region_codigo": "ES43",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 5521.25,
     "presupuesto_sin_iva": 4563.02,
@@ -9242,7 +9242,7 @@
     "plataforma": "Gobierno de Navarra",
     "region": null,
     "region_codigo": "ES220",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 14331.57,
@@ -9441,7 +9441,7 @@
     "plataforma": null,
     "region": "Sevilla",
     "region_codigo": "ES618",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 6767364.0,
     "presupuesto_sin_iva": 5592862.8,
@@ -9470,7 +9470,7 @@
     "plataforma": null,
     "region": "Asturias",
     "region_codigo": "ES120",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 193619.07,
     "presupuesto_sin_iva": 160015.76,
@@ -9509,7 +9509,7 @@
     "plataforma": null,
     "region": "Guadalajara",
     "region_codigo": "ES424",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 160389.2,
     "presupuesto_sin_iva": 132553.06,
@@ -9533,7 +9533,7 @@
     "plataforma": null,
     "region": null,
     "region_codigo": "ES300",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 1806.05,
     "presupuesto_sin_iva": 1492.6,
@@ -9557,7 +9557,7 @@
     "plataforma": "Gobierno Vasco",
     "region": null,
     "region_codigo": "ES213",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 28682.4,
@@ -9584,7 +9584,7 @@
     "plataforma": "Generalitat de Catalunya",
     "region": null,
     "region_codigo": "ES512",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 20769.18,
@@ -9593,7 +9593,7 @@
     "fecha_publicacion": "2026-08-24",
     "fecha_actualizacion": "2026-09-24T12:02:58.342+02:00",
     "primera_vez": "2026-08-25T06:51:38.413648",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20068251": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20068251",
@@ -9730,7 +9730,7 @@
     "plataforma": "Junta de Andalucía",
     "region": null,
     "region_codigo": "ES61",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 513910.0,
@@ -9787,7 +9787,7 @@
     "fecha_publicacion": "2026-08-25",
     "fecha_actualizacion": "2026-10-01T16:04:54.983+02:00",
     "primera_vez": "2026-08-26T06:48:22.397563",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20345657": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20345657",
@@ -9811,7 +9811,7 @@
     "fecha_publicacion": "2026-08-25",
     "fecha_actualizacion": "2026-10-01T18:01:29.722+02:00",
     "primera_vez": "2026-08-26T06:48:22.397563",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20350260": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20350260",
@@ -9960,7 +9960,7 @@
     "fecha_publicacion": "2026-08-26",
     "fecha_actualizacion": "2026-09-26T00:25:53.515+02:00",
     "primera_vez": "2026-08-27T17:22:06.832200",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/15606195": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/15606195",
@@ -9983,7 +9983,7 @@
     "plataforma": null,
     "region": "Canarias",
     "region_codigo": "ES70",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 1882559.28,
     "presupuesto_sin_iva": 1759401.2,
@@ -10010,7 +10010,7 @@
     "plataforma": null,
     "region": "Comunidad de Madrid",
     "region_codigo": "ES30",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 1212769.7,
     "presupuesto_sin_iva": 1002289.01,
@@ -10051,7 +10051,7 @@
     "fecha_publicacion": "2026-08-26",
     "fecha_actualizacion": "2026-10-01T13:12:32.576+02:00",
     "primera_vez": "2026-08-27T17:22:06.832200",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18183431": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18183431",
@@ -10072,7 +10072,7 @@
     "plataforma": null,
     "region": "León",
     "region_codigo": "ES413",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 990551.26,
     "presupuesto_sin_iva": 818637.41,
@@ -10131,7 +10131,7 @@
     "fecha_publicacion": "2026-09-28",
     "fecha_actualizacion": "2026-09-30T15:29:39.982+02:00",
     "primera_vez": "2026-08-28T18:14:22.079310",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20356559": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20356559",
@@ -10434,7 +10434,7 @@
     "plataforma": null,
     "region": "Zaragoza",
     "region_codigo": "ES243",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 123734.38,
     "presupuesto_sin_iva": 102259.82,
@@ -10631,7 +10631,7 @@
     "plataforma": null,
     "region": "Extra-Regio NUTS 3",
     "region_codigo": "ESZZZ",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 95996.98,
     "presupuesto_sin_iva": 89716.8,
@@ -10655,7 +10655,7 @@
     "plataforma": null,
     "region": "Sevilla",
     "region_codigo": "ES618",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 101379.72,
     "presupuesto_sin_iva": 83784.89,
@@ -10687,7 +10687,7 @@
     "plataforma": null,
     "region": "Badajoz",
     "region_codigo": "ES431",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 1072245.16,
     "presupuesto_sin_iva": 886153.03,
@@ -10824,7 +10824,7 @@
     "plataforma": null,
     "region": "Albacete",
     "region_codigo": "ES421",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 1198375.29,
     "presupuesto_sin_iva": 990392.8,
@@ -10848,7 +10848,7 @@
     "plataforma": "Generalitat de Catalunya",
     "region": null,
     "region_codigo": "ES511",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 35080.0,
@@ -11021,7 +11021,7 @@
     "plataforma": "Generalitat de Catalunya",
     "region": null,
     "region_codigo": "ES511",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 399970.92,
@@ -11152,7 +11152,7 @@
     "plataforma": "Generalitat de Catalunya",
     "region": null,
     "region_codigo": "ES511",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 596942.17,
@@ -11178,7 +11178,7 @@
     "plataforma": "Generalitat de Catalunya",
     "region": null,
     "region_codigo": "ES51",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 70920.0,
@@ -11339,7 +11339,7 @@
     "plataforma": null,
     "region": "Jaén",
     "region_codigo": "ES616",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 97641.77,
     "presupuesto_sin_iva": 80695.68,
@@ -11348,7 +11348,7 @@
     "fecha_publicacion": "2026-06-16",
     "fecha_actualizacion": "2026-10-01T12:13:08.141+02:00",
     "primera_vez": "2026-09-04T11:01:18.598009",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19187917": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19187917",
@@ -11363,7 +11363,7 @@
     "plataforma": null,
     "region": "Valencia/València",
     "region_codigo": "ES523",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 210479.25,
     "presupuesto_sin_iva": 173949.8,
@@ -11415,7 +11415,7 @@
     "plataforma": null,
     "region": "Melilla",
     "region_codigo": "ES640",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 53560.0,
     "presupuesto_sin_iva": 51500.0,
@@ -11439,7 +11439,7 @@
     "plataforma": null,
     "region": "Málaga",
     "region_codigo": "ES617",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 51818.25,
     "presupuesto_sin_iva": 42825.0,
@@ -11467,7 +11467,7 @@
     "plataforma": "Comunidad de Madrid",
     "region": null,
     "region_codigo": "ES300",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 1105595.99,
@@ -11861,7 +11861,7 @@
     "fecha_publicacion": "2026-07-14",
     "fecha_actualizacion": "2026-10-01T10:00:02.572+02:00",
     "primera_vez": "2026-09-08T10:42:20.735981",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19404009": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19404009",
@@ -12031,7 +12031,7 @@
     "fecha_publicacion": "2026-05-08",
     "fecha_actualizacion": "2026-09-28T12:11:56.459+02:00",
     "primera_vez": "2026-09-08T10:42:20.735981",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20378720": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20378720",
@@ -12119,7 +12119,7 @@
     "plataforma": null,
     "region": "Granada",
     "region_codigo": "ES614",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 192356.78,
     "presupuesto_sin_iva": 158972.56,
@@ -12128,7 +12128,7 @@
     "fecha_publicacion": "2026-06-18",
     "fecha_actualizacion": "2026-10-01T12:40:16.503+02:00",
     "primera_vez": "2026-09-08T10:42:20.735981",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18972523": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18972523",
@@ -12147,7 +12147,7 @@
     "plataforma": null,
     "region": "Madrid",
     "region_codigo": "ES300",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 84216.0,
     "presupuesto_sin_iva": 69600.0,
@@ -12176,7 +12176,7 @@
     "plataforma": null,
     "region": "Sevilla",
     "region_codigo": "ES618",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 5973528.0,
     "presupuesto_sin_iva": 4936800.0,
@@ -12202,7 +12202,7 @@
     "plataforma": null,
     "region": "Toledo",
     "region_codigo": "ES425",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 447651.84,
     "presupuesto_sin_iva": 369960.2,
@@ -12227,7 +12227,7 @@
     "plataforma": null,
     "region": "Bizkaia",
     "region_codigo": "ES213",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 227480.0,
     "presupuesto_sin_iva": 188000.0,
@@ -12255,7 +12255,7 @@
     "plataforma": null,
     "region": "Albacete",
     "region_codigo": "ES421",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 56410.2,
     "presupuesto_sin_iva": 46620.0,
@@ -12288,7 +12288,7 @@
     "fecha_publicacion": "2026-10-01",
     "fecha_actualizacion": "2026-10-01T09:43:44.594+02:00",
     "primera_vez": "2026-09-08T10:42:20.735981",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19430314": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19430314",
@@ -12311,9 +12311,9 @@
     "valor_estimado": 334466.4,
     "fecha_fin_plazo": "2026-07-17",
     "fecha_publicacion": "2026-06-30",
-    "fecha_actualizacion": "2026-09-08T14:32:57.229+02:00",
+    "fecha_actualizacion": "2026-10-04T14:27:33.907+02:00",
     "primera_vez": "2026-09-09T10:51:27.073069",
-    "ultima_vez": "2026-09-25T11:23:13.154967"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20379306": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20379306",
@@ -12389,7 +12389,7 @@
     "plataforma": null,
     "region": "Cantabria",
     "region_codigo": "ES130",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 102317.6,
     "presupuesto_sin_iva": 84560.0,
@@ -12418,7 +12418,7 @@
     "plataforma": null,
     "region": "Pontevedra",
     "region_codigo": "ES114",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 284945.02,
     "presupuesto_sin_iva": 235491.75,
@@ -12442,7 +12442,7 @@
     "plataforma": null,
     "region": "Andalucía",
     "region_codigo": "ES61",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 44679.05,
     "presupuesto_sin_iva": 38003.94,
@@ -12475,7 +12475,7 @@
     "fecha_publicacion": "2026-06-05",
     "fecha_actualizacion": "2026-09-25T14:41:02.212+02:00",
     "primera_vez": "2026-09-10T10:40:51.097692",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20384058": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20384058",
@@ -12518,7 +12518,7 @@
     "plataforma": "Generalitat de Catalunya",
     "region": null,
     "region_codigo": "ES51",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 0.0,
@@ -12527,7 +12527,7 @@
     "fecha_publicacion": "2026-07-14",
     "fecha_actualizacion": "2026-09-25T14:05:14.691+02:00",
     "primera_vez": "2026-09-10T10:40:51.097692",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20390003": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20390003",
@@ -12568,7 +12568,7 @@
     "plataforma": "Generalitat de Catalunya",
     "region": null,
     "region_codigo": "ES514",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 298178.86,
@@ -12617,7 +12617,7 @@
     "plataforma": "Junta de Andalucía",
     "region": null,
     "region_codigo": "ES618",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 12530.25,
@@ -12644,7 +12644,7 @@
     "plataforma": "Junta de Andalucía",
     "region": null,
     "region_codigo": "ES615",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 45970.98,
@@ -13008,7 +13008,7 @@
     "fecha_publicacion": "2026-09-09",
     "fecha_actualizacion": "2026-09-29T13:09:49.346+02:00",
     "primera_vez": "2026-09-14T18:53:10.600830",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20417837": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20417837",
@@ -13039,7 +13039,7 @@
     "fecha_publicacion": "2026-09-09",
     "fecha_actualizacion": "2026-09-29T14:14:52.506+02:00",
     "primera_vez": "2026-09-14T18:53:10.600830",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20417848": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20417848",
@@ -13116,9 +13116,9 @@
     "valor_estimado": 70862.76,
     "fecha_fin_plazo": "2026-07-22",
     "fecha_publicacion": "2026-06-29",
-    "fecha_actualizacion": "2026-09-29T10:01:30.382+02:00",
+    "fecha_actualizacion": "2026-10-01T15:21:00.989+02:00",
     "primera_vez": "2026-09-14T18:53:10.600830",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20415820": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20415820",
@@ -13136,7 +13136,7 @@
     "plataforma": null,
     "region": "Granada",
     "region_codigo": "ES614",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 35221.47,
     "presupuesto_sin_iva": 29108.65,
@@ -13166,7 +13166,7 @@
     "plataforma": null,
     "region": "Comunitat Valenciana",
     "region_codigo": "ES52",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 37742.05,
     "presupuesto_sin_iva": 31191.78,
@@ -13194,7 +13194,7 @@
     "plataforma": null,
     "region": "Madrid",
     "region_codigo": "ES300",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 21780.0,
     "presupuesto_sin_iva": 18000.0,
@@ -13243,7 +13243,7 @@
     "plataforma": null,
     "region": "Zaragoza",
     "region_codigo": "ES243",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 804455.53,
     "presupuesto_sin_iva": 664839.28,
@@ -13268,7 +13268,7 @@
     "plataforma": null,
     "region": "Murcia",
     "region_codigo": "ES620",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 985890.22,
     "presupuesto_sin_iva": 814785.31,
@@ -13319,7 +13319,7 @@
     "plataforma": null,
     "region": "Canarias",
     "region_codigo": "ES70",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 79478.53,
     "presupuesto_sin_iva": 74279.0,
@@ -13344,7 +13344,7 @@
     "plataforma": null,
     "region": "Jaén",
     "region_codigo": "ES616",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 41611.32,
     "presupuesto_sin_iva": 34389.52,
@@ -13368,7 +13368,7 @@
     "plataforma": null,
     "region": "Valladolid",
     "region_codigo": "ES418",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 60000.0,
     "presupuesto_sin_iva": 49586.78,
@@ -13400,7 +13400,7 @@
     "plataforma": null,
     "region": "Cádiz",
     "region_codigo": "ES612",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 86800.0,
     "presupuesto_sin_iva": 71735.54,
@@ -13431,9 +13431,9 @@
     "valor_estimado": 281100.0,
     "fecha_fin_plazo": "2026-09-29",
     "fecha_publicacion": "2026-09-02",
-    "fecha_actualizacion": "2026-09-02T10:29:08.367+02:00",
+    "fecha_actualizacion": "2026-10-02T12:52:11.923+02:00",
     "primera_vez": "2026-09-14T18:53:10.600830",
-    "ultima_vez": "2026-09-25T11:23:13.154967"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20417215": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20417215",
@@ -13479,7 +13479,7 @@
     "plataforma": null,
     "region": "Palencia",
     "region_codigo": "ES414",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 51999.99,
     "presupuesto_sin_iva": 42975.2,
@@ -13488,7 +13488,7 @@
     "fecha_publicacion": "2026-09-09",
     "fecha_actualizacion": "2026-10-01T14:03:48.285+02:00",
     "primera_vez": "2026-09-14T18:53:10.600830",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20418272": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20418272",
@@ -13526,7 +13526,7 @@
     "plataforma": null,
     "region": "Madrid",
     "region_codigo": "ES300",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 2316880.0,
     "presupuesto_sin_iva": 1914776.86,
@@ -13733,9 +13733,9 @@
     "valor_estimado": 1769943.38,
     "fecha_fin_plazo": "2026-09-15",
     "fecha_publicacion": "2026-07-29",
-    "fecha_actualizacion": "2026-09-18T14:42:01.892+02:00",
+    "fecha_actualizacion": "2026-10-01T15:41:33.631+02:00",
     "primera_vez": "2026-09-16T11:13:29.326900",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20430333": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20430333",
@@ -13759,7 +13759,7 @@
     "fecha_publicacion": "2026-09-15",
     "fecha_actualizacion": "2026-10-01T14:56:05.883+02:00",
     "primera_vez": "2026-09-16T11:13:29.326900",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20430339": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20430339",
@@ -13807,7 +13807,7 @@
     "fecha_publicacion": "2026-09-09",
     "fecha_actualizacion": "2026-09-25T00:25:55.618+02:00",
     "primera_vez": "2026-09-16T11:13:29.326900",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19893596": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19893596",
@@ -13825,7 +13825,7 @@
     "plataforma": null,
     "region": "Alicante/Alacant",
     "region_codigo": "ES521",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 38720.0,
     "presupuesto_sin_iva": 32000.0,
@@ -13901,7 +13901,7 @@
     "plataforma": null,
     "region": "Mallorca",
     "region_codigo": "ES532",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 1705615.2,
     "presupuesto_sin_iva": 1409599.35,
@@ -13950,7 +13950,7 @@
     "plataforma": null,
     "region": "España",
     "region_codigo": "ES",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 35695.0,
     "presupuesto_sin_iva": 29500.0,
@@ -13977,7 +13977,7 @@
     "plataforma": null,
     "region": "Huelva",
     "region_codigo": "ES615",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 72237.0,
     "presupuesto_sin_iva": 59700.0,
@@ -13986,7 +13986,7 @@
     "fecha_publicacion": "2026-09-14",
     "fecha_actualizacion": "2026-09-30T09:24:09.589+02:00",
     "primera_vez": "2026-09-16T11:13:29.326900",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19424583": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19424583",
@@ -14013,7 +14013,7 @@
     "fecha_publicacion": "2026-04-09",
     "fecha_actualizacion": "2026-09-22T14:11:26.477+02:00",
     "primera_vez": "2026-09-16T11:13:29.326900",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20077907": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20077907",
@@ -14133,7 +14133,7 @@
     "fecha_publicacion": "2024-05-13",
     "fecha_actualizacion": "2026-09-24T09:56:14.814+02:00",
     "primera_vez": "2026-09-17T11:04:05.276173",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20434719": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20434719",
@@ -14148,7 +14148,7 @@
     "plataforma": null,
     "region": "Pontevedra",
     "region_codigo": "ES114",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 5997.6,
     "presupuesto_sin_iva": 4956.69,
@@ -14172,7 +14172,7 @@
     "plataforma": null,
     "region": "Madrid",
     "region_codigo": "ES300",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 28670.4,
     "presupuesto_sin_iva": 25776.0,
@@ -14181,7 +14181,7 @@
     "fecha_publicacion": "2026-09-07",
     "fecha_actualizacion": "2026-09-29T14:11:16.262+02:00",
     "primera_vez": "2026-09-17T11:04:05.276173",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20434773": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20434773",
@@ -14202,7 +14202,7 @@
     "plataforma": null,
     "region": "Córdoba",
     "region_codigo": "ES613",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 45798.0,
     "presupuesto_sin_iva": 37849.59,
@@ -14230,7 +14230,7 @@
     "plataforma": null,
     "region": "Cádiz",
     "region_codigo": "ES612",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 14718.44,
     "presupuesto_sin_iva": 12164.0,
@@ -14257,7 +14257,7 @@
     "plataforma": null,
     "region": "Murcia",
     "region_codigo": "ES620",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 1192648.25,
     "presupuesto_sin_iva": 985659.71,
@@ -14284,7 +14284,7 @@
     "plataforma": null,
     "region": "Málaga",
     "region_codigo": "ES617",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 289193.36,
     "presupuesto_sin_iva": 239002.77,
@@ -14308,7 +14308,7 @@
     "plataforma": null,
     "region": null,
     "region_codigo": "ES431",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 269919.14,
     "presupuesto_sin_iva": 223073.65,
@@ -14332,7 +14332,7 @@
     "plataforma": null,
     "region": "Valencia/València",
     "region_codigo": "ES523",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 37259.88,
     "presupuesto_sin_iva": 30793.27,
@@ -14363,7 +14363,7 @@
     "plataforma": "Comunidad de Madrid",
     "region": null,
     "region_codigo": "ES300",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 1015990.93,
@@ -14391,7 +14391,7 @@
     "plataforma": "Comunidad de Madrid",
     "region": null,
     "region_codigo": "ES300",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 1105595.99,
@@ -14400,7 +14400,7 @@
     "fecha_publicacion": "2026-09-03",
     "fecha_actualizacion": "2026-09-24T11:26:32.196+02:00",
     "primera_vez": "2026-09-17T11:04:05.276173",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20122842": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20122842",
@@ -14528,7 +14528,7 @@
     "fecha_publicacion": "2026-09-17",
     "fecha_actualizacion": "2026-09-29T15:44:52.927+02:00",
     "primera_vez": "2026-09-18T10:34:06.559471",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20447199": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20447199",
@@ -14696,7 +14696,7 @@
     "plataforma": null,
     "region": "Jaén",
     "region_codigo": "ES616",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 84000.02,
     "presupuesto_sin_iva": 69421.51,
@@ -14721,7 +14721,7 @@
     "plataforma": null,
     "region": "A Coruña",
     "region_codigo": "ES111",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 84526.8,
     "presupuesto_sin_iva": 69856.86,
@@ -14776,9 +14776,9 @@
     "valor_estimado": null,
     "fecha_fin_plazo": "2026-10-05",
     "fecha_publicacion": "2026-09-18",
-    "fecha_actualizacion": "2026-09-22T08:26:17.912+02:00",
+    "fecha_actualizacion": "2026-09-28T12:26:07.542+02:00",
     "primera_vez": "2026-09-21T10:56:07.987167",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20480462": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20480462",
@@ -14848,11 +14848,11 @@
     "presupuesto_con_iva": 169666.2,
     "presupuesto_sin_iva": 140220.0,
     "valor_estimado": 140220.0,
-    "fecha_fin_plazo": "2026-10-03",
+    "fecha_fin_plazo": "2026-10-07",
     "fecha_publicacion": "2026-09-18",
-    "fecha_actualizacion": "2026-09-18T14:16:06.616+02:00",
+    "fecha_actualizacion": "2026-10-02T14:55:42.232+02:00",
     "primera_vez": "2026-09-22T10:45:34.669825",
-    "ultima_vez": "2026-09-28T12:48:27.492359"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19772673": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19772673",
@@ -14876,7 +14876,7 @@
     "fecha_publicacion": "2026-06-02",
     "fecha_actualizacion": "2026-09-30T10:19:21.244+02:00",
     "primera_vez": "2026-09-22T10:45:34.669825",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20480972": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20480972",
@@ -15000,9 +15000,9 @@
     "valor_estimado": 163800.0,
     "fecha_fin_plazo": "2026-09-25",
     "fecha_publicacion": "2026-09-04",
-    "fecha_actualizacion": "2026-09-21T16:04:23.362+02:00",
+    "fecha_actualizacion": "2026-09-29T14:04:26.301+02:00",
     "primera_vez": "2026-09-22T10:45:34.669825",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/17551523": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/17551523",
@@ -15096,7 +15096,7 @@
     "plataforma": null,
     "region": "Ceuta",
     "region_codigo": "ES630",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 45000.0,
     "presupuesto_sin_iva": 41284.4,
@@ -15123,7 +15123,7 @@
     "plataforma": null,
     "region": "Ceuta",
     "region_codigo": "ES630",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 12074755.6,
     "presupuesto_sin_iva": 11963978.09,
@@ -15147,7 +15147,7 @@
     "plataforma": null,
     "region": "Madrid",
     "region_codigo": "ES300",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 70000.0,
     "presupuesto_sin_iva": 57851.24,
@@ -15226,10 +15226,10 @@
     "presupuesto_sin_iva": 35000.0,
     "valor_estimado": 35000.0,
     "fecha_fin_plazo": "2026-09-29",
-    "fecha_publicacion": "2026-09-18",
-    "fecha_actualizacion": "2026-09-22T13:09:05.734+02:00",
+    "fecha_publicacion": "2026-10-02",
+    "fecha_actualizacion": "2026-10-02T09:54:25.880+02:00",
     "primera_vez": "2026-09-22T10:45:34.669825",
-    "ultima_vez": "2026-09-28T12:48:27.492359"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20496799": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20496799",
@@ -15500,7 +15500,7 @@
     "fecha_publicacion": "2026-09-07",
     "fecha_actualizacion": "2026-09-22T14:42:12.210+02:00",
     "primera_vez": "2026-09-23T10:57:39.604545",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20497320": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20497320",
@@ -15545,7 +15545,7 @@
     "plataforma": "Generalitat de Catalunya",
     "region": null,
     "region_codigo": "ES51",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 70920.0,
@@ -15554,7 +15554,7 @@
     "fecha_publicacion": "2026-09-02",
     "fecha_actualizacion": "2026-09-22T12:06:12.417+02:00",
     "primera_vez": "2026-09-23T10:57:39.604545",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20497060": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20497060",
@@ -15603,7 +15603,7 @@
     "fecha_publicacion": "2026-09-22",
     "fecha_actualizacion": "2026-09-22T22:00:06.611+02:00",
     "primera_vez": "2026-09-23T10:57:39.604545",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20498912": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20498912",
@@ -15710,7 +15710,7 @@
     "fecha_publicacion": "2026-09-03",
     "fecha_actualizacion": "2026-09-29T14:37:44.315+02:00",
     "primera_vez": "2026-09-23T19:44:21.734826",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20499891": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20499891",
@@ -15818,7 +15818,7 @@
     "plataforma": null,
     "region": "Pontevedra",
     "region_codigo": "ES114",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 45553.25,
     "presupuesto_sin_iva": 37647.31,
@@ -15842,7 +15842,7 @@
     "plataforma": null,
     "region": "Castellón/Castelló",
     "region_codigo": "ES522",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 3209.13,
     "presupuesto_sin_iva": 2652.17,
@@ -15894,16 +15894,16 @@
     "plataforma": null,
     "region": "Canarias",
     "region_codigo": "ES70",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 164941.08,
     "presupuesto_sin_iva": 154150.54,
     "valor_estimado": 317979.03,
     "fecha_fin_plazo": "2026-10-05",
     "fecha_publicacion": "2026-09-03",
-    "fecha_actualizacion": "2026-09-22T14:57:55.355+02:00",
+    "fecha_actualizacion": "2026-10-02T13:06:28.519+02:00",
     "primera_vez": "2026-09-23T19:44:21.734826",
-    "ultima_vez": "2026-09-28T12:48:27.492359"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20499453": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20499453",
@@ -15942,7 +15942,7 @@
     "plataforma": null,
     "region": "Córdoba",
     "region_codigo": "ES613",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 70743.86,
     "presupuesto_sin_iva": 58466.0,
@@ -15986,7 +15986,7 @@
     "fecha_publicacion": "2026-10-01",
     "fecha_actualizacion": "2026-10-01T08:44:04.966+02:00",
     "primera_vez": "2026-09-23T19:44:21.734826",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20499944": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20499944",
@@ -16005,7 +16005,7 @@
     "plataforma": null,
     "region": null,
     "region_codigo": "ES613",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 113324.32,
     "presupuesto_sin_iva": 93656.46,
@@ -16062,7 +16062,7 @@
     "fecha_publicacion": "2026-08-27",
     "fecha_actualizacion": "2026-09-30T15:11:22.919+02:00",
     "primera_vez": "2026-09-24T08:54:42.039758",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20508563": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20508563",
@@ -16392,7 +16392,7 @@
     "plataforma": "Generalitat de Catalunya",
     "region": null,
     "region_codigo": "ES511",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 399970.92,
@@ -16886,7 +16886,7 @@
     "fecha_publicacion": "2026-09-25",
     "fecha_actualizacion": "2026-09-25T08:10:56.473+02:00",
     "primera_vez": "2026-09-28T12:48:27.492359",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/16610908": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/16610908",
@@ -16910,7 +16910,7 @@
     "fecha_publicacion": "2025-02-04",
     "fecha_actualizacion": "2026-09-23T10:26:25.472+02:00",
     "primera_vez": "2026-09-28T12:48:27.492359",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/17513269": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/17513269",
@@ -16934,7 +16934,7 @@
     "fecha_publicacion": "2025-06-19",
     "fecha_actualizacion": "2026-09-23T09:11:34.976+02:00",
     "primera_vez": "2026-09-28T12:48:27.492359",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20545226": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20545226",
@@ -16959,7 +16959,7 @@
     "plataforma": null,
     "region": "Valencia/València",
     "region_codigo": "ES523",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 75585.07,
     "presupuesto_sin_iva": 62467.0,
@@ -16985,7 +16985,7 @@
     "plataforma": null,
     "region": "Madrid",
     "region_codigo": "ES300",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 39493.52,
     "presupuesto_sin_iva": 35903.2,
@@ -16994,7 +16994,7 @@
     "fecha_publicacion": "2026-09-22",
     "fecha_actualizacion": "2026-09-30T08:56:32.908+02:00",
     "primera_vez": "2026-09-28T12:48:27.492359",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/14519952": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/14519952",
@@ -17014,7 +17014,7 @@
     "plataforma": null,
     "region": "Illes Balears",
     "region_codigo": "ES53",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 331364.48,
     "presupuesto_sin_iva": 273854.94,
@@ -17040,7 +17040,7 @@
     "plataforma": "Generalitat de Catalunya",
     "region": null,
     "region_codigo": "ES511",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 567279.74,
@@ -17049,7 +17049,7 @@
     "fecha_publicacion": "2025-10-03",
     "fecha_actualizacion": "2026-09-25T16:04:22.660+02:00",
     "primera_vez": "2026-09-28T12:48:27.492359",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20132745": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20132745",
@@ -17074,7 +17074,7 @@
     "fecha_publicacion": "2026-07-21",
     "fecha_actualizacion": "2026-09-23T12:08:11.113+02:00",
     "primera_vez": "2026-09-28T12:48:27.492359",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/16691266": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/16691266",
@@ -17089,7 +17089,7 @@
     "plataforma": "Comunidad de Madrid",
     "region": null,
     "region_codigo": "ES300",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 71970.0,
@@ -17098,7 +17098,7 @@
     "fecha_publicacion": "2025-02-14",
     "fecha_actualizacion": "2026-09-23T09:56:30.125+02:00",
     "primera_vez": "2026-09-28T12:48:27.492359",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20545639": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20545639",
@@ -17156,7 +17156,7 @@
     "fecha_publicacion": "2026-09-30",
     "fecha_actualizacion": "2026-09-30T08:05:20.853+02:00",
     "primera_vez": "2026-09-28T12:48:27.492359",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20571041": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20571041",
@@ -17564,7 +17564,7 @@
     "fecha_publicacion": "2026-09-28",
     "fecha_actualizacion": "2026-09-28T12:11:55.247+02:00",
     "primera_vez": "2026-09-29T12:35:07.841723",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20580999": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20580999",
@@ -17588,7 +17588,7 @@
     "fecha_publicacion": "2026-09-28",
     "fecha_actualizacion": "2026-09-28T06:00:44.766+02:00",
     "primera_vez": "2026-09-29T12:35:07.841723",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20571163": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20571163",
@@ -17607,7 +17607,7 @@
     "plataforma": null,
     "region": "Almería",
     "region_codigo": "ES611",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 89347.5,
     "presupuesto_sin_iva": 73840.91,
@@ -17672,7 +17672,7 @@
     "plataforma": null,
     "region": "Madrid",
     "region_codigo": "ES300",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 1237889.86,
     "presupuesto_sin_iva": 1023049.47,
@@ -17827,7 +17827,7 @@
     "plataforma": null,
     "region": "Valencia/València",
     "region_codigo": "ES523",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 416410.19,
     "presupuesto_sin_iva": 344140.65,
@@ -17878,7 +17878,7 @@
     "plataforma": null,
     "region": "Castilla y León",
     "region_codigo": "ES41",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 35000.0,
     "presupuesto_sin_iva": 28925.61,
@@ -17929,7 +17929,7 @@
     "plataforma": null,
     "region": "Pontevedra",
     "region_codigo": "ES114",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 710459.97,
     "presupuesto_sin_iva": 587157.0,
@@ -17957,7 +17957,7 @@
     "plataforma": null,
     "region": null,
     "region_codigo": "ES415",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 202993.59,
     "presupuesto_sin_iva": 167763.3,
@@ -17966,7 +17966,7 @@
     "fecha_publicacion": "2026-09-23",
     "fecha_actualizacion": "2026-10-01T13:47:42.084+02:00",
     "primera_vez": "2026-09-29T12:35:07.841723",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20571582": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20571582",
@@ -18097,7 +18097,7 @@
     "fecha_publicacion": "2026-09-29",
     "fecha_actualizacion": "2026-09-29T13:11:20.751+02:00",
     "primera_vez": "2026-09-30T12:35:29.844363",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20589366": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20589366",
@@ -18121,7 +18121,7 @@
     "fecha_publicacion": "2026-09-29",
     "fecha_actualizacion": "2026-09-29T08:41:01.667+02:00",
     "primera_vez": "2026-09-30T12:35:29.844363",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/15745587": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/15745587",
@@ -18189,7 +18189,7 @@
     "plataforma": null,
     "region": "Madrid",
     "region_codigo": "ES300",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 1279271.67,
     "presupuesto_sin_iva": 1061957.38,
@@ -18198,7 +18198,7 @@
     "fecha_publicacion": "2024-10-18",
     "fecha_actualizacion": "2026-09-29T15:47:28.267+02:00",
     "primera_vez": "2026-09-30T12:35:29.844363",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20585850": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20585850",
@@ -18217,7 +18217,7 @@
     "plataforma": null,
     "region": "Cádiz",
     "region_codigo": "ES612",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 17731.65,
     "presupuesto_sin_iva": 14654.26,
@@ -18226,7 +18226,7 @@
     "fecha_publicacion": "2026-09-29",
     "fecha_actualizacion": "2026-09-29T14:59:57.835+02:00",
     "primera_vez": "2026-09-30T12:35:29.844363",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19429551": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19429551",
@@ -18554,7 +18554,7 @@
     "plataforma": null,
     "region": "Alicante/Alacant",
     "region_codigo": "ES521",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 1210000.0,
     "presupuesto_sin_iva": 1000000.0,
@@ -18563,7 +18563,7 @@
     "fecha_publicacion": "2026-04-10",
     "fecha_actualizacion": "2026-09-29T12:30:21.142+02:00",
     "primera_vez": "2026-09-30T12:35:29.844363",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20586351": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20586351",
@@ -18580,7 +18580,7 @@
     "plataforma": null,
     "region": "Alicante/Alacant",
     "region_codigo": "ES521",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 2674.1,
     "presupuesto_sin_iva": 2210.0,
@@ -18613,7 +18613,7 @@
     "fecha_publicacion": "2026-03-16",
     "fecha_actualizacion": "2026-09-30T14:42:18.021+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20593494": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20593494",
@@ -18648,7 +18648,7 @@
     "fecha_publicacion": "2026-09-30",
     "fecha_actualizacion": "2026-09-30T14:31:24.060+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20232573": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20232573",
@@ -18672,7 +18672,7 @@
     "fecha_publicacion": "2026-08-04",
     "fecha_actualizacion": "2026-09-30T13:36:11.169+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18964681": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18964681",
@@ -18697,7 +18697,7 @@
     "fecha_publicacion": "2026-02-03",
     "fecha_actualizacion": "2026-09-30T12:25:08.937+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/17644607": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/17644607",
@@ -18721,7 +18721,7 @@
     "fecha_publicacion": "2025-07-10",
     "fecha_actualizacion": "2026-09-30T11:38:51.497+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18024709": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/18024709",
@@ -18748,7 +18748,7 @@
     "fecha_publicacion": "2025-11-17",
     "fecha_actualizacion": "2026-09-30T10:54:17.609+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19988194": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19988194",
@@ -18773,7 +18773,7 @@
     "fecha_publicacion": "2026-07-22",
     "fecha_actualizacion": "2026-09-30T09:28:00.166+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20597790": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20597790",
@@ -18797,7 +18797,7 @@
     "fecha_publicacion": "2026-09-30",
     "fecha_actualizacion": "2026-09-30T12:41:35.833+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20597812": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20597812",
@@ -18822,7 +18822,7 @@
     "fecha_publicacion": "2026-09-30",
     "fecha_actualizacion": "2026-09-30T11:41:37.753+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20597819": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20597819",
@@ -18846,7 +18846,7 @@
     "fecha_publicacion": "2026-09-30",
     "fecha_actualizacion": "2026-09-30T11:11:13.518+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19798970": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19798970",
@@ -18862,7 +18862,7 @@
     "plataforma": null,
     "region": "Málaga",
     "region_codigo": "ES617",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 646494.33,
     "presupuesto_sin_iva": 534292.84,
@@ -18871,7 +18871,7 @@
     "fecha_publicacion": "2026-06-02",
     "fecha_actualizacion": "2026-09-30T13:44:09.705+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19715138": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/19715138",
@@ -18888,7 +18888,7 @@
     "plataforma": null,
     "region": "Extra-Regio NUTS 3",
     "region_codigo": "ESZZZ",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 3205853.4,
     "presupuesto_sin_iva": 2649465.62,
@@ -18897,7 +18897,7 @@
     "fecha_publicacion": "2026-05-20",
     "fecha_actualizacion": "2026-09-30T11:56:16.368+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20594106": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20594106",
@@ -18915,7 +18915,7 @@
     "plataforma": null,
     "region": "Málaga",
     "region_codigo": "ES617",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 31314.7,
     "presupuesto_sin_iva": 25880.0,
@@ -18924,7 +18924,7 @@
     "fecha_publicacion": "2026-09-29",
     "fecha_actualizacion": "2026-09-29T21:05:45.096+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20597716": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20597716",
@@ -18948,7 +18948,7 @@
     "fecha_publicacion": "2026-09-30",
     "fecha_actualizacion": "2026-09-30T14:09:29.362+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20597843": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20597843",
@@ -18963,7 +18963,7 @@
     "plataforma": "Generalitat de Catalunya",
     "region": null,
     "region_codigo": "ES512",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": null,
     "presupuesto_sin_iva": 78739.6,
@@ -18972,7 +18972,7 @@
     "fecha_publicacion": "2026-09-30",
     "fecha_actualizacion": "2026-09-30T10:03:50.649+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/17995641": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/17995641",
@@ -18996,7 +18996,7 @@
     "fecha_publicacion": "2025-09-16",
     "fecha_actualizacion": "2026-09-30T16:41:29.132+02:00",
     "primera_vez": "2026-10-01T12:42:41.220983",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20603190": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20603190",
@@ -19023,7 +19023,7 @@
     "fecha_publicacion": "2026-10-01",
     "fecha_actualizacion": "2026-10-01T12:49:24.799+02:00",
     "primera_vez": "2026-10-02T12:51:25.768496",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20603449": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20603449",
@@ -19049,7 +19049,7 @@
     "fecha_publicacion": "2026-10-01",
     "fecha_actualizacion": "2026-10-01T10:03:23.672+02:00",
     "primera_vez": "2026-10-02T12:51:25.768496",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/18138235": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/18138235",
@@ -19073,7 +19073,7 @@
     "fecha_publicacion": "2025-10-09",
     "fecha_actualizacion": "2026-10-01T11:12:13.598+02:00",
     "primera_vez": "2026-10-02T12:51:25.768496",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20606831": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20606831",
@@ -19097,7 +19097,7 @@
     "fecha_publicacion": "2026-10-01",
     "fecha_actualizacion": "2026-10-01T06:01:19.252+02:00",
     "primera_vez": "2026-10-02T12:51:25.768496",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20602947": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20602947",
@@ -19121,7 +19121,7 @@
     "plataforma": null,
     "region": "Madrid",
     "region_codigo": "ES300",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 21000.0,
     "presupuesto_sin_iva": 17355.37,
@@ -19130,7 +19130,7 @@
     "fecha_publicacion": "2026-10-01",
     "fecha_actualizacion": "2026-10-01T15:38:55.097+02:00",
     "primera_vez": "2026-10-02T12:51:25.768496",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20602997": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20602997",
@@ -19157,7 +19157,7 @@
     "fecha_publicacion": "2026-10-01",
     "fecha_actualizacion": "2026-10-01T14:30:38.594+02:00",
     "primera_vez": "2026-10-02T12:51:25.768496",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20603249": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20603249",
@@ -19185,7 +19185,7 @@
     "fecha_publicacion": "2026-10-01",
     "fecha_actualizacion": "2026-10-01T12:11:43.133+02:00",
     "primera_vez": "2026-10-02T12:51:25.768496",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20603377": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20603377",
@@ -19200,7 +19200,7 @@
     "plataforma": null,
     "region": "ESPAÑA",
     "region_codigo": "ES",
-    "categoria": "criticas",
+    "categoria": "a_revisar",
     "coincidencia": "CPV 90920000 (coincide con 90920000)",
     "presupuesto_con_iva": 16125.67,
     "presupuesto_sin_iva": 13327.0,
@@ -19209,7 +19209,7 @@
     "fecha_publicacion": "2026-10-01",
     "fecha_actualizacion": "2026-10-01T10:48:51.732+02:00",
     "primera_vez": "2026-10-02T12:51:25.768496",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20603434": {
     "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20603434",
@@ -19236,7 +19236,7 @@
     "fecha_publicacion": "2026-10-01",
     "fecha_actualizacion": "2026-10-01T10:11:46.543+02:00",
     "primera_vez": "2026-10-02T12:51:25.768496",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   },
   "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20606790": {
     "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20606790",
@@ -19262,6 +19262,448 @@
     "fecha_publicacion": "2026-10-01",
     "fecha_actualizacion": "2026-10-01T10:26:00.890+02:00",
     "primera_vez": "2026-10-02T12:51:25.768496",
-    "ultima_vez": "2026-10-02T12:51:25.768496"
+    "ultima_vez": "2026-10-05T13:15:01.940033"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20120613": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20120613",
+    "titulo": "Servicios de soporte de fabricante y de servicios profesionales de integrador de soporte, monitorización y mantenimiento del equipamiento hardware y software que componen la red WiFi de la UAH y de CRUSA.",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=l%2BM%2F2aNhlDYeC9GJQOEBkQ%3D%3D",
+    "cpv": [
+      "50330000"
+    ],
+    "fuente": "estatal",
+    "num_expediente": "2026/056.SER.ABR.MC",
+    "organismo": "Gerencia de la Universidad de Alcalá",
+    "plataforma": null,
+    "region": "Madrid",
+    "region_codigo": "ES300",
+    "categoria": "pruebas",
+    "coincidencia": "palabra clave «monitorización»",
+    "presupuesto_con_iva": 665500.0,
+    "presupuesto_sin_iva": 550000.0,
+    "valor_estimado": 1100000.0,
+    "fecha_fin_plazo": "2026-09-09",
+    "fecha_publicacion": "2026-07-24",
+    "fecha_actualizacion": "2026-10-02T12:08:30.665+02:00",
+    "primera_vez": "2026-10-05T13:15:01.940033",
+    "ultima_vez": "2026-10-05T13:15:01.940033"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20611691": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20611691",
+    "titulo": "Servicio de cualificación anual de la Bioseguridad Ambiental y evaluación semestral del nivel de higienización del sistema de ventilación en quirófanos y otras salas. Evaluación trimestral del nivel de contención en quirófanos y otras salas de ambiente controlado, respetuoso con el medio ambiente, del Hospital de Denia",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=eM9lMyRSfXUadbH3CysQuQ%3D%3D",
+    "cpv": [
+      "90714200",
+      "71620000",
+      "90714500",
+      "90731100",
+      "71610000"
+    ],
+    "fuente": "estatal",
+    "num_expediente": "PA 371/2026",
+    "organismo": "Departamento de Salud de Denia. Dirección Económica-Gerencia",
+    "plataforma": null,
+    "region": "Alicante/Alacant",
+    "region_codigo": "ES521",
+    "categoria": "pruebas",
+    "coincidencia": "palabra clave «higienización»",
+    "presupuesto_con_iva": 213039.39,
+    "presupuesto_sin_iva": 176065.61,
+    "valor_estimado": 281704.98,
+    "fecha_fin_plazo": "2026-11-02",
+    "fecha_publicacion": "2026-10-02",
+    "fecha_actualizacion": "2026-10-02T11:12:08.241+02:00",
+    "primera_vez": "2026-10-05T13:15:01.940033",
+    "ultima_vez": "2026-10-05T13:15:01.940033"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20611694": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20611694",
+    "titulo": "Suministro de filtros de ultracentrífuga para purificación de ADN en la investigación genética en los Departamentos y Delegación del Instituto Nacional de Toxicología y Ciencias Forenses",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=TvP%2Bh1KLNKI%2Bk2oCbDosIw%3D%3D",
+    "cpv": [
+      "33140000"
+    ],
+    "fuente": "estatal",
+    "num_expediente": "ASU/2026/085",
+    "organismo": "Junta de Contratación de la Secretaría de Estado de Justicia",
+    "plataforma": null,
+    "region": "España",
+    "region_codigo": "ES",
+    "categoria": "pruebas",
+    "coincidencia": "palabra clave «purificación»",
+    "presupuesto_con_iva": 205054.78,
+    "presupuesto_sin_iva": 170437.44,
+    "valor_estimado": 374962.37,
+    "fecha_fin_plazo": "2026-11-03",
+    "fecha_publicacion": "2026-10-02",
+    "fecha_actualizacion": "2026-10-02T11:09:33.965+02:00",
+    "primera_vez": "2026-10-05T13:15:01.940033",
+    "ultima_vez": "2026-10-05T13:15:01.940033"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20611772": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20611772",
+    "titulo": "Suministro de sistemas de monitorización continua de glucosa en líquido intersticial.",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=DjamT23zt8h%2FP7lJ7Fu0SA%3D%3D",
+    "cpv": [
+      "33195000"
+    ],
+    "fuente": "estatal",
+    "num_expediente": "2020017191",
+    "organismo": "Gerencia de Atención Primaria de León",
+    "plataforma": null,
+    "region": "León",
+    "region_codigo": "ES413",
+    "categoria": "pruebas",
+    "coincidencia": "palabra clave «monitorización»",
+    "presupuesto_con_iva": 2432100.0,
+    "presupuesto_sin_iva": 2211000.0,
+    "valor_estimado": 2432100.0,
+    "fecha_fin_plazo": "2026-09-16",
+    "fecha_publicacion": "2026-10-02",
+    "fecha_actualizacion": "2026-10-02T10:31:21.687+02:00",
+    "primera_vez": "2026-10-05T13:15:01.940033",
+    "ultima_vez": "2026-10-05T13:15:01.940033"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20612010": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20612010",
+    "titulo": "Suministro, En La Modalidad De Suscripción, De Licencias De Software De Monitorización Integral De Infraestructuras Tic Con Funcionalidades Avanzadas De Gestión.\n (Ministerio Del Interior -Servicio De Contratación)",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=oqgp1VUAvhoS7pcxhTeWOg%3D%3D",
+    "cpv": [
+      "48000000",
+      "48000000"
+    ],
+    "fuente": "estatal",
+    "num_expediente": "CEA3408/2026",
+    "organismo": "Dirección General de Racionalización y Centralización de la Contratación-Junta de Contratación Centralizada",
+    "plataforma": null,
+    "region": "Madrid",
+    "region_codigo": "ES300",
+    "categoria": "pruebas",
+    "coincidencia": "palabra clave «monitorización»",
+    "presupuesto_con_iva": 36319.77,
+    "presupuesto_sin_iva": 30016.34,
+    "valor_estimado": 30016.34,
+    "fecha_fin_plazo": null,
+    "fecha_publicacion": "2026-10-01",
+    "fecha_actualizacion": "2026-10-01T22:33:22.270+02:00",
+    "primera_vez": "2026-10-05T13:15:01.940033",
+    "ultima_vez": "2026-10-05T13:15:01.940033"
+  },
+  "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19529658": {
+    "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/19529658",
+    "titulo": "0000349/2026 suministro e instalación de seis monitores multiparamétricos con central de monitorizacion con destino a la unidad de cuidados intensivos del hospital universitario reina sofia de córdoba. (pa 23/26)",
+    "enlace": "https://www.juntadeandalucia.es/haciendayadministracionpublica/apl/pdc_sirec/perfiles-licitaciones/detalle-licitacion.jsf?idExpediente=945202",
+    "cpv": [
+      "33172000"
+    ],
+    "fuente": "agregadas",
+    "num_expediente": "CONTR 2026 0000129859",
+    "organismo": "Servicio Andaluz de Salud",
+    "plataforma": "Junta de Andalucía",
+    "region": null,
+    "region_codigo": "ES613",
+    "categoria": "pruebas",
+    "coincidencia": "palabra clave «monitorización»",
+    "presupuesto_con_iva": null,
+    "presupuesto_sin_iva": 110000.0,
+    "valor_estimado": 110000.0,
+    "fecha_fin_plazo": "2026-05-05",
+    "fecha_publicacion": "2026-04-20",
+    "fecha_actualizacion": "2026-10-02T14:41:41.769+02:00",
+    "primera_vez": "2026-10-05T13:15:01.940033",
+    "ultima_vez": "2026-10-05T13:15:01.940033"
+  },
+  "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20615504": {
+    "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20615504",
+    "titulo": "Contrato de servicio de monitorizaciones prolongadas de ecg con holter textil para monitorizaciones de 30 días según protocolo losa-hf (proyecto pi25/00282), para la fundación para la investigación biomédica del hospital universitario la paz, ensayo clínico losa-hf: “ensayo clínico multicéntrico aleatorizado en pacientes con insuficiencia cardíaca y fibrilación auricular persistente de larga duración: ablación vs tratamiento médico óptimo (losa-hf)” a adjudicar por procedimiento abierto simplificado mediante pluralidad de criterios. el proyecto pi25/00282 ha sido financiado por el instituto de salud carlos iii y cofinanciado por la unión europea. expediente pas 44-2026.",
+    "enlace": "https://contratos-publicos.comunidad.madrid/contrato-publico/contrato-servicio-monitorizaciones-prolongadas-ecg-holter-textil-monitorizaciones",
+    "cpv": [
+      "85121231"
+    ],
+    "fuente": "agregadas",
+    "num_expediente": "PAS 44-2026",
+    "organismo": "Fundación para la Investigación Biomédica del Hospital Universitario La Paz",
+    "plataforma": "Comunidad de Madrid",
+    "region": null,
+    "region_codigo": "ES300",
+    "categoria": "pruebas",
+    "coincidencia": "palabra clave «monitorización»",
+    "presupuesto_con_iva": null,
+    "presupuesto_sin_iva": 56628.0,
+    "valor_estimado": 56628.0,
+    "fecha_fin_plazo": "2026-10-19",
+    "fecha_publicacion": "2026-10-02",
+    "fecha_actualizacion": "2026-10-02T12:41:14.519+02:00",
+    "primera_vez": "2026-10-05T13:15:01.940033",
+    "ultima_vez": "2026-10-05T13:15:01.940033"
+  },
+  "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20615391": {
+    "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20615391",
+    "titulo": "Unidad móvil para la Red de vigilancia de la calidad del aire de Navarra",
+    "enlace": "https://hacienda.navarra.es/sicpportal/mtoFichaAnuncioPrevisto.aspx?cod=261002135101B6E53F35",
+    "cpv": [
+      "90731100"
+    ],
+    "fuente": "agregadas",
+    "num_expediente": null,
+    "organismo": "Dirección General de Medio Ambiente",
+    "plataforma": "Gobierno de Navarra",
+    "region": null,
+    "region_codigo": "ES220",
+    "categoria": "criticas",
+    "coincidencia": "CPV 90731100 (coincide con 90731100)",
+    "presupuesto_con_iva": null,
+    "presupuesto_sin_iva": null,
+    "valor_estimado": 260000.0,
+    "fecha_fin_plazo": null,
+    "fecha_publicacion": "2026-10-02",
+    "fecha_actualizacion": "2026-10-02T15:00:08.560+02:00",
+    "primera_vez": "2026-10-05T13:15:01.940033",
+    "ultima_vez": "2026-10-05T13:15:01.940033"
+  },
+  "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20615392": {
+    "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20615392",
+    "titulo": "Cabina para estación de calidad del aire de Pamplona - Rochapea",
+    "enlace": "https://hacienda.navarra.es/sicpportal/mtoFichaAnuncioPrevisto.aspx?cod=26100213423908E4FE11",
+    "cpv": [
+      "90731100"
+    ],
+    "fuente": "agregadas",
+    "num_expediente": null,
+    "organismo": "Dirección General de Medio Ambiente",
+    "plataforma": "Gobierno de Navarra",
+    "region": null,
+    "region_codigo": "ES220",
+    "categoria": "criticas",
+    "coincidencia": "CPV 90731100 (coincide con 90731100)",
+    "presupuesto_con_iva": null,
+    "presupuesto_sin_iva": null,
+    "valor_estimado": 25000.0,
+    "fecha_fin_plazo": null,
+    "fecha_publicacion": "2026-10-02",
+    "fecha_actualizacion": "2026-10-02T15:00:07.935+02:00",
+    "primera_vez": "2026-10-05T13:15:01.940033",
+    "ultima_vez": "2026-10-05T13:15:01.940033"
+  },
+  "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20615394": {
+    "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20615394",
+    "titulo": "Analizadores para la Red de vigilancia de la calidad del aire de Navarra",
+    "enlace": "https://hacienda.navarra.es/sicpportal/mtoFichaAnuncioPrevisto.aspx?cod=261002133811C6E84F1B",
+    "cpv": [
+      "90731100"
+    ],
+    "fuente": "agregadas",
+    "num_expediente": null,
+    "organismo": "Dirección General de Medio Ambiente",
+    "plataforma": "Gobierno de Navarra",
+    "region": null,
+    "region_codigo": "ES220",
+    "categoria": "criticas",
+    "coincidencia": "CPV 90731100 (coincide con 90731100)",
+    "presupuesto_con_iva": null,
+    "presupuesto_sin_iva": null,
+    "valor_estimado": 45000.0,
+    "fecha_fin_plazo": null,
+    "fecha_publicacion": "2026-10-02",
+    "fecha_actualizacion": "2026-10-02T15:00:06.561+02:00",
+    "primera_vez": "2026-10-05T13:15:01.940033",
+    "ultima_vez": "2026-10-05T13:15:01.940033"
+  },
+  "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20384756": {
+    "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20384756",
+    "titulo": "Subministrament, instal·lació i posada en marxa de tres cambres climàtiques visitables amb control de temperatura i humitat i que admetin l’entrada de carros per al Servei de Camps Experimentals on es situaran els diferents tipus de material viu que es farà créixer en les cambres.\nL’objecte compren:\n1. Tres cambres visitables de la mateixa mida, sense prestatgeries ni sistema d’il·luminació, amb regulació de les condicions climàtiques (temperatura, humitat relativa).\n2. Habilitació per a l’entrada de carros-prestatgeria mòbils per a l’optimització de l’espai i aplicar condicions específiques a cada espècie, inclòs sistema propi d’il·luminació. Aquests carros no formen part d’aquesta licitació i es descriuen només per claredat dels requeriments de les cambres.\n3. Controlador de temperatura i humitat de la cambra que inclogui control de fotoperíode, que serà utilitzat per controlar l’alimentació elèctrica dels carros.\n4. Altres ajustos i correcció de desperfectes en la instal·lació.\nL’objecte comprèn una garantia de 2 anys.\nTambé inclou un curs de formació bàsic i pràctic amb el material necessari inclòs, per a l’aprenentatge de les funcions del sistema destinat al personal tècnic i investigadors. Es preveu 5 persones (vegeu l’apartat 4 del PPT).\nAquest contracte respon a un dels objectius del projecte següent:\nPlataforma de fenotipado y laboratorio de bioseguridad P2 de plantes, ref. EQC2024-008053-P, finançat pel MICIU/AEI /10.13039/501100011033 y por FEDER. IP. Jose Luis Araus Ortega.\nL’objectiu d’aquest equipament és la recerca i innovació mitjançant el subministrament continu de planta sana que després serà infectada dins les instal·lacions del laboratori de bioseguretat P2 inclòs en el projecte EQC2024-008053-P, on les plantes seran infectades amb patògens de quarantena en un espai de bioseguretat de nivell P2 tant per part d’investigadors de la UB com usuaris externs.",
+    "enlace": "https://contractaciopublica.cat/ca/detall-publicacio/b0276242-dcfd-4f50-be41-682fa9e73715/300897146",
+    "cpv": [
+      "38970000"
+    ],
+    "fuente": "agregadas",
+    "num_expediente": "2026/48",
+    "organismo": "Universitat de Barcelona",
+    "plataforma": "Generalitat de Catalunya",
+    "region": null,
+    "region_codigo": "ES511",
+    "categoria": "criticas",
+    "coincidencia": "palabra clave «bioseguridad»",
+    "presupuesto_con_iva": null,
+    "presupuesto_sin_iva": 105000.0,
+    "valor_estimado": 105000.0,
+    "fecha_fin_plazo": "2026-09-24",
+    "fecha_publicacion": "2026-09-08",
+    "fecha_actualizacion": "2026-10-01T16:04:06.684+02:00",
+    "primera_vez": "2026-10-05T13:15:01.940033",
+    "ultima_vez": "2026-10-05T13:15:01.940033"
+  },
+  "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/17780084": {
+    "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/17780084",
+    "titulo": "Contrato de servicios de: instalación y mantenimiento de equipos de bioseguridad sanitaria por frio en el Hospital Universitario Ramón y Cajal",
+    "enlace": "https://contratos-publicos.comunidad.madrid/contrato-publico/contrato-servicios-instalacion-mantenimiento-equipos-bioseguridad-sanitaria-frio",
+    "cpv": [
+      "90721000"
+    ],
+    "fuente": "agregadas",
+    "num_expediente": "A/SER-031581/2025",
+    "organismo": "Hospital Universitario Ramón y Cajal",
+    "plataforma": "Comunidad de Madrid",
+    "region": null,
+    "region_codigo": "ES300",
+    "categoria": "criticas",
+    "coincidencia": "palabra clave «bioseguridad»",
+    "presupuesto_con_iva": null,
+    "presupuesto_sin_iva": 35100.0,
+    "valor_estimado": 112320.0,
+    "fecha_fin_plazo": "2025-08-18",
+    "fecha_publicacion": "2025-08-01",
+    "fecha_actualizacion": "2026-10-01T10:56:21.044+02:00",
+    "primera_vez": "2026-10-05T13:15:01.940033",
+    "ultima_vez": "2026-10-05T13:15:01.940033"
+  },
+  "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/14937060": {
+    "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/14937060",
+    "titulo": "Suministro de válvula simple de bioseguridad para el Hospital Universitario Infanta Sofía",
+    "enlace": "https://contratos-publicos.comunidad.madrid/contrato-publico/suministro-valvula-simple-bioseguridad-hospital-universitario-infanta-sofia-1",
+    "cpv": [
+      "33140000"
+    ],
+    "fuente": "agregadas",
+    "num_expediente": "GCASU2400007",
+    "organismo": "Hospital Universitario Infanta Sofía",
+    "plataforma": "Comunidad de Madrid",
+    "region": null,
+    "region_codigo": "ES300",
+    "categoria": "criticas",
+    "coincidencia": "palabra clave «bioseguridad»",
+    "presupuesto_con_iva": null,
+    "presupuesto_sin_iva": 120000.0,
+    "valor_estimado": 240000.0,
+    "fecha_fin_plazo": "2024-06-10",
+    "fecha_publicacion": "2024-05-09",
+    "fecha_actualizacion": "2026-09-30T10:41:05.025+02:00",
+    "primera_vez": "2026-10-05T13:15:01.940033",
+    "ultima_vez": "2026-10-05T13:15:01.940033"
+  },
+  "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20558290": {
+    "id": "https://contrataciondelestado.es/sindicacion/PlataformasAgregadasSinMenores/20558290",
+    "titulo": "Suministro para la adquisición de 370.000 unidades de combos (jeringa + agujas de bioseguridad) durante la campaña COVID 2026/2027 en la Comunidad de Madrid",
+    "enlace": "https://contratos-publicos.comunidad.madrid/contrato-publico/suministro-adquisicion-370000-unidades-combos-jeringa-agujas-bioseguridad-campana",
+    "cpv": [
+      "33141310",
+      "33141320"
+    ],
+    "fuente": "agregadas",
+    "num_expediente": "29/2026, A/SUM-033543/2026",
+    "organismo": "Consejería de Sanidad",
+    "plataforma": "Comunidad de Madrid",
+    "region": null,
+    "region_codigo": "ES300",
+    "categoria": "criticas",
+    "coincidencia": "palabra clave «bioseguridad»",
+    "presupuesto_con_iva": null,
+    "presupuesto_sin_iva": 33300.0,
+    "valor_estimado": 33300.0,
+    "fecha_fin_plazo": "2026-09-24",
+    "fecha_publicacion": "2026-09-09",
+    "fecha_actualizacion": "2026-09-25T00:25:56.129+02:00",
+    "primera_vez": "2026-10-05T13:15:01.940033",
+    "ultima_vez": "2026-10-05T13:15:01.940033"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20010223": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20010223",
+    "titulo": "Limpieza de oficinas",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=rfszX1yEkvAzjChw4z%2FXvw%3D%3D",
+    "cpv": [
+      "90920000",
+      "90910000"
+    ],
+    "fuente": "estatal",
+    "num_expediente": "AREX-2026-20006",
+    "organismo": "Aragón Exterior S.A.U.",
+    "plataforma": null,
+    "region": "Zaragoza",
+    "region_codigo": "ES243",
+    "categoria": "a_revisar",
+    "coincidencia": "CPV 90920000 (coincide con 90920000)",
+    "presupuesto_con_iva": 34122.0,
+    "presupuesto_sin_iva": 28200.0,
+    "valor_estimado": 56400.0,
+    "fecha_fin_plazo": "2026-07-24",
+    "fecha_publicacion": "2026-07-09",
+    "fecha_actualizacion": "2026-10-02T14:32:48.564+02:00",
+    "primera_vez": "2026-10-05T13:15:01.940033",
+    "ultima_vez": "2026-10-05T13:15:01.940033"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20611385": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20611385",
+    "titulo": "Apoyo técnico en materia de análisis de contaminantes atmosféricos y estudio de precursores de ozono troposférico",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=dyKyKA7fcbikU02jNGj1Fw%3D%3D",
+    "cpv": [
+      "90731400"
+    ],
+    "fuente": "estatal",
+    "num_expediente": "300/2026/01542",
+    "organismo": "Área de Gobierno de Urbanismo, Medio Ambiente y Movilidad del Ayuntamiento de Madrid",
+    "plataforma": null,
+    "region": "Madrid",
+    "region_codigo": "ES300",
+    "categoria": "a_revisar",
+    "coincidencia": "CPV 90731400 (coincide con 9073)",
+    "presupuesto_con_iva": 331250.64,
+    "presupuesto_sin_iva": 273760.86,
+    "valor_estimado": 527396.36,
+    "fecha_fin_plazo": "2026-11-06",
+    "fecha_publicacion": "2026-10-02",
+    "fecha_actualizacion": "2026-10-02T13:56:11.966+02:00",
+    "primera_vez": "2026-10-05T13:15:01.940033",
+    "ultima_vez": "2026-10-05T13:15:01.940033"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20611427": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20611427",
+    "titulo": "Contratación del servicio de limpieza, desinfección, desinsectación y desratización de las embarcaciones dependientes del Servicio Marítimo Provincial de la Guardia Civil de Valencia, dependientes de la 6ª Zona de la Guardia Civil (VALENCIA).",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=9%2BEafMBYTWnIGlsa0Wad%2Bw%3D%3D",
+    "cpv": [
+      "90910000",
+      "90920000"
+    ],
+    "fuente": "estatal",
+    "num_expediente": "P/0191/X/26/2",
+    "organismo": "Sexta Zona de la Guardia Civil en la Comunidad Valenciana",
+    "plataforma": null,
+    "region": "Valencia/València",
+    "region_codigo": "ES523",
+    "categoria": "a_revisar",
+    "coincidencia": "CPV 90920000 (coincide con 90920000)",
+    "presupuesto_con_iva": 90000.0,
+    "presupuesto_sin_iva": 90000.0,
+    "valor_estimado": 90000.0,
+    "fecha_fin_plazo": "2026-10-19",
+    "fecha_publicacion": "2026-10-02",
+    "fecha_actualizacion": "2026-10-02T13:30:45.709+02:00",
+    "primera_vez": "2026-10-05T13:15:01.940033",
+    "ultima_vez": "2026-10-05T13:15:01.940033"
+  },
+  "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20611796": {
+    "id": "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/20611796",
+    "titulo": "Servicio de limpieza y mantenimiento integral de los parques infantiles y biosalaudables del Municipio de Arrecife",
+    "enlace": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=nIefSIg7wne8ebB%2FXTwy0A%3D%3D",
+    "cpv": [
+      "90900000",
+      "90911200",
+      "90920000"
+    ],
+    "fuente": "estatal",
+    "num_expediente": "26236/2026",
+    "organismo": "Alcaldía del Ayuntamiento de Arrecife",
+    "plataforma": null,
+    "region": "Canarias",
+    "region_codigo": "ES70",
+    "categoria": "a_revisar",
+    "coincidencia": "CPV 90920000 (coincide con 90920000)",
+    "presupuesto_con_iva": 300953.66,
+    "presupuesto_sin_iva": 281265.11,
+    "valor_estimado": 1296112.33,
+    "fecha_fin_plazo": "2026-11-09",
+    "fecha_publicacion": "2026-10-02",
+    "fecha_actualizacion": "2026-10-02T10:18:41.745+02:00",
+    "primera_vez": "2026-10-05T13:15:01.940033",
+    "ultima_vez": "2026-10-05T13:15:01.940033"
   }
 }
