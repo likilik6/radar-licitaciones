@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 from utiles import (ORDEN_CATEGORIAS, CATEGORIA_ULTIMA, busca_coincidencia,
-                    normaliza, ordena_categorias)
+                    normaliza, ordena_categorias, reclasifica)
 
 sys.stdout.reconfigure(encoding="utf-8")
 OK, FALLOS = 0, []
@@ -111,6 +111,39 @@ comprueba("el motivo dice por qué casó",
           "CPV" in (busca_coincidencia(["90731100"], "", {"cpv": ["9073"]}) or ""))
 comprueba("criterios vacíos no casan con nada",
           busca_coincidencia(["90731100"], "lo que sea", {}) is None)
+
+# --- reclasifica: lo que hace la poda en cada pasada -----------------------------------
+# El campo 'coincidencia' se escribía UNA sola vez, el día que la licitación era nueva, y
+# ya no se tocaba nunca: ni al volver a verla en el feed (esa rama solo refresca fechas e
+# importes) ni en la poda, que sí refrescaba la categoría. Medido el 09/10/2026 sobre las
+# 714 tarjetas guardadas: 13 llevaban un motivo de un criterio que ya era de otro grupo.
+CATS = ordena_categorias(COMO_LO_DA_JSONB)
+
+comprueba("reclasifica devuelve grupo Y motivo",
+          reclasifica({"titulo": CASO, "cpv": []}, CATS) == ("criticas", "palabra clave «bioseguridad»"),
+          reclasifica({"titulo": CASO, "cpv": []}, CATS))
+comprueba("reclasifica por CPV dice con qué prefijo casó",
+          reclasifica({"titulo": "x", "cpv": ["90731100"]}, CATS)
+          == ("criticas", "CPV 90731100 (coincide con 90731100)"))
+comprueba("lo que no casa con nada -> (None, None)",
+          reclasifica({"titulo": "Suministro de sillas", "cpv": []}, CATS) == (None, None))
+comprueba("sin título ni cpv no explota",
+          reclasifica({}, CATS) == (None, None))
+comprueba("titulo None no explota",
+          reclasifica({"titulo": None, "cpv": None}, CATS) == (None, None))
+comprueba("respeta el orden que se le da (si llega el del jsonb, gana pruebas)",
+          reclasifica({"titulo": CASO, "cpv": []}, COMO_LO_DA_JSONB)[0] == "pruebas")
+
+# REGRESIÓN del motivo rancio: una tarjeta guardada en su día por el prefijo corto de
+# a_revisar que HOY entra por el CPV largo de críticas. La poda tiene que corregir las dos
+# cosas, grupo y motivo; antes solo corregía el grupo y el texto se quedaba mintiendo.
+_vieja = {"titulo": "Inspecciones acreditadas de la calidad del aire",
+          "cpv": ["90731100"], "categoria": "a_revisar",
+          "coincidencia": "CPV 90731100 (coincide con 9073)"}
+_cat, _mot = reclasifica(_vieja, CATS)
+comprueba("REGRESIÓN motivo rancio: el grupo se corrige", _cat == "criticas")
+comprueba("REGRESIÓN motivo rancio: el motivo YA NO apunta al criterio de otro grupo",
+          _mot == "CPV 90731100 (coincide con 90731100)" and _mot != _vieja["coincidencia"], _mot)
 
 # --- por qué aquí NO se comprueba el fichero de datos real -----------------------
 # Tentador, pero no vale: data/licitaciones.json guarda la categoría con la que se
