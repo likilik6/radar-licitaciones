@@ -660,6 +660,59 @@ comprueba("31/03 - 1 mes", ie.resta_meses(datetime(2026, 3, 31, tzinfo=timezone.
 comprueba("15/09 - 24 meses", ie.resta_meses(datetime(2026, 9, 15, tzinfo=timezone.utc), 24).date().isoformat(), "2024-09-15")
 comprueba("15/09 - 18 meses", ie.resta_meses(datetime(2026, 9, 15, tzinfo=timezone.utc), 18).date().isoformat(), "2025-03-15")
 
+print("\n== fin de plazo por FECHA de Madrid (abierta todo su último día) ==")
+# La base guarda la fecha de fin a las 00:00 UTC (= 02:00 en Madrid). Antes se comparaba
+# con el instante actual y, desde las 02:00 del último día, la licitación ya no contaba
+# como abierta mientras el Radar decía «vence hoy» (mismo fallo que el Buscador, PR #37).
+from datetime import date  # noqa: E402
+comprueba("hoy · verano, 23:59 en Madrid", ie.hoy_madrid(datetime(2026, 10, 15, 21, 59, tzinfo=timezone.utc)), date(2026, 10, 15))
+comprueba("hoy · verano, 00:01 en Madrid ya es el día siguiente", ie.hoy_madrid(datetime(2026, 10, 15, 22, 1, tzinfo=timezone.utc)), date(2026, 10, 16))
+comprueba("hoy · invierno, 23:59 en Madrid", ie.hoy_madrid(datetime(2026, 12, 31, 22, 59, tzinfo=timezone.utc)), date(2026, 12, 31))
+comprueba("hoy · invierno, 00:01 en Madrid ya es el día siguiente", ie.hoy_madrid(datetime(2026, 12, 31, 23, 1, tzinfo=timezone.utc)), date(2027, 1, 1))
+comprueba("fecha de fin tal como la devuelve PostgREST", ie.fecha_fin_madrid("2026-10-15T00:00:00+00:00"), date(2026, 10, 15))
+comprueba("fecha de fin con Z", ie.fecha_fin_madrid("2026-10-15T00:00:00Z"), date(2026, 10, 15))
+comprueba("fecha de fin sin hora", ie.fecha_fin_madrid("2026-10-15"), date(2026, 10, 15))
+comprueba("si un día se guarda la hora: 00:30 de Madrid sigue siendo ese día", ie.fecha_fin_madrid("2026-10-14T22:30:00+00:00"), date(2026, 10, 15))
+comprueba("sin fecha de fin", ie.fecha_fin_madrid(None), None)
+comprueba("fecha de fin ilegible", ie.fecha_fin_madrid("basura"), None)
+comprueba("frontera para PostgREST = como se guarda la columna", ie.frontera_abiertas(date(2026, 10, 15)), "2026-10-15T00:00:00Z")
+
+HOY = date(2026, 10, 15)
+FILAS_PLAZO = [
+    {"licitacion_id": "ayer", "organo_contratacion": "A", "presupuesto_sin_iva": 1,
+     "fecha_fin_plazo": "2026-10-14T00:00:00+00:00", "estado_adjudicacion": None, "ccaa": None},
+    {"licitacion_id": "hoy", "organo_contratacion": "A", "presupuesto_sin_iva": 1,
+     "fecha_fin_plazo": "2026-10-15T00:00:00+00:00", "estado_adjudicacion": None, "ccaa": None},
+    {"licitacion_id": "mañana", "organo_contratacion": "A", "presupuesto_sin_iva": 1,
+     "fecha_fin_plazo": "2026-10-16T00:00:00+00:00", "estado_adjudicacion": None, "ccaa": None},
+    {"licitacion_id": "sin fecha", "organo_contratacion": "A", "presupuesto_sin_iva": 1,
+     "fecha_fin_plazo": None, "estado_adjudicacion": None, "ccaa": None},
+]
+b5_plazo = ie.bloque5_mercado(SupabaseDeMentira(FILAS_PLAZO), ["90910000"],
+                              "2024-01-01T00:00:00+00:00", hoy=HOY)
+comprueba("bloque 5 · la que vence hoy cuenta como abierta (hoy + mañana)", b5_plazo["abiertas_hoy"], 2)
+
+
+class SupabaseQueApunta(SupabaseDeMentira):
+    """Como SupabaseDeMentira, pero se queda con la consulta para poder mirarla."""
+
+    def filas(self, tabla, params, tope=None):
+        self.params = params
+        return super().filas(tabla, params, tope)
+
+
+sb_op = SupabaseQueApunta([
+    {"licitacion_id": "hoy", "fecha_fin_plazo": "2026-10-15T00:00:00+00:00"},
+    {"licitacion_id": "pasado", "fecha_fin_plazo": "2026-10-17T00:00:00+00:00"},
+    {"licitacion_id": "sin fecha", "fecha_fin_plazo": None},
+])
+op = ie.bloque7_oportunidades(sb_op, ["90910000"], hoy=HOY)
+comprueba("bloque 7 · pide desde el inicio de hoy, no desde el instante actual",
+          "fecha_fin_plazo=gte.2026-10-15T00%3A00%3A00Z" in sb_op.params, True)
+comprueba("bloque 7 · vence hoy = 0 días", op[0]["dias_restantes"], 0)
+comprueba("bloque 7 · pasado mañana = 2 días (antes salía 1)", op[1]["dias_restantes"], 2)
+comprueba("bloque 7 · sin fecha = sin días", op[2]["dias_restantes"], None)
+
 print("\n== la clave no se imprime ==")
 comprueba("la clave no aparece en ningún print",
           any("clave" in l and "print(" in l for l in fuente.splitlines()), False)

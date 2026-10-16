@@ -56,9 +56,10 @@ import os
 import sys
 import time
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -84,6 +85,42 @@ TOP_ADJUDICATARIOS = 15
 
 UMBRAL_AM = 1000             # mismo valor que COMP_UMBRAL_AM en generar_web.py
 DESIERTAS = ("desierta_total", "desierta_parcial")
+MADRID = ZoneInfo("Europe/Madrid")   # tzdata ya está en requirements.txt
+
+
+# ---------------------------------------------------------------------------
+# Fin de plazo: se cuenta por FECHA de Madrid, igual que el Radar y el Buscador
+# ---------------------------------------------------------------------------
+# `licitaciones.fecha_fin_plazo` guarda solo la FECHA del feed (cbc:EndDate) a las
+# 00:00 UTC, que son las 02:00 en Madrid. Compararla con el instante actual daba por
+# cerrada una licitación desde las 02:00 de su último día (el mismo fallo se corrigió
+# en el Buscador en el PR #37). Por eso aquí se trabaja con fechas: abierta = vence hoy
+# o después; días restantes = fecha de fin − hoy (0 = vence hoy), como dias_restantes()
+# de generar_web.py.
+def hoy_madrid(ahora: datetime | None = None) -> date:
+    """Fecha de hoy en Madrid. `ahora` (con zona) solo lo pasan las pruebas."""
+    return (ahora or datetime.now(timezone.utc)).astimezone(MADRID).date()
+
+
+def frontera_abiertas(hoy: date) -> str:
+    """Inicio de `hoy` escrito como se guarda la columna, para filtrar en PostgREST
+    (`fecha_fin_plazo=gte.<esto>`): mismo rango por índice que usa el Buscador."""
+    return f"{hoy.isoformat()}T00:00:00Z"
+
+
+def fecha_fin_madrid(valor) -> date | None:
+    """Fecha en Madrid del fin de plazo que devuelve PostgREST (timestamptz en texto).
+    Se pasa a Madrid en vez de cortar los 10 primeros caracteres para que siga bien si
+    algún día se guarda también la hora. None si no hay fecha o no se entiende."""
+    if not valor:
+        return None
+    try:
+        instante = datetime.fromisoformat(str(valor).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if instante.tzinfo is None:           # sin zona = UTC, que es como la guarda la base
+        instante = instante.replace(tzinfo=timezone.utc)
+    return instante.astimezone(MADRID).date()
 
 
 # ---------------------------------------------------------------------------
@@ -807,7 +844,8 @@ def criba_cpv(sb: Supabase, candidatos: list[str], total_catalogo: int) -> dict:
             "max_cpv": MAX_CPV}
 
 
-def bloque5_mercado(sb: Supabase, cpvs: list[str], desde_iso: str) -> dict:
+def bloque5_mercado(sb: Supabase, cpvs: list[str], desde_iso: str,
+                    hoy: date | None = None) -> dict:
     """Mercado en esos CPV, desglosado POR COMUNIDAD AUTÓNOMA y POR ÓRGANO.
 
     Las dos dimensiones, porque no se sustituyen: hay 7.472 órganos distintos y los
@@ -833,14 +871,15 @@ def bloque5_mercado(sb: Supabase, cpvs: list[str], desde_iso: str) -> dict:
     filas = sb.filas("licitaciones",
                      "select=licitacion_id,organo_contratacion,presupuesto_sin_iva,"
                      f"fecha_fin_plazo,estado_adjudicacion,ccaa&{filtro}", tope=TOPE_MERCADO)
-    ahora = datetime.now(timezone.utc).isoformat()
+    hoy = hoy or hoy_madrid()
     por_organo = defaultdict(lambda: {"n": 0, "importe": 0.0})
     por_ccaa = defaultdict(lambda: {"n": 0, "importe": 0.0})
     total_importe, abiertas, desiertas, sin_ccaa = 0.0, 0, 0, 0
     for f in filas:
         imp = num(f.get("presupuesto_sin_iva")) or 0
         total_importe += imp
-        if f.get("fecha_fin_plazo") and f["fecha_fin_plazo"] >= ahora:
+        fin = fecha_fin_madrid(f.get("fecha_fin_plazo"))
+        if fin is not None and fin >= hoy:      # abierta todo su último día
             abiertas += 1
         if f.get("estado_adjudicacion") in DESIERTAS:
             desiertas += 1
@@ -923,26 +962,21 @@ def bloque6_quien_gana(sb: Supabase, ids: list[str]) -> list[dict]:
     return salida[:TOP_ADJUDICATARIOS]
 
 
-def bloque7_oportunidades(sb: Supabase, cpvs: list[str]) -> list[dict]:
+def bloque7_oportunidades(sb: Supabase, cpvs: list[str],
+                          hoy: date | None = None) -> list[dict]:
     if not cpvs:
         return []
-    ahora = datetime.now(timezone.utc)
+    hoy = hoy or hoy_madrid()
     ov = "%7B" + ",".join(cpvs) + "%7D"
     filas = sb.filas("licitaciones",
                      "select=licitacion_id,titulo,organo_contratacion,presupuesto_sin_iva,"
                      "valor_estimado,fecha_fin_plazo,enlace,num_expediente"
-                     f"&cpv=ov.{ov}&fecha_fin_plazo=gte.{quote(ahora.isoformat())}"
+                     f"&cpv=ov.{ov}&fecha_fin_plazo=gte.{quote(frontera_abiertas(hoy))}"
                      "&order=fecha_fin_plazo.asc")
     salida = []
     for f in filas:
-        dias = None
-        if f.get("fecha_fin_plazo"):
-            try:
-                fin = datetime.fromisoformat(f["fecha_fin_plazo"].replace("Z", "+00:00"))
-                dias = (fin - ahora).days
-            except ValueError:
-                dias = None
-        salida.append({**f, "dias_restantes": dias})
+        fin = fecha_fin_madrid(f.get("fecha_fin_plazo"))
+        salida.append({**f, "dias_restantes": (fin - hoy).days if fin is not None else None})
     return salida
 
 
