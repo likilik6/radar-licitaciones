@@ -168,8 +168,9 @@ export function crearBuscador(supabase) {
     const pubHasta = aISO(params.fechaPubHasta);
 
     // Estado (DERIVADO, no se guarda).
-    //   'abierta' -> fin de plazo en el FUTURO (fecha_fin_plazo >= ahora). Las que NO
-    //               tienen fecha de fin NO cuentan como abiertas (aparecen solo en 'todas').
+    //   'abierta' -> el último día de plazo es HOY o después, en fecha de Madrid (igual
+    //               que el Radar: abierta todo su último día). Las que NO tienen fecha
+    //               de fin NO cuentan como abiertas (aparecen solo en 'todas').
     //               (Antes 'abierta' incluía las NULL, pero ese OR-null no es sargable y
     //                con el orden fin_plazo ASC provocaba timeout 57014 en la vista inicial.)
     //   'cerrada' -> fin de plazo ya pasado (los NULL NO cuentan como cerrada).
@@ -240,8 +241,11 @@ export function crearBuscador(supabase) {
     // ======================================================================
     // CAMINO 2 · SIN TEXTO -> PostgREST + conteo híbrido.
     // ======================================================================
-    // ISO sin milisegundos para no meter puntos extra en el filtro .or().
-    const ahora = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+    // Frontera abierta/cerrada = inicio de HOY en Madrid, escrito como se guarda la
+    // columna: fecha_fin_plazo lleva solo la FECHA del feed a las 00:00 UTC. Comparar
+    // con el instante actual la cerraba a las 02:00 de su último día. Misma regla en
+    // buscador_rpc.sql (camino con texto). 'en-CA' da AAAA-MM-DD.
+    const hoyMadrid = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date()) + 'T00:00:00Z';
 
     const aplicarFiltros = (q) => {
       if (cpvs.length) q = q.overlaps('cpv', cpvs); // OR; código COMPLETO (el prefijo va por la RPC, ver arriba)
@@ -259,12 +263,12 @@ export function crearBuscador(supabase) {
       if (finHasta) q = q.lte('fecha_fin_plazo', finHasta);
       if (pubDesde) q = q.gte('fecha_publicacion', pubDesde);
       if (pubHasta) q = q.lte('fecha_publicacion', pubHasta);
-      // 'abierta' = fecha de fin FUTURA. SARGABLE: es un rango por el índice
-      // (fecha_fin_plazo, licitacion_id) desde 'ahora' -> instantáneo. El antiguo
+      // 'abierta' = vence hoy o después. SARGABLE: es un rango por el índice
+      // (fecha_fin_plazo, licitacion_id) desde 'hoyMadrid' -> instantáneo. El antiguo
       // 'OR fecha_fin_plazo IS NULL' rompía el rango y, con orden fin_plazo ASC, el
       // índice recorría TODAS las cerradas (pasadas) antes de las abiertas -> timeout.
-      if (estado === 'abierta') q = q.gte('fecha_fin_plazo', ahora);
-      else if (estado === 'cerrada') q = q.lt('fecha_fin_plazo', ahora);
+      if (estado === 'abierta') q = q.gte('fecha_fin_plazo', hoyMadrid);
+      else if (estado === 'cerrada') q = q.lt('fecha_fin_plazo', hoyMadrid);
       return q;
     };
 
