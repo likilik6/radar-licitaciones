@@ -58,6 +58,15 @@
 -- Se descartó el join/EXISTS sobre adjudicaciones: medido, 4,9 s el listado, 7,3 s con
 -- texto (el EXISTS tumbaba el GIN) y 13,0 s el COUNT. Ver la cabecera de ese archivo.
 -- Añadir p_desiertas cambia la firma (16 -> 17 args): hay que DROPear la de 16.
+--
+-- FIN DE PLAZO EN FECHA DE MADRID (16/10/2026): fecha_fin_plazo guarda solo la FECHA
+-- del feed (cbc:EndDate) a las 00:00 UTC, que son las 02:00 en Madrid. Con `>= now()`
+-- una licitación pasaba a 'cerrada' a las 02:00 de su ÚLTIMO día mientras el Radar
+-- decía «vence hoy». Ahora se compara con el inicio de HOY en Madrid escrito igual que
+-- se guarda (00:00 UTC de esa fecha): abierta todo el último día, como en el Radar.
+-- Sigue siendo un rango sobre el mismo índice (EXPLAIN: Index Scan licitaciones_finplazo_id).
+-- Misma regla en buscador_api.js. Solo cambia el cuerpo: create or replace basta y los
+-- permisos no se tocan.
 -- ============================================================================
 
 -- (Idempotente) Asegura el GIN sobre tsv por si se corre en un entorno limpio.
@@ -230,12 +239,13 @@ begin
     v_where := v_where || ' and fecha_publicacion <= ' || quote_literal(p_pub_hasta::text) || '::timestamptz';
   end if;
   if p_estado = 'abierta' then
-    -- 'abierta' = fecha de fin FUTURA (SARGABLE: rango por índice desde now()).
+    -- 'abierta' = el último día de plazo es HOY o después, en fecha de Madrid (ver la
+    -- cabecera: la columna guarda la fecha a las 00:00 UTC). SARGABLE: rango por índice.
     -- Se quitó el 'OR fecha_fin_plazo IS NULL' (no sargable; con orden fin_plazo ASC
     -- recorría las cerradas pasadas -> timeout). Las de fin de plazo NULL caen en 'todas'.
-    v_where := v_where || ' and fecha_fin_plazo >= now()';
+    v_where := v_where || ' and fecha_fin_plazo >= (date_trunc(''day'', now() at time zone ''Europe/Madrid'') at time zone ''UTC'')';
   elsif p_estado = 'cerrada' then
-    v_where := v_where || ' and fecha_fin_plazo < now()';
+    v_where := v_where || ' and fecha_fin_plazo < (date_trunc(''day'', now() at time zone ''Europe/Madrid'') at time zone ''UTC'')';
   end if;  -- 'todas' (o cualquier otro): sin filtro de estado
 
   -- =====================================================================
