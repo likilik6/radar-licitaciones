@@ -63,6 +63,23 @@ ORDEN_CATEGORIAS = ("criticas", "a_revisar")
 CATEGORIA_ULTIMA = "pruebas"
 
 
+def reclasifica(registro, categorias):
+    """(categoría, motivo) de una licitación GUARDADA con los criterios que se le pasen;
+    (None, None) si ya no casa con ninguna.
+
+    'categorias' tiene que venir ya en orden de prioridad (ordena_categorias), porque se
+    queda con la PRIMERA que casa. Vive aquí, y no dentro del bucle de la poda, para que
+    se pueda probar: la poda está en el cuerpo de filtrar.py, que al importarlo arranca
+    la descarga del feed."""
+    titulo_norm = normaliza(registro.get("titulo") or "")
+    cpvs = registro.get("cpv") or []
+    for nombre, criterios in categorias.items():
+        motivo = busca_coincidencia(cpvs, titulo_norm, criterios)
+        if motivo:
+            return nombre, motivo
+    return None, None
+
+
 def ordena_categorias(categorias):
     """Devuelve las categorías en orden de PRIORIDAD (un dict nuevo, mismo contenido).
 
