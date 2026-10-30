@@ -399,6 +399,13 @@ def extrae_entrada(entrada, fuente):
     presupuesto_sin_iva = a_numero(entrada.findtext(base_presupuesto + "cbc:TaxExclusiveAmount", namespaces=NS))
     valor_estimado = a_numero(entrada.findtext(base_presupuesto + "cbc:EstimatedOverallContractAmount", namespaces=NS))
 
+    # Estado del expediente en ESTA versión: PRE (anuncio previo), PUB (publicado), EV (en
+    # evaluación), ADJ (adjudicado), RES (resuelto/formalizado), ANUL (anulado)... Misma
+    # ruta que ya usa extrae_adjudicaciones. Se guarda en public.licitaciones para saber si
+    # algo está anulado o resuelto aunque su plazo aún no haya vencido.
+    estado_expediente = a_texto(entrada.findtext(
+        ".//place:ContractFolderStatus/pce:ContractFolderStatusCode", namespaces=NS))
+
     # Fin del plazo de presentación de ofertas.
     fecha_fin_plazo = a_texto(entrada.findtext(
         ".//place:ContractFolderStatus/cac:TenderingProcess"
@@ -446,5 +453,6 @@ def extrae_entrada(entrada, fuente):
         "fecha_fin_plazo": fecha_fin_plazo,
         "fecha_publicacion": fecha_publicacion,
         "fecha_actualizacion": fecha_actualizacion,
+        "estado_expediente": estado_expediente,
         "adjudicaciones": adjudicaciones,
     }
