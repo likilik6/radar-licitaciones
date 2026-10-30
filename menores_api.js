@@ -80,6 +80,40 @@ const M_CADUCIDAD_ORDEN_MS = 5 * 60 * 1000;   // la lista ordenada se reutiliza 
 // al minuto) y dar por buena una lista completa con un dato viejo la dejaría coja. El
 // margen evita que un órgano justo en el filo baile entre aviso y no aviso.
 const M_PISTA_MARGEN = 1.1;
+// --- RPC ÚNICA (menores_rpc.sql) --------------------------------------------------------
+// Una sola petición en lugar de hasta 14. Si la llamada falla por cualquier motivo se sigue
+// por la ruta de abajo —la de siempre, por etapas y con sus presupuestos—, porque la RPC lo
+// hace todo en UNA sentencia con un único statement_timeout de 8 s: si se pasa, no hay
+// degradación posible desde dentro (el temporizador se arma al empezar la sentencia, así que
+// un `set local` en el cuerpo no compra tiempo). La red se queda puesta.
+const M_RPC = 'menores_buscar';
+const M_RPC_FILAS = 100;               // p_filas_completas: 100 filas = 66 KB = 4 páginas
+const M_PRESUPUESTO_RPC_MS = 7000;     // bajo los 8 s del rol 'authenticated'
+const M_USAR_RPC = true;               // interruptor: a false, se vuelve a la ruta por etapas
+
+// Parámetros de la RPC a partir de los filtros ya normalizados. Los null son importantes:
+// una cadena vacía en un date o un numeric la rechaza PostgREST con un 400.
+function mParamsRpc(n) {
+  return {
+    p_modo: n.modo,
+    p_cifs: n.modo === 'cifs' && n.cifsSeguidos.length ? n.cifsSeguidos : null,
+    p_nicho_cpv: n.modo === 'nicho' && n.nichoCpv.length ? n.nichoCpv : null,
+    p_nicho_kw: n.modo === 'nicho' && n.nichoKw ? n.nichoKw : null,
+    p_nicho_excl: n.modo === 'nicho' && n.nichoExcl.length ? n.nichoExcl : null,
+    p_cpv_prefijo: n.cpvPrefijo.length ? n.cpvPrefijo : null,
+    p_texto: n.texto ? mSinTildes(n.texto) : null,
+    p_organo: n.organo || null,
+    p_importe_min: n.impMin,
+    p_importe_max: n.impMax,
+    p_fecha_desde: n.fechaDesde || null,
+    p_fecha_hasta: n.fechaHasta || null,
+    p_orden_campo: n.ordenCampo,
+    p_orden_asc: n.ordenAsc,
+    p_pagina: n.pagina,
+    p_por_pagina: n.porPagina,
+    p_filas_completas: M_RPC_FILAS,
+  };
+}
 const M_ORDEN_PERMITIDO = new Set(['fecha_adjudicacion', 'importe_sin_iva']);
 const M_MODOS = new Set(['todo', 'nicho', 'cifs']);
 
@@ -178,7 +212,9 @@ export function crearMenores(supabase) {
   function decisionDe(clave) {
     const vigente = mDecision.clave === clave && (Date.now() - mDecision.hora) < M_CADUCIDAD_ORDEN_MS;
     if (!vigente) {
-      mDecision = { clave, hora: Date.now(), lista: null, supera: null, costosa: false, listaCostosa: false, servidor: false, sonda: null };
+      // porId: filas COMPLETAS ya traídas, acumuladas por clave. Con ella, cambiar de
+      // página o de orden dentro de lo ya traído no toca la base ni una vez.
+      mDecision = { clave, hora: Date.now(), lista: null, supera: null, costosa: false, listaCostosa: false, servidor: false, sonda: null, porId: new Map() };
     }
     return mDecision;
   }
@@ -430,6 +466,57 @@ export function crearMenores(supabase) {
     }, extra || {});
     const fallo = (error) => resultado([], { total: 0, error });
 
+    // ---- VÍA RÁPIDA: la RPC única (menores_rpc.sql) -------------------------
+    // Devuelve el resultado completo, o null si no ha podido; en ese caso sigue la ruta de
+    // abajo, que es la de siempre. Vale para CON y SIN filtros: la RPC trae el recuento
+    // exacto (o el tope) en la misma llamada, así que no queda conteoPendiente.
+    const d = decisionDe(clave);
+    const porRpc = async () => {
+      // 1) Con la lista ligera en memoria no se vuelve a la base por ella: se ordena y se
+      //    corta aquí, y las filas completas ya traídas se reusan. Solo se piden las que
+      //    falten, y si no falta ninguna la petición es CERO.
+      if (d.lista) {
+        const ids = d.lista.slice().sort(mComparador(n.ordenCampo, n.ordenAsc))
+          .slice(desde, hasta + 1).map((x) => x.licitacion_id);
+        if (!ids.length) return resultado([], { total: d.lista.length });
+        const faltan = ids.filter((id) => !d.porId.has(id));
+        if (faltan.length) {
+          const h = await mConPresupuesto(
+            supabase.from('menores').select(M_COLUMNAS).in('licitacion_id', faltan),
+            M_PRESUPUESTO_PAGINA_MS);
+          if (h.error) return null;
+          (h.data || []).forEach((f) => { if (f && f.licitacion_id) d.porId.set(f.licitacion_id, f); });
+        }
+        return resultado(ids.map((id) => d.porId.get(id)).filter(Boolean), { total: d.lista.length });
+      }
+      // 2) Primera vez con estos filtros (o resultado topado): UNA llamada.
+      const r = await mConPresupuesto(supabase.rpc(M_RPC, mParamsRpc(n)), M_PRESUPUESTO_RPC_MS);
+      if (r.error || !r.data || typeof r.data !== 'object') return null;
+      const x = r.data;
+      const filas = Array.isArray(x.filas) ? x.filas : [];
+      if (mDecision === d) {
+        d.supera = !!x.topado;
+        // Si está topado, la lista no viene: ese subconjunto sería arbitrario y ordenarlo
+        // haría que la "primera página" fuese mentira (lo explica menores_rpc.sql).
+        d.lista = Array.isArray(x.lista) ? x.lista : null;
+        filas.forEach((f) => { if (f && f.licitacion_id) d.porId.set(f.licitacion_id, f); });
+      }
+      // 'desde' dice a qué fila del orden corresponde filas[0]: o es 0 (y vino el bloque
+      // entero, del que se corta la página) o es el offset pedido (y vino solo esa página).
+      const inicio = Math.max(0, Number(x.desde) || 0);
+      const corte = Math.max(0, desde - inicio);
+      return resultado(filas.slice(corte, corte + porPagina), {
+        total: Number(x.total) || 0,
+        topado: !!x.topado,
+        ordenImporteDesactivado: !!x.orden_importe_desactivado,
+        motivoOrden: x.orden_importe_desactivado ? 'grande' : null,
+      });
+    };
+    if (M_USAR_RPC) {
+      const rRpc = await porRpc();
+      if (rRpc) return rRpc;
+    }
+
     // ---- SIN FILTROS (o solo importe): el servidor recorre directamente el índice del orden.
     if (!hayFiltros(n)) {
       const [rDatos, rEstim] = await Promise.all([
@@ -440,8 +527,7 @@ export function crearMenores(supabase) {
       return resultado(rDatos.data, { conteoPendiente: true, estimado: rEstim.error ? null : (rEstim.count ?? null) });
     }
 
-    // ---- CON FILTROS ---------------------------------------------------------
-    const d = decisionDe(clave);
+    // ---- CON FILTROS (ruta por etapas: la red si la RPC no ha podido) --------
     // Tamaño ya sabido del órgano: aviso al instante, sin sonda (ver pistaGrande).
     if (d.supera === null && !d.costosa && pistaGrande(n)) d.supera = true;
     const porImporte = n.ordenCampo === 'importe_sin_iva';
