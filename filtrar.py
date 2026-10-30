@@ -27,7 +27,7 @@ from collections import Counter
 
 # normaliza() vive en utiles.py para compartirla con generar_web.py sin duplicarla.
 from utiles import (normaliza, credencial_config, en_actions, get_con_reintentos,
-                    busca_coincidencia, ordena_categorias)
+                    busca_coincidencia, ordena_categorias, reclasifica)
 # La lista de feeds, el extractor (descarga + paginación) y la extracción de
 # campos CODICE de cada entrada (extrae_entrada) viven en feeds.py, para
 # compartirlos con fetch.py y con el backfill del buscador sin duplicar nada.
@@ -549,23 +549,28 @@ for registro_guardado in datos.values():
 # entrada guardada con sus PROPIOS datos (cpv/título/territorio) contra los criterios
 # efectivos de ahora, y borramos las que ya no casan (por criterio, fuente o territorio).
 podadas = 0
+recoincidencias = 0
 for clave in list(datos.keys()):
     reg = datos[clave]
-    titulo_norm = normaliza(reg.get("titulo", "") or "")
-    cpvs_reg = reg.get("cpv", []) or []
     # ¿sigue casando con alguna categoría efectiva (por CPV o palabra clave)?
-    categoria_reev = None
-    for nombre, criterios in intereses_efectivos.items():
-        if busca_coincidencia(cpvs_reg, titulo_norm, criterios):
-            categoria_reev = nombre
-            break
+    categoria_reev, motivo_reev = reclasifica(reg, intereses_efectivos)
     fuente_ok = (not fuentes_config) or (reg.get("fuente", "estatal") in fuentes_config)
     territorio_ok = pasa_territorio(reg.get("plataforma"), reg.get("region_codigo"))
     if categoria_reev is None or not fuente_ok or not territorio_ok:
         del datos[clave]
         podadas += 1
     else:
-        reg["categoria"] = categoria_reev   # refresca el grupo por si cambió
+        # Se refrescan los DOS: la categoría y el motivo. Antes el motivo se escribía
+        # una sola vez, el día que la licitación era nueva, y nunca más: ni al volver a
+        # verla en el feed (esa rama solo toca fechas e importes) ni aquí. Resultado
+        # medido el 09/10/2026 sobre las 714 guardadas: 13 tarjetas decían «coincide con
+        # 9073» o «CPV 90920000» -- criterios que ya son de a_revisar -- estando en
+        # críticas por OTRO criterio. La categoría era correcta; el motivo, de julio.
+        # El motivo ya lo calcula busca_coincidencia aquí mismo: antes se tiraba.
+        if motivo_reev != reg.get("coincidencia"):
+            recoincidencias += 1
+        reg["categoria"] = categoria_reev
+        reg["coincidencia"] = motivo_reev
 
 # --- CONTROL antes de escribir ----------------------------------------------
 # Una recuperación solo puede SUMAR: si el total baja, es que la poda ha quitado cosas
@@ -596,6 +601,10 @@ conteo_fuente = Counter(registro["fuente"] for registro in datos.values())
 detalle_guardadas = ", ".join(f"{n} {fuente}" for fuente, n in sorted(conteo_fuente.items()))
 print(f"Por fuente en el archivo: {detalle_guardadas}.")
 print(f"Podadas (ya no encajan con la config actual): {podadas}")
+if recoincidencias:
+    # Se dice en voz alta porque es el síntoma de que los criterios han cambiado: una
+    # tarjeta que ahora entra por otro criterio distinto del que la trajo.
+    print(f"Motivo actualizado (entraban por otro criterio): {recoincidencias}")
 print(f"Nuevas en esta ejecución: {len(nuevas)}")
 for lic in nuevas:
     print(f"  - [{lic['fuente']}/{lic['categoria']}] {lic['titulo']}")
