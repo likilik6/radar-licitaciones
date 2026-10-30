@@ -976,11 +976,16 @@ JS_SUPABASE = """
       if (s >= 1 && s <= 5) perdidos++;
       dia.setDate(dia.getDate() + 1);
     }
-    // Y hoy mismo: si es laborable y han pasado las 16:00, ya tendría que haber una
-    // generación de hoy. Las 16:00 y no las 15:00 para no dar falsas alarmas: la pasada más
-    // tardía que hemos medido (28/09) acabó a las 15:03.
+    // Y hoy mismo: si es laborable y ya ha pasado el CORTE, tendría que haber una
+    // generación de hoy. El corte está a las 16:30 y no a las 16:00 por lo medido entre el
+    // 05 y el 08/10/2026: GitHub crea el run programado sobre las 12:00 UTC pase lo que
+    // pase (hasta 6 h 59 min después del cron) y las pasadas acaban entre las 15:00 y las
+    // 15:30 de España. Con el corte a las 16:00 el margen era de 30 minutos y una pasada
+    // lenta daba una FALSA alarma, que es peor que no avisar: enseña a ignorar el aviso.
+    const CORTE_MIN = 16 * 60 + 30;
     const s = hoy.getDay();
-    if (s >= 1 && s <= 5 && ahora.getHours() >= 16 && g < hoy) perdidos++;
+    const minutos = ahora.getHours() * 60 + ahora.getMinutes();
+    if (s >= 1 && s <= 5 && minutos >= CORTE_MIN && g < hoy) perdidos++;
     return { perdidos: perdidos, horas: (ahora - g) / 3600000 };
   }
   (function avisaDesfase() {
