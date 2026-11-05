@@ -52,6 +52,8 @@
 --     pide «alter table» (un instante) dura hasta el final. Por eso el lock_timeout corto:
 --     si en 3 s no lo consigue, FALLA sin tocar nada y basta con repetirlo un rato después.
 --     Mientras espera, las lecturas de la web pueden quedarse en cola esos segundos.
+--   · Al final sale una TABLA DE COMPROBACIÓN (bloque 5): las 6 filas tienen que decir «sí»
+--     en la columna «ok». Si sale un error en vez de la tabla, no se ha aplicado nada.
 --   · Después, ejecuta prueba_versiones.sql (comprueba cada rama y no deja rastro).
 --
 -- CONTRATO DEL CLIENTE (lo que tiene que hacer backfill_catalogo.py; lo fijan sus tests):
@@ -390,17 +392,9 @@ grant execute on function public.carga_versiones(jsonb) to service_role;
 notify pgrst, 'reload schema';
 
 -- ----------------------------------------------------------------------------
--- 4) Consultas de comprobación (SOLO LECTURA; pégalas aparte cuando toque)
+-- 4) Consulta para DESPUÉS de la reparación (SOLO LECTURA; pégala aparte cuando toque)
 -- ----------------------------------------------------------------------------
--- Tras este fichero: las 6 columnas y los permisos de la función.
--- select column_name, data_type from information_schema.columns
---  where table_schema = 'public' and table_name = 'licitaciones'
---    and column_name in ('atom_updated','version_snapshot','version_huella',
---                        'estado_expediente','baja_en','baja_tipo');          -- 6 filas
--- select has_function_privilege('anon', 'public.carga_versiones(jsonb)', 'execute') as anon,
---        has_function_privilege('authenticated', 'public.carga_versiones(jsonb)', 'execute') as authenticated,
---        has_function_privilege('service_role', 'public.carga_versiones(jsonb)', 'execute') as service_role;
---                                                                  -- false, false, true
+-- Las columnas y los permisos de este fichero ya los comprueba la tabla del bloque 5.
 --
 -- Tras la reparación: «ganadas» de LODEPA que se han quedado sin su adjudicación (el
 -- auto-marcado nunca desmarca; se deciden a mano).
@@ -411,3 +405,30 @@ notify pgrst, 'reload schema';
 --    and not exists (select 1 from public.adjudicaciones a
 --                     where a.licitacion_id = d.licitacion_id
 --                       and a.cif_adjudicatario = 'B86833753');
+
+-- ----------------------------------------------------------------------------
+-- 5) COMPROBACIÓN: lo único que enseña el SQL Editor es esta tabla. Las 6 filas tienen
+--    que decir «sí» en «ok».
+-- ----------------------------------------------------------------------------
+select comprobacion, resultado, esperado,
+       case when resultado = esperado then 'sí' else 'NO' end as ok
+  from (values
+    (1, 'columnas nuevas en licitaciones (de 6)',
+        (select count(*)::text from information_schema.columns
+          where table_schema = 'public' and table_name = 'licitaciones'
+            and column_name in ('atom_updated', 'version_snapshot', 'version_huella',
+                                'estado_expediente', 'baja_en', 'baja_tipo')), '6'),
+    (2, 'columna atom_updated en adjudicaciones',
+        (select count(*)::text from information_schema.columns
+          where table_schema = 'public' and table_name = 'adjudicaciones'
+            and column_name = 'atom_updated'), '1'),
+    (3, 'existe la función carga_versiones(jsonb)',
+        (to_regprocedure('public.carga_versiones(jsonb)') is not null)::text, 'true'),
+    (4, 'anon puede ejecutarla',
+        has_function_privilege('anon', 'public.carga_versiones(jsonb)', 'execute')::text, 'false'),
+    (5, 'authenticated puede ejecutarla',
+        has_function_privilege('authenticated', 'public.carga_versiones(jsonb)', 'execute')::text, 'false'),
+    (6, 'service_role puede ejecutarla',
+        has_function_privilege('service_role', 'public.carga_versiones(jsonb)', 'execute')::text, 'true')
+  ) as t(n, comprobacion, resultado, esperado)
+ order by n;

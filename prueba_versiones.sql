@@ -4,8 +4,10 @@
 -- Es un ÚNICO bloque DO: escribe expedientes SINTÉTICOS (licitacion_id 'ZZTEST-...')
 -- a través de la función, comprueba cada rama de la regla y AL FINAL FUERZA UN ROLLBACK:
 -- no persiste NADA.
---   · Si todo va bien: NOTICE «PRUEBA VERSIONES OK ...» y la transacción se revierte sola.
---   · Si una comprobación falla: verás el mensaje del assert y también se revierte todo.
+--   · Si todo va bien: al final sale una TABLA DE COMPROBACIÓN con 3 filas que dicen «sí»
+--     en «ok» (la prueba ha pasado y no queda ni una fila de prueba).
+--   · Si una comprobación falla: sale un ERROR con el mensaje del assert en vez de la tabla,
+--     y también se revierte todo.
 --
 -- Requisito: haber ejecutado antes versiones_schema.sql.
 -- CÓMO USARLO: pega TODO en el SQL Editor de Supabase y pulsa Run. Se puede repetir.
@@ -240,3 +242,17 @@ exception
   when sqlstate 'ZZ999' then
     raise notice 'Datos de prueba revertidos (no se ha persistido nada). ✔';
 end $$;
+
+-- COMPROBACIÓN: lo único que enseña el SQL Editor es esta tabla. Solo se llega aquí si
+-- todos los assert del bloque de arriba han pasado (si no, sale el error y se para).
+-- Las 3 filas tienen que decir «sí» en «ok».
+select comprobacion, resultado, esperado,
+       case when resultado = esperado then 'sí' else 'NO' end as ok
+  from (values
+    (1, 'todos los casos de la prueba (A a L) han pasado', 'sí', 'sí'),
+    (2, 'filas de prueba que quedan en licitaciones',
+        (select count(*)::text from public.licitaciones where licitacion_id like 'ZZTEST-%'), '0'),
+    (3, 'filas de prueba que quedan en adjudicaciones',
+        (select count(*)::text from public.adjudicaciones where licitacion_id like 'ZZTEST-%'), '0')
+  ) as t(n, comprobacion, resultado, esperado)
+ order by n;
