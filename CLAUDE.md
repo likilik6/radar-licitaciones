@@ -173,52 +173,55 @@ Lo lento no es tener muchos datos, es contar y escanear sin índice.
   aguanta el BOM. Unificar cuando se toque alguna.
 - Pendiente de OK: recortar un `EXECUTE` sobrante en las funciones del Buscador (sin fuga).
 
-## Estado (30/10/2026)
+## Estado (05/11/2026)
 
-Revisado el 30/10 contra el repo, GitHub y la base (con `claude_ro`).
+Revisado el 30/10 contra el repo, GitHub y la base (con `claude_ro`); puesto al día el 05/11.
 
 - **Robot:** funciona. Pasada programada los 21 laborables del 1 al 29/10; 20 en verde. La del
   16/10 falló en el push de la persistencia (se mergeó un PR a mitad de pasada) y no publicó: esa
-  web salió de una pasada manual anterior. Datos frescos a 29/10 en el JSON y en el catálogo. Los
+  web salió de una pasada manual anterior. El viernes 31/10 GitHub no lanzó la pasada (ni run ni
+  commit); del 02 al 04/11, bien. Datos frescos a 04/11 en el JSON y en el catálogo. Los
   fines de semana (`mantenimiento.yml`, `menores_autonomicos.yml`), en verde todo octubre; cada
   carga de menores avisa «no pude anotar el refresco de cobertura» (sin investigar).
 - **Supabase:** unos 5,3 GB de 30 según `pg_size_pretty` (`menores` 2,7, `licitaciones` 2,2,
   `adjudicaciones` 0,3). Regla 8 intacta.
-- **PR abiertos** (todos aplican sobre master sin conflictos; revisados el 30/10):
+- **PR abiertos** (cada uno aplica sobre master sin conflictos; revisados el 30/10, #43 el 05/11):
   - #35 — RPC única `menores_buscar` (SQL). Ya está ejecutada en Supabase con el mismo cuerpo:
     se mergea tal cual y **no se vuelve a ejecutar**.
   - #36 — la vista Menores usa esa RPC, con la ruta por etapas como red. Rompe
     `test_menores_api.mjs` (su cliente falso no tiene `.rpc`): antes de mergear necesita un
     `try/catch` de una línea alrededor de `porRpc()`. Después, `radar.yml` a mano y medir con sesión.
-  - #33 — la poda refresca también el motivo, no solo la categoría. Choca en dos sitios triviales
-    con `versiones-guarda` (el import de `filtrar.py` y un bloque de `utiles.py`): quedarse con los
-    dos lados.
+  - #33 — la poda refresca también el motivo, no solo la categoría. Choca con #43 en dos sitios
+    triviales (el import de `filtrar.py` y un bloque de `utiles.py`): el que entre segundo se
+    resuelve quedándose con los dos lados.
   - #34 — el aviso de desfase pasa a las 16:30.
   - #39 — `informe_mercado.py`. Antes de mergear, un commit que sustituya por inventados los
     datos reales que aún quedan en `test_informe_mercado.py`.
   - #26 — deja `sql/perfiles_paso2_revokes.sql` como registro de lo ejecutado el 23-24/09
     (comprobado en vigor).
-  - #40 — `estado_expediente` en `extrae_entrada`: completo y probado, pero sin consumidor. Es
-    el mismo código que trae `versiones-guarda`: se cierra si esa rama entra antes.
+  - #40 — `estado_expediente` en `extrae_entrada`. Sobra: el mismo código va dentro de #43, que
+    además lo usa. Se cierra sin mergear.
   - #41 — `buscador_schema.sql`, el esquema de BG-1 de `licitaciones` (17 de las 21 columnas de
     hoy; lo demás está en otros `.sql`).
+  - #43 — versiones y bajas del catálogo (rama `versiones-guarda`): cada licitación guarda su
+    versión más nueva, las bajas se marcan y `reparar_versiones.py` repara lo ya cargado. Es el
+    grande y lleva carga en producción. Orden (detalle en la cabecera de `versiones_schema.sql`):
+    1) `versiones_schema.sql` y `prueba_versiones.sql` en el SQL Editor; 2) mergear; 3) `radar.yml`
+    a mano; 4) `reparacion.yml` por tramos, con `VACUUM` entre tramo y tramo; 5) refrescos.
+    Cuando entre, el commit automático añadirá 2 claves a todas las fichas de
+    `data/licitaciones.json`.
 - **Perfiles:** migración a dos perfiles en curso; qué está ejecutado y qué falta se lleva fuera
   del repo. `sql/perfiles_migracion.sql` y `verificar_perfiles.py` (escribe en producción) están
   en la rama local `perfiles-migracion`, sin subir. No crees usuarios en Auth sin mi OK.
-- **En curso, sin commit:** el worktree `versiones` (rama `versiones-guarda`, sin remoto): guarda
-  de versiones y bajas, reparación y un workflow nuevo, `reparacion.yml`. Su `versiones_schema.sql`
-  no está ejecutado: primero el SQL y después el merge. Cuando entre, el commit automático añadirá
-  2 claves a todas las fichas de `data/licitaciones.json`.
 - **En el PC (checkout principal, rama `rpc-menores-front`):** `feeds.py` modificado sin commit
-  (la versión vieja de `estado_expediente`, ya guardada en #40: se descarta) y, sin versionar,
-  `buscador_schema.sql` (#41), `sql/perfiles_migracion.sql`, `verificar_perfiles.py` y este
-  `CLAUDE.md`. Al mergear cada PR hay que descartar o borrar su copia local, o `git pull`
+  (la versión vieja de `estado_expediente`, ya guardada en #40 y en #43: se descarta) y, sin
+  versionar, `buscador_schema.sql` (#41), `sql/perfiles_migracion.sql`, `verificar_perfiles.py` y
+  este `CLAUDE.md`. Al mergear cada PR hay que descartar o borrar su copia local, o `git pull`
   fallará. `medir_small.py` y `medidas_micro.json` (prueba Micro contra Small, descartada) se
   movieron fuera del repo.
 - **Worktrees:** `fin-plazo` e `informe-fin-plazo` retirados el 30/10 (sus ramas siguen). Quedan
-  `informe-mercado` (espera al #39), `versiones` (trabajo vivo) y `radar-estado-organizacion-985e83`
-  (el de este PR; se retira al mergearlo).
+  `informe-mercado` (espera al #39), `versiones` (#43) y `radar-estado-organizacion-985e83` (el de
+  este PR). Cada uno se retira al mergear su PR.
 - **Ramas locales:** 39 (35 más las 4 del 30/10). Falta decidir cuáles se borran. Ojo:
-  `git branch --merged` incluye `versiones-guarda` (no tiene commits, pero su worktree tiene
-  trabajo vivo) y no incluye `fin-plazo-madrid` ni `informe-fin-plazo-madrid` (entraron por squash
-  en #37 y #38).
+  `git branch --merged` no incluye `fin-plazo-madrid` ni `informe-fin-plazo-madrid` (entraron por
+  squash en #37 y #38).
