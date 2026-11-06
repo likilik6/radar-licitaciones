@@ -11,13 +11,21 @@
 import re
 import time
 import requests
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from lxml import etree
 
 # Espacio de nombres mínimo para navegar el ATOM: localizar las entradas
 # (<atom:entry>) y el enlace a la página siguiente (<atom:link rel="next">).
 # El resto de namespaces (CPV, presupuesto...) los usa filtrar.py al extraer.
 ATOM_NS = {"atom": "http://www.w3.org/2005/Atom"}
+
+# BAJAS: la Plataforma avisa de que un expediente deja de estar publicado con un
+# <at:deleted-entry ref="<atom:id>" when="..."><at:comment type="ANULADA"/></...>
+# (extensión ATOM «tombstones», RFC 6721). En el estatal el tipo es ANULADA; en las
+# agregadas, CERRADA; a veces no trae tipo. Van intercaladas con las <entry> de cada .atom.
+TOMBSTONES = "http://purl.org/atompub/tombstones/1.0"
+_BAJA = f"{{{TOMBSTONES}}}deleted-entry"
+_COMENTARIO = f"{{{TOMBSTONES}}}comment"
 
 # El servidor rechaza las peticiones que no parezcan de un navegador, así que
 # enviamos una cabecera "User-Agent" que imita a un navegador real. OBLIGATORIO.
@@ -64,12 +72,16 @@ def _siguiente_pagina(raiz):
     return None
 
 
-def descarga_entradas(url, max_paginas=MAX_PAGINAS, pausa=PAUSA_ENTRE_PAGINAS):
+def descarga_feed(url, max_paginas=MAX_PAGINAS, pausa=PAUSA_ENTRE_PAGINAS):
     """Descarga un feed ATOM siguiendo la paginación rel="next" hasta agotarla o
     hasta llegar a 'max_paginas'. Mantiene la cabecera de navegador en cada petición.
 
-    Devuelve una tupla (entradas, paginas_leidas, tope_alcanzado):
-      - entradas:        lista de elementos <atom:entry> (lxml) de TODAS las páginas.
+    Devuelve una tupla (versiones, bajas, paginas_leidas, tope_alcanzado):
+      - versiones:       lista de (entrada, snapshot): cada <atom:entry> (lxml) de TODAS
+                         las páginas con el <updated> de la página donde venía. Un mismo
+                         expediente puede salir varias veces (una por versión): para
+                         quedarse con la buena, elige_versiones().
+      - bajas:           lista de dicts {id, cuando, tipo} (ver parsea_baja).
       - paginas_leidas:  cuántas páginas se llegaron a descargar.
       - tope_alcanzado:  True si se paró por el tope (quedaba 'next' sin leer),
                          para poder avisar de que puede faltar histórico.
@@ -77,7 +89,8 @@ def descarga_entradas(url, max_paginas=MAX_PAGINAS, pausa=PAUSA_ENTRE_PAGINAS):
     Si una página falla (error de red o respuesta no válida), se avisa y se deja
     de paginar ESE feed con lo que se llevara descargado, para no tumbar todo el
     trabajo por un fallo puntual."""
-    entradas = []
+    versiones = []
+    bajas = []
     paginas_leidas = 0
     while url and paginas_leidas < max_paginas:
         try:
@@ -87,9 +100,11 @@ def descarga_entradas(url, max_paginas=MAX_PAGINAS, pausa=PAUSA_ENTRE_PAGINAS):
         except Exception as error:
             # Fallo puntual (red, 5xx, XML corrupto...): avisamos y paramos este feed.
             print(f"  AVISO: no se pudo leer una página ({error}); se deja de paginar este feed.")
-            return entradas, paginas_leidas, False
+            return versiones, bajas, paginas_leidas, False
 
-        entradas.extend(raiz.findall("atom:entry", ATOM_NS))
+        entradas, bajas_pagina, snapshot = lee_pagina(raiz)
+        versiones.extend((e, snapshot) for e in entradas)
+        bajas.extend(bajas_pagina)
         paginas_leidas += 1
         url = _siguiente_pagina(raiz)
 
@@ -99,7 +114,127 @@ def descarga_entradas(url, max_paginas=MAX_PAGINAS, pausa=PAUSA_ENTRE_PAGINAS):
 
     # Si todavía queda un 'next' es que paramos por el tope, no porque se agotara.
     tope_alcanzado = bool(url)
-    return entradas, paginas_leidas, tope_alcanzado
+    return versiones, bajas, paginas_leidas, tope_alcanzado
+
+
+def descarga_entradas(url, max_paginas=MAX_PAGINAS, pausa=PAUSA_ENTRE_PAGINAS):
+    """Como descarga_feed, pero devuelve solo (entradas, paginas_leidas, tope_alcanzado),
+    sin snapshot ni bajas. Para quien solo quiere mirar el feed (fetch.py, menores).
+    OJO: un mismo expediente puede venir varias veces; para ESCRIBIR versiones, usa
+    descarga_feed + elige_versiones."""
+    versiones, _bajas, paginas_leidas, tope = descarga_feed(url, max_paginas, pausa)
+    return [e for e, _snapshot in versiones], paginas_leidas, tope
+
+
+# ============================================================================
+# VERSIONES Y BAJAS (PASO 0 del 15/10/2026)
+# ----------------------------------------------------------------------------
+# La Plataforma republica cada expediente (mismo atom:id, distinto atom:updated)
+# cada vez que cambia, así que en un feed, en un ZIP o entre ejecuciones llegan
+# VARIAS versiones del mismo expediente. Hasta ahora cada sitio se quedaba con la
+# que le tocaba por el orden de lectura, y casi siempre era la VIEJA. La regla
+# (especificación de sindicación PCSP v1.3, §3.3.2, más un desempate):
+#   1. Gana la de MAYOR atom:updated, comparado como INSTANTE con su zona horaria,
+#      nunca como texto: el 25/10 hay cambio de hora y, como texto,
+#      «02:30+02:00» parece posterior a «02:10+01:00» y no lo es.
+#   2. Con la MISMA marca, gana la del snapshot más reciente (el <updated> del .atom
+#      donde se leyó): en septiembre de 2026 la Plataforma republicó 6.491
+#      expedientes con la marca vieja y el contenido nuevo. Acierta aunque traiga
+#      menos avisos o un estado «hacia atrás» (anulada, adjudicación caída): 8 de 8
+#      comprobados en la web el 30/10. No desempatar por avisos ni por estado.
+#   3. Si las dos cosas son iguales, no se cambia nada (se queda la que ya había).
+# En la base, la misma regla la aplica public.carga_versiones (versiones_schema.sql),
+# que además deja reescribir con el MISMO snapshot si el contenido cambia (un
+# extractor mejorado relee el mismo fichero).
+# ============================================================================
+def instante(texto):
+    """Fecha del feed ('2026-10-14T18:07:20.126+02:00') -> datetime CON zona horaria.
+    None si viene vacía, sin zona o mal formada: una fecha sin zona no se adivina,
+    porque con el cambio de hora podría ordenar mal dos versiones."""
+    if texto is None:
+        return None
+    texto = str(texto).strip()
+    if not texto:
+        return None
+    if texto[-1] in "Zz":
+        texto = texto[:-1] + "+00:00"
+    try:
+        momento = datetime.fromisoformat(texto)
+    except ValueError:
+        return None
+    return momento if momento.tzinfo is not None else None
+
+
+def es_mas_nueva(nueva, guardada):
+    """¿La versión 'nueva' gana a la 'guardada'? Cada una es (atom_updated, snapshot),
+    en texto tal cual viene del feed; 'guardada' puede ser None (no había nada).
+      · Manda el atom:updated, comparado como instante.
+      · A igual marca, el snapshot más reciente.
+      · Si todo es igual, False: no se cambia nada.
+    Una versión sin marca válida nunca gana a una que sí la tiene."""
+    if guardada is None:
+        return True
+    marca_n, snap_n = instante(nueva[0]), instante(nueva[1])
+    marca_g, snap_g = instante(guardada[0]), instante(guardada[1])
+    if marca_n is None:
+        return False
+    if marca_g is None:
+        return True
+    if marca_n != marca_g:
+        return marca_n > marca_g
+    if snap_n is None:
+        return False
+    if snap_g is None:
+        return True
+    return snap_n > snap_g
+
+
+def id_de(entrada):
+    """atom:id de una <entry> (si faltara, su enlace): la clave del expediente."""
+    idu = entrada.findtext("atom:id", default="", namespaces=ATOM_NS).strip()
+    if idu:
+        return idu
+    link = entrada.find("atom:link", ATOM_NS)
+    return link.get("href") if link is not None else "(sin enlace)"
+
+
+def elige_versiones(versiones):
+    """De una lista de (entrada, snapshot), se queda con UNA por expediente: la que
+    gana según es_mas_nueva. No depende del orden en que lleguen (el del feed, el
+    del ZIP o cualquier otro). Devuelve {atom:id: (entrada, snapshot)}."""
+    elegidas = {}
+    for entrada, snapshot in versiones:
+        clave = id_de(entrada)
+        marca = entrada.findtext("atom:updated", default="", namespaces=ATOM_NS).strip()
+        actual = elegidas.get(clave)
+        if actual is None or es_mas_nueva((marca, snapshot), (actual[2], actual[1])):
+            elegidas[clave] = (entrada, snapshot, marca)
+    return {clave: (entrada, snapshot) for clave, (entrada, snapshot, _m) in elegidas.items()}
+
+
+def parsea_baja(elemento):
+    """Una <at:deleted-entry> -> {id, cuando, tipo}. El tipo se guarda tal cual
+    (ANULADA, CERRADA...) o None si no viene. None si no trae ref (no se sabe de qué
+    expediente es)."""
+    ref = a_texto(elemento.get("ref"))
+    if not ref:
+        return None
+    comentario = elemento.find(_COMENTARIO)
+    return {
+        "id": ref,
+        "cuando": a_texto(elemento.get("when")),
+        "tipo": a_texto(comentario.get("type")) if comentario is not None else None,
+    }
+
+
+def lee_pagina(raiz):
+    """Separa un .atom (ya parseado) en (entradas, bajas, snapshot): sus <entry>, sus
+    bajas (ver parsea_baja) y el <updated> del propio fichero, que hace de SNAPSHOT
+    para desempatar versiones con la misma marca."""
+    entradas = raiz.findall("atom:entry", ATOM_NS)
+    bajas = [b for b in (parsea_baja(el) for el in raiz.findall(_BAJA)) if b]
+    snapshot = a_texto(raiz.findtext("atom:updated", namespaces=ATOM_NS))
+    return entradas, bajas, snapshot
 
 
 # ============================================================================
@@ -380,7 +515,7 @@ def extrae_entrada(entrada, fuente):
     enlace = link.get("href") if link is not None else "(sin enlace)"
 
     # Id único de la licitación (atom:id == entry.id). Si faltara, caemos al enlace.
-    id_unico = entrada.findtext("atom:id", default="", namespaces=NS).strip() or enlace
+    id_unico = id_de(entrada)
     # Fecha de actualización del aviso (atom:updated).
     fecha_actualizacion = entrada.findtext("atom:updated", default="", namespaces=NS).strip()
 
@@ -398,6 +533,13 @@ def extrae_entrada(entrada, fuente):
     presupuesto_con_iva = a_numero(entrada.findtext(base_presupuesto + "cbc:TotalAmount", namespaces=NS))
     presupuesto_sin_iva = a_numero(entrada.findtext(base_presupuesto + "cbc:TaxExclusiveAmount", namespaces=NS))
     valor_estimado = a_numero(entrada.findtext(base_presupuesto + "cbc:EstimatedOverallContractAmount", namespaces=NS))
+
+    # Estado del expediente en ESTA versión: PRE (anuncio previo), PUB (publicado), EV (en
+    # evaluación), ADJ (adjudicado), RES (resuelto/formalizado), ANUL (anulado)... Misma
+    # ruta que ya usa extrae_adjudicaciones. Se guarda en public.licitaciones para saber si
+    # algo está anulado o resuelto aunque su plazo aún no haya vencido.
+    estado_expediente = a_texto(entrada.findtext(
+        ".//place:ContractFolderStatus/pce:ContractFolderStatusCode", namespaces=NS))
 
     # Fin del plazo de presentación de ofertas.
     fecha_fin_plazo = a_texto(entrada.findtext(
@@ -446,5 +588,6 @@ def extrae_entrada(entrada, fuente):
         "fecha_fin_plazo": fecha_fin_plazo,
         "fecha_publicacion": fecha_publicacion,
         "fecha_actualizacion": fecha_actualizacion,
+        "estado_expediente": estado_expediente,
         "adjudicaciones": adjudicaciones,
     }

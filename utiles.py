@@ -63,6 +63,130 @@ ORDEN_CATEGORIAS = ("criticas", "a_revisar")
 CATEGORIA_ULTIMA = "pruebas"
 
 
+# ---------------------------------------------------------------------------
+# EL RADAR (data/licitaciones.json): una ficha por expediente, con su versión MÁS NUEVA
+#
+# Hasta el PASO 0 del 15/10/2026, filtrar.py clasificaba TODAS las versiones que traen
+# las ~20 páginas del feed y luego las fusionaba una detrás de otra: la última en
+# fusionarse, que es la más VIEJA, pisaba plazo e importes. Así el Radar enseñaba
+# «cerrado el 14/10» en una licitación con el plazo ampliado al 16/10. Ahora:
+#   1. de cada expediente se elige la versión que gana (feeds.es_mas_nueva);
+#   2. se clasifica ESA versión con los criterios;
+#   3. se fusiona: una ficha guardada solo se pisa con una versión más nueva.
+# La regla es la misma que la de la base (ver feeds.py, «VERSIONES Y BAJAS»).
+# ---------------------------------------------------------------------------
+# Lo que se guarda de cada ficha (además de primera_vez y ultima_vez).
+CAMPOS_FICHA = ("id", "titulo", "enlace", "cpv", "fuente", "num_expediente", "organismo",
+                "plataforma", "region", "region_codigo", "categoria", "coincidencia",
+                "presupuesto_con_iva", "presupuesto_sin_iva", "valor_estimado", "fecha_fin_plazo",
+                "fecha_publicacion", "fecha_actualizacion", "version_snapshot", "estado_expediente")
+# Lo que se refresca cuando llega una versión más nueva: todo menos el id, la fuente
+# (el origen no cambia) y primera_vez.
+CAMPOS_REFRESCO = tuple(c for c in CAMPOS_FICHA if c not in ("id", "fuente"))
+
+
+def _version(ficha):
+    return (ficha.get("fecha_actualizacion"), ficha.get("version_snapshot"))
+
+
+def fusiona_radar(datos, lic, ahora):
+    """Mete en 'datos' (el contenido de data/licitaciones.json) la versión 'lic' de un
+    expediente. Devuelve True si la ficha es NUEVA.
+      · Si no estaba: se añade con primera_vez = ultima_vez = ahora.
+      · Si estaba: ultima_vez = ahora (la hemos visto) y, SOLO si 'lic' es más nueva
+        que la guardada (o la guardada no tiene fecha), se refrescan sus datos. Una
+        versión vieja que llega después no pisa nada.
+      · Una versión posterior a la baja marcada la desmarca (se republicó)."""
+    from feeds import es_mas_nueva, instante
+    clave = lic["id"]
+    ficha = datos.get(clave)
+    if ficha is None:
+        datos[clave] = {**{c: lic.get(c) for c in CAMPOS_FICHA}, "primera_vez": ahora, "ultima_vez": ahora}
+        return True
+    ficha["ultima_vez"] = ahora
+    if ficha.get("fecha_actualizacion") and not es_mas_nueva(_version(lic), _version(ficha)):
+        return False
+    for c in CAMPOS_REFRESCO:
+        ficha[c] = lic.get(c)
+    # Igual que en la base: la baja se conserva solo si es POSTERIOR a esta versión.
+    baja, version = instante(ficha.get("baja_en")), instante(lic.get("fecha_actualizacion"))
+    if baja is not None and version is not None and version >= baja:
+        ficha.pop("baja_en", None)
+        ficha.pop("baja_tipo", None)
+    return False
+
+
+def radar_pasada(datos, registros, criterios, territorio_ok, ahora, resultados=None):
+    """Una pasada del Radar sobre las versiones leídas del feed.
+
+    registros: dicts de feeds.extrae_entrada con, además, 'version_snapshot'. Puede
+    haber varios del mismo expediente (uno por versión), en cualquier orden.
+    criterios: {categoría: {'cpv': [...], 'palabras_clave': [...]}} en orden de
+    prioridad (ordena_categorias). territorio_ok(plataforma, region_codigo) -> bool.
+    resultados: si se pasa un dict, se rellena {categoría: [fichas]} para el log.
+
+    De cada expediente se clasifica SOLO su versión más nueva. Si casa, se fusiona
+    (fusiona_radar). Si no casa pero la ficha ya estaba, se refrescan sus datos
+    cambiantes (plazo, importes, fechas, estado, enlace...) y se CONSERVAN los que
+    deciden la poda (título, CPV, territorio, categoría), como hacía el código de antes:
+    una versión con el título roto (mojibake «MonitorizaciÃ³n», visto en el Gobierno
+    Vasco desde el 07/10) no puede hacer desaparecer una ficha buena.
+    Devuelve la lista de fichas NUEVAS (las de data/licitaciones.json)."""
+    from feeds import es_mas_nueva
+    ultimas = {}
+    for reg in registros:
+        actual = ultimas.get(reg["id"])
+        if actual is None or es_mas_nueva(_version(reg), _version(actual)):
+            ultimas[reg["id"]] = reg
+    nuevas = []
+    for reg in ultimas.values():
+        titulo_normalizado = normaliza(reg.get("titulo") or "")
+        categoria = motivo = None
+        for nombre, crit in criterios.items():
+            motivo = busca_coincidencia(reg.get("cpv") or [], titulo_normalizado, crit)
+            if motivo:
+                # Cazada por interés; ahora debe pasar el filtro de TERRITORIO.
+                if territorio_ok(reg.get("plataforma"), reg.get("region_codigo")):
+                    categoria = nombre
+                break   # ya decidida (guardada o descartada por territorio)
+        if categoria:
+            lic = {**reg, "categoria": categoria, "coincidencia": motivo}
+            if resultados is not None:
+                resultados.setdefault(categoria, []).append(lic)
+            if fusiona_radar(datos, lic, ahora):
+                nuevas.append(datos[lic["id"]])
+        elif reg["id"] in datos:
+            vieja = datos[reg["id"]]
+            fusiona_radar(datos, {**reg, **{c: vieja.get(c) for c in CAMPOS_FIJOS_SI_NO_CASA}}, ahora)
+    return nuevas
+
+
+# Lo que NO se toca de una ficha guardada cuando su versión nueva ya no casa con los
+# criterios: es lo que decide la poda (ver radar_pasada).
+CAMPOS_FIJOS_SI_NO_CASA = ("titulo", "cpv", "plataforma", "region", "region_codigo",
+                           "categoria", "coincidencia")
+
+
+def marca_bajas_radar(datos, bajas):
+    """Marca en las fichas del Radar las bajas del feed (<at:deleted-entry>): baja_en y
+    baja_tipo, si la baja es POSTERIOR a la versión guardada y a la baja ya marcada.
+    Nunca borra la ficha. bajas: dicts {id, cuando, tipo} (feeds.parsea_baja).
+    Devuelve cuántas ha marcado."""
+    from feeds import instante
+    marcadas = 0
+    for baja in bajas:
+        ficha = datos.get(baja.get("id"))
+        cuando = instante(baja.get("cuando"))
+        if ficha is None or cuando is None:
+            continue
+        version = instante(ficha.get("fecha_actualizacion"))
+        anterior = instante(ficha.get("baja_en"))
+        if (version is None or cuando > version) and (anterior is None or cuando > anterior):
+            ficha["baja_en"], ficha["baja_tipo"] = baja["cuando"], baja.get("tipo")
+            marcadas += 1
+    return marcadas
+
+
 def ordena_categorias(categorias):
     """Devuelve las categorías en orden de PRIORIDAD (un dict nuevo, mismo contenido).
 

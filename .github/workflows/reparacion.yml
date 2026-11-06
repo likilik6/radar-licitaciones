@@ -1,0 +1,166 @@
+# Reparación dirigida de versiones (paso 4 del ORDEN DE DESPLIEGUE de versiones_schema.sql)
+# — ejecución MANUAL.
+#
+# Qué hace (ver la cabecera de reparar_versiones.py):
+#   1. Índice: baja los ZIP de la ventana y se queda, por expediente, con su versión
+#      GANADORA de entre todas (no toca la base). Se guarda en la caché de Actions: la
+#      siguiente ejecución solo vuelve a leer lo que ha crecido (el mes en curso).
+#   2. Ensayo: cruza el índice con la base en SOLO LECTURA y deja en el log qué se
+#      escribiría (filas, adjudicaciones de LODEPA que aparecen o desaparecen...).
+#   3. Escribir (solo si se marca la casilla, con OK): manda las ganadoras por la RPC con
+#      guarda carga_versiones: repara las filas de la base e inserta los expedientes que
+#      faltan si la purga no los quitaría (el ensayo dice cuántos y cuáles traen LODEPA).
+#      Se puede relanzar: no repite lo ya hecho, porque lo escrito queda sellado.
+#
+# ANTES: migración aplicada, código nuevo desplegado y radar.yml lanzado a mano. Durante:
+# ni backfill.yml (comparte el grupo de concurrencia, así que no se solapan) ni la purga.
+# El script no escribe en las franjas del robot (L-V 05:00-14:30 y domingo 06:00-07:30
+# UTC) y se para antes de la siguiente; además, antes de escribir se espera a que no
+# corran el Radar ni el mantenimiento. Lánzalo L-V por la tarde o el sábado.
+#
+# Lee la URL y la service_role de los SECRETS del repo; nunca del código y nunca se imprimen.
+
+name: Reparación de versiones (paso 4)
+
+on:
+  workflow_dispatch:
+    inputs:
+      escribir:
+        description: "Escribir en la base (con OK). Sin marcar: solo índice y ensayo, no escribe nada."
+        required: false
+        type: boolean
+        default: false
+      max_minutos:
+        description: "Minutos de escritura como mucho (0 = lo que quede del job de 350 min)."
+        required: false
+        default: "150"
+      max_filas:
+        description: "Filas como mucho en esta tanda (0 = sin tope). Para una primera tanda corta y mirar el disco."
+        required: false
+        default: "0"
+      ignorar_ilegibles:
+        description: "Escribir aunque el índice tenga .atom ilegibles (mira antes el ensayo)."
+        required: false
+        type: boolean
+        default: false
+
+# El mismo grupo que backfill.yml: nunca a la vez que un backfill. NO el grupo 'pages' del
+# Radar: GitHub cancela los pendientes de un mismo grupo (ver menores_autonomicos.yml).
+concurrency:
+  group: backfill-catalogo
+  cancel-in-progress: false
+
+jobs:
+  reparar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    # Solo lee: el repo (checkout) y la lista de ejecuciones de otros workflows (espera).
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      # Antes de nada: un número mal puesto haría fallar Escribir tras horas de índice.
+      - name: Comprobar las entradas y apuntar la hora de inicio
+        env:
+          MAX_MINUTOS: ${{ inputs.max_minutos }}
+          MAX_FILAS: ${{ inputs.max_filas }}
+        run: |
+          for v in "$MAX_MINUTOS" "$MAX_FILAS"; do
+            if ! [[ "$v" =~ ^[0-9]+$ ]]; then
+              echo "max_minutos y max_filas tienen que ser números enteros (0 vale): '$v'." >&2
+              exit 1
+            fi
+          done
+          echo "INICIO=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar librerías
+        run: pip install -r requirements.txt
+
+      # La clave lleva run_id y run_attempt porque una caché no se puede sobrescribir;
+      # restore-keys recupera la más reciente. Si cambia el formato del índice, el script
+      # lo dice y basta con subir la versión del prefijo.
+      - name: Recuperar el índice de la última ejecución
+        uses: actions/cache/restore@v4
+        with:
+          path: reparacion_versiones.sqlite*
+          key: reparacion-versiones-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            reparacion-versiones-v1-
+
+      - name: Índice (baja y lee los ZIP; no toca la base)
+        run: python reparar_versiones.py --indexar
+
+      # Aunque el índice falle a medias: lo ya leído se aprovecha en la siguiente.
+      - name: Guardar el índice
+        if: always() && hashFiles('reparacion_versiones.sqlite') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: reparacion_versiones.sqlite*
+          key: reparacion-versiones-v1-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Ensayo (solo lectura)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+        run: python reparar_versiones.py --ensayo
+
+      # Como en menores_autonomicos.yml: 18 vueltas de 5 min = 90 min, más que el Radar más
+      # largo medido (85 min). Si gh no responde, se avisa y se sigue: las franjas del
+      # script siguen valiendo.
+      - name: Esperar a que no corra el Radar ni el mantenimiento
+        if: ${{ inputs.escribir }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for vuelta in $(seq 1 18); do
+            ocupados=0
+            for wf in radar.yml mantenimiento.yml; do
+              for st in in_progress queued; do
+                if ! n=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$wf" --status "$st" \
+                           --limit 5 --json databaseId --jq 'length' 2>/dev/null); then
+                  echo "AVISO: no pude consultar $wf ($st); sigo sin esperar."
+                  n=0
+                fi
+                ocupados=$((ocupados + n))
+              done
+            done
+            if [ "$ocupados" -eq 0 ]; then
+              echo "Ni Radar ni mantenimiento en marcha: adelante."
+              exit 0
+            fi
+            echo "Radar o mantenimiento en marcha ($ocupados); espero 5 min (vuelta $vuelta de 18)."
+            sleep 300
+          done
+          echo "Tras 90 min siguen el Radar o el mantenimiento: no escribo a la vez. Relánzalo después." >&2
+          exit 1
+
+      # El tiempo de escritura se recorta a lo que quede del job (350 min desde INICIO) menos
+      # 20 de margen, para que el informe final y las bajas no los corte el timeout.
+      - name: Escribir (solo con la casilla marcada)
+        if: ${{ inputs.escribir }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+          MAX_MINUTOS: ${{ inputs.max_minutos }}
+          MAX_FILAS: ${{ inputs.max_filas }}
+          IGNORAR_ILEGIBLES: ${{ inputs.ignorar_ilegibles }}
+        run: |
+          restante=$(( 350 - ( $(date +%s) - INICIO ) / 60 - 20 ))
+          if [ "$restante" -le 0 ]; then
+            echo "No queda tiempo de job para escribir: relánzalo (el índice está en la caché)." >&2
+            exit 1
+          fi
+          minutos=$MAX_MINUTOS
+          if [ "$minutos" -eq 0 ] || [ "$minutos" -gt "$restante" ]; then minutos=$restante; fi
+          args=(--escribir --max-minutos "$minutos" --max-filas "$MAX_FILAS")
+          if [ "$IGNORAR_ILEGIBLES" = "true" ]; then args+=(--ignorar-ilegibles); fi
+          echo "Ejecutando: python reparar_versiones.py ${args[*]}"
+          python reparar_versiones.py "${args[@]}"
