@@ -199,11 +199,10 @@ Revisado el 30/10 contra el repo, GitHub y la base (con `claude_ro`); puesto al 
     datos reales que aún quedan en `test_informe_mercado.py`.
   - #26 — deja `sql/perfiles_paso2_revokes.sql` como registro de lo ejecutado el 23-24/09
     (comprobado en vigor).
-  - #40 — `estado_expediente` en `extrae_entrada`. Sobra: el mismo código va dentro de #43, que
-    además lo usa. Se cierra sin mergear.
   - #41 — `buscador_schema.sql`, el esquema de BG-1 de `licitaciones` (17 de las 21 columnas de
     hoy; lo demás está en otros `.sql`).
-  - #43 — versiones y bajas del catálogo (rama `versiones-guarda`): cada licitación guarda su
+  - #43 — versiones y bajas del catálogo (rama `versiones-guarda`; trae también
+    `estado_expediente`, por eso #40 se cerró sin mergear el 11/11): cada licitación guarda su
     versión más nueva, las bajas se marcan y `reparar_versiones.py` repara lo ya cargado. Es el
     grande y lleva carga en producción. Orden (detalle en la cabecera de `versiones_schema.sql`):
     1) `versiones_schema.sql` y `prueba_versiones.sql` en el SQL Editor; 2) mergear; 3) `radar.yml`
@@ -214,7 +213,7 @@ Revisado el 30/10 contra el repo, GitHub y la base (con `claude_ro`); puesto al 
   del repo. `sql/perfiles_migracion.sql` y `verificar_perfiles.py` (escribe en producción) están
   en la rama local `perfiles-migracion`, sin subir. No crees usuarios en Auth sin mi OK.
 - **En el PC (checkout principal, rama `rpc-menores-front`):** `feeds.py` modificado sin commit
-  (la versión vieja de `estado_expediente`, ya guardada en #40 y en #43: se descarta) y, sin
+  (la versión vieja de `estado_expediente`, ya incluida en #43: se descarta) y, sin
   versionar, `buscador_schema.sql` (#41), `sql/perfiles_migracion.sql`, `verificar_perfiles.py` y
   este `CLAUDE.md`. Al mergear cada PR hay que descartar o borrar su copia local, o `git pull`
   fallará. `medir_small.py` y `medidas_micro.json` (prueba Micro contra Small, descartada) se
