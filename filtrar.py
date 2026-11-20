@@ -27,11 +27,12 @@ from collections import Counter
 
 # normaliza() vive en utiles.py para compartirla con generar_web.py sin duplicarla.
 from utiles import (normaliza, credencial_config, en_actions, get_con_reintentos,
-                    busca_coincidencia, ordena_categorias)
+                    busca_coincidencia, ordena_categorias, radar_pasada,
+                    marca_bajas_radar)
 # La lista de feeds, el extractor (descarga + paginación) y la extracción de
 # campos CODICE de cada entrada (extrae_entrada) viven en feeds.py, para
 # compartirlos con fetch.py y con el backfill del buscador sin duplicar nada.
-from feeds import FEEDS, ATOM_NS, descarga_entradas, extrae_entrada
+from feeds import FEEDS, ATOM_NS, descarga_feed, extrae_entrada, instante, lee_pagina
 
 # Hacemos que la consola muestre los acentos y la "ñ" correctamente.
 sys.stdout.reconfigure(encoding="utf-8")
@@ -234,11 +235,13 @@ resultados = {nombre: [] for nombre in intereses_efectivos}
 # --- 2. Recorremos la LISTA de feeds (estatal + agregadas) ------------------
 # --- RECUPERACIÓN desde el ZIP de Datos Abiertos ----------------------------
 def _entradas_del_zip(fuente, mes=None, desde=None, hasta=None):
-    """Entradas ATOM del ZIP mensual de esa fuente, filtradas por fecha si se pide.
+    """Versiones ATOM del ZIP mensual de esa fuente, filtradas por fecha si se pide.
 
     Reutiliza lo que ya usa el catálogo del Buscador (backfill_catalogo): misma URL, misma
     descarga reanudable (si el ZIP ya está en cache_backfill/, no se vuelve a bajar) y el
-    mismo recorrido de los .atom de dentro. Devuelve (entradas, cuentas_por_dia)."""
+    mismo recorrido de los .atom de dentro. Devuelve (versiones, bajas, cuentas_por_dia):
+    versiones = [(entrada, snapshot)] con el <updated> de su .atom, para que la elección
+    de versión (utiles.radar_pasada) no dependa del orden de los ficheros del ZIP."""
     from backfill_catalogo import url_zip, descarga_zip, itera_atoms, CACHE_DIR
     from lxml import etree
     from collections import Counter as _Counter
@@ -249,13 +252,15 @@ def _entradas_del_zip(fuente, mes=None, desde=None, hasta=None):
     print(f"  Recuperación «{fuente}»: ZIP de {periodo} (Datos Abiertos)")
     descarga_zip(url_zip(fuente, periodo), destino)
 
-    entradas, por_dia, total_zip = [], _Counter(), 0
-    for _nombre, blob in itera_atoms(destino):
+    versiones, bajas, por_dia, total_zip = [], [], _Counter(), 0
+    for _nombre, blob in itera_atoms(destino, ordenar=True):
         try:
             raiz = etree.fromstring(blob)
         except etree.XMLSyntaxError:
             continue
-        for entrada_zip in raiz.findall("atom:entry", ATOM_NS):
+        entradas_atom, bajas_atom, snapshot = lee_pagina(raiz)
+        bajas.extend(bajas_atom)
+        for entrada_zip in entradas_atom:
             total_zip += 1
             marca = entrada_zip.find("atom:updated", ATOM_NS)
             dia = (marca.text or "")[:10] if marca is not None and marca.text else ""
@@ -264,16 +269,16 @@ def _entradas_del_zip(fuente, mes=None, desde=None, hasta=None):
             if hasta and dia > hasta:
                 continue
             por_dia[dia] += 1
-            entradas.append(entrada_zip)
+            versiones.append((entrada_zip, snapshot))
     rango = f" entre {desde or 'el principio'} y {hasta or 'el final'}" if (desde or hasta) else ""
     print(f"  Recuperación «{fuente}»: {total_zip:,} entradas en el ZIP, "
-          f"{len(entradas):,} en el rango{rango}.")
+          f"{len(versiones):,} en el rango{rango}.")
     for dia, n in sorted(por_dia.items()):
         print(f"      {dia}: {n:,}")
-    return entradas, por_dia
+    return versiones, bajas, por_dia
 
 
-# Cada feed se descarga y pagina con el MISMO extractor (feeds.descarga_entradas)
+# Cada feed se descarga y pagina con el MISMO extractor (feeds.descarga_feed)
 # y cada licitación queda etiquetada con su "fuente" para poder distinguirla.
 total_entradas = 0           # cuántas entradas hemos leído en total (todos los feeds)
 cuentas_zip = {}             # en recuperación: entradas del ZIP por día y fuente (control)
@@ -286,6 +291,10 @@ ultima_entrada_por_fuente = {}
 # Y la MÁS ANTIGUA que hemos leído: con ella se sabe si esta pasada enlaza con la anterior.
 primera_entrada_por_fuente = {}
 tope_por_fuente = {}
+# TODAS las versiones leídas (de todos los feeds) y las bajas: se eligen y clasifican
+# juntas más abajo (utiles.radar_pasada), una vez por expediente.
+registros_leidos = []
+bajas_leidas = []
 
 for feed in FEEDS:
     fuente = feed["fuente"]
@@ -303,56 +312,69 @@ for feed in FEEDS:
         continue
 
     if MODO_RECUPERACION:
-        entradas, cuentas_zip[fuente] = _entradas_del_zip(fuente, ARGS.mes, ARGS.desde, ARGS.hasta)
+        versiones, bajas, cuentas_zip[fuente] = _entradas_del_zip(fuente, ARGS.mes, ARGS.desde, ARGS.hasta)
         paginas, tope = 0, False
     else:
         # Descarga + paginación rel="next" (hasta agotarla o hasta el tope de páginas).
-        entradas, paginas, tope = descarga_entradas(feed["url"])
-    leidas_por_fuente[fuente] = len(entradas)
-    total_entradas += len(entradas)
+        versiones, bajas, paginas, tope = descarga_feed(feed["url"])
+    leidas_por_fuente[fuente] = len(versiones)
+    total_entradas += len(versiones)
+    bajas_leidas.extend(bajas)
 
     aviso_tope = "  [TOPE de páginas alcanzado: puede faltar histórico]" if tope else ""
     origen = "el ZIP de Datos Abiertos" if MODO_RECUPERACION else f"{paginas} página(s)"
-    print(f"Feed «{fuente}»: {len(entradas)} entradas en {origen}{aviso_tope}")
+    print(f"Feed «{fuente}»: {len(versiones)} entradas y {len(bajas)} bajas en {origen}{aviso_tope}")
 
     # La más reciente de TODAS las entradas leídas (hayan pasado el filtro o no): es la
-    # señal de si la fuente sigue publicando.
+    # señal de si la fuente sigue publicando. Se compara como INSTANTE (con su zona): como
+    # texto, el 25/10 «02:30+02:00» parecería posterior a «02:10+01:00» y no lo es.
     fechas_feed = []
-    for entrada_cruda in entradas:
+    for entrada_cruda, _snapshot in versiones:
         marca = entrada_cruda.find("atom:updated", ATOM_NS)
-        if marca is not None and marca.text:
+        if marca is not None and marca.text and instante(marca.text) is not None:
             fechas_feed.append(marca.text.strip())
     if fechas_feed:
-        ultima_entrada_por_fuente[fuente] = max(fechas_feed)[:19]
-        primera_entrada_por_fuente[fuente] = min(fechas_feed)[:19]
+        ultima_entrada_por_fuente[fuente] = max(fechas_feed, key=instante)[:19]
+        primera_entrada_por_fuente[fuente] = min(fechas_feed, key=instante)[:19]
     tope_por_fuente[fuente] = bool(tope)
 
-    # --- Recorremos las licitaciones de ESTE feed una a una -----------------
-    for entrada in entradas:
-        # Extracción de TODOS los campos CODICE: la hace el extractor compartido
-        # (feeds.extrae_entrada), el MISMO que usa el backfill del buscador, para no
-        # duplicar la lógica. Devuelve un dict con id, titulo, objeto, enlace, cpv[],
-        # fuente, organismo, plataforma, region(_codigo), importes y fechas. La
-        # "categoria" y la "coincidencia" se añaden abajo, cuando sepamos su grupo.
+    # Extracción de TODOS los campos CODICE de cada versión: la hace el extractor
+    # compartido (feeds.extrae_entrada), el MISMO que usa el backfill del buscador. Se
+    # apunta además el <updated> del .atom donde venía (version_snapshot), que desempata
+    # dos versiones con la misma marca.
+    for entrada, snapshot in versiones:
         registro = extrae_entrada(entrada, fuente)
-        cpvs = registro["cpv"]
-        # Normalizamos el título una sola vez para comparar palabras clave.
-        titulo_normalizado = normaliza(registro["titulo"])
+        registro["version_snapshot"] = snapshot
+        registros_leidos.append(registro)
 
-        # Clasificamos recorriendo las categorías EFECTIVAS EN ORDEN. La PRIMERA con
-        # la que coincida se queda con la licitación; el orden marca la prioridad
-        # (criticas > a_revisar > pruebas, o lo que defina el panel).
-        for nombre, criterios in intereses_efectivos.items():
-            motivo = busca_coincidencia(cpvs, titulo_normalizado, criterios)
-            if motivo:
-                # Está cazada por interés; ahora debe pasar el filtro de TERRITORIO
-                # (plataforma/región) elegido en la config. Si no, NO se guarda.
-                if pasa_territorio(registro["plataforma"], registro["region_codigo"]):
-                    registro["categoria"] = nombre        # categoría efectiva
-                    registro["coincidencia"] = motivo
-                    resultados[nombre].append(registro)
-                break  # ya decidida (guardada o descartada por territorio)
-        # Si ninguna categoría coincide, la licitación se ignora (no la guardamos).
+# --- 2 bis. Elegir, clasificar y fusionar con data/licitaciones.json ---------
+# Cargamos lo que ya hubiera guardado de ejecuciones anteriores.
+# Si es la PRIMERA vez (el archivo aún no existe), empezamos con un diccionario vacío.
+ruta_json = Path("data") / "licitaciones.json"
+ruta_json.parent.mkdir(parents=True, exist_ok=True)
+if ruta_json.exists():
+    with open(ruta_json, encoding="utf-8") as f:
+        datos = json.load(f)
+else:
+    datos = {}
+
+# Cuántas había ANTES de tocar nada: es el control de que una recuperación solo puede
+# sumar. Si al final hay menos, algo ha ido mal y no se escribe.
+TOTAL_ANTES = len(datos)
+
+# Momento de esta ejecución, como texto en formato ISO (ej: "2026-06-22T18:30:00.123").
+ahora = datetime.now().isoformat()
+
+# De cada expediente se queda SOLO su versión más nueva, se clasifica ESA (por CPV o
+# palabra clave, en orden de prioridad, y con el filtro de territorio) y se fusiona: una
+# ficha guardada solo se pisa con una versión más nueva. Ver utiles.radar_pasada. Antes se
+# clasificaban todas las versiones y la última en fusionarse, la más VIEJA, pisaba plazo e
+# importes (PASO 0 del 15/10/2026).
+nuevas = radar_pasada(datos, registros_leidos, intereses_efectivos, pasa_territorio, ahora,
+                      resultados=resultados)
+# Las bajas del feed (<at:deleted-entry>) se MARCAN en la ficha (baja_en, baja_tipo); la
+# ficha no se borra. Después de las versiones, para que el orden no importe.
+bajas_marcadas = marca_bajas_radar(datos, bajas_leidas)
 
 # --- 3. Mostramos los resultados agrupados, una sección por categoría --------
 for nombre, lista in resultados.items():
@@ -375,6 +397,7 @@ print(f"Resumen: {detalle}; sobre {total_entradas} licitaciones leídas en total
 # Cuántas entradas trajo cada feed (antes de filtrar).
 detalle_feeds = ", ".join(f"{n} de {fuente}" for fuente, n in leidas_por_fuente.items())
 print(f"Entradas leídas por fuente: {detalle_feeds}.")
+print(f"Bajas del feed: {len(bajas_leidas)} leídas, {bajas_marcadas} marcadas en el Radar.")
 
 # --- 4 bis. ¿HAY ALGUNA FUENTE MUDA? ---------------------------------------
 # Se avisa a partir de 2 días sin entradas nuevas: un fin de semana no cuenta como avería,
@@ -454,81 +477,8 @@ if not MODO_RECUPERACION:
         json.dump(estado_fuentes, f, ensure_ascii=False, indent=1)
 
 # --- 5. Guardamos las licitaciones en data/licitaciones.json ----------------
-# Juntamos en una sola lista todas las que han pasado el filtro (todas las categorías,
-# en orden de prioridad: primero las de "criticas", luego "a_revisar", etc.).
-licitaciones_filtradas = [lic for lista in resultados.values() for lic in lista]
-
-# Ruta del archivo. Path nos permite crear la carpeta "data" si todavía no existe.
-ruta_json = Path("data") / "licitaciones.json"
-ruta_json.parent.mkdir(parents=True, exist_ok=True)
-
-# Cargamos lo que ya hubiera guardado de ejecuciones anteriores.
-# Si es la PRIMERA vez (el archivo aún no existe), empezamos con un diccionario vacío.
-if ruta_json.exists():
-    with open(ruta_json, encoding="utf-8") as f:
-        datos = json.load(f)
-else:
-    datos = {}
-
-# Cuántas había ANTES de tocar nada: es el control de que una recuperación solo puede
-# sumar. Si al final hay menos, algo ha ido mal y no se escribe.
-TOTAL_ANTES = len(datos)
-
-# Momento de esta ejecución, como texto en formato ISO (ej: "2026-06-22T18:30:00.123").
-ahora = datetime.now().isoformat()
-
-# Recorremos las licitaciones filtradas y actualizamos el diccionario "datos".
-# Usamos el id como clave: así no se duplican y reconocemos las que ya conocíamos.
-nuevas = []
-for lic in licitaciones_filtradas:
-    clave = lic["id"]
-    if clave not in datos:
-        # No estaba: es NUEVA. La añadimos con primera_vez = ultima_vez = ahora.
-        datos[clave] = {
-            "id": lic["id"],
-            "titulo": lic["titulo"],
-            "enlace": lic["enlace"],
-            "cpv": lic["cpv"],
-            "fuente": lic["fuente"],
-            "num_expediente": lic["num_expediente"],
-            "organismo": lic["organismo"],
-            "plataforma": lic["plataforma"],
-            "region": lic["region"],
-            "region_codigo": lic["region_codigo"],
-            "categoria": lic["categoria"],
-            "coincidencia": lic["coincidencia"],
-            "presupuesto_con_iva": lic["presupuesto_con_iva"],
-            "presupuesto_sin_iva": lic["presupuesto_sin_iva"],
-            "valor_estimado": lic["valor_estimado"],
-            "fecha_fin_plazo": lic["fecha_fin_plazo"],
-            "fecha_publicacion": lic["fecha_publicacion"],
-            "fecha_actualizacion": lic["fecha_actualizacion"],
-            "primera_vez": ahora,
-            "ultima_vez": ahora,
-        }
-        nuevas.append(datos[clave])
-    else:
-        # Ya la conocíamos: refrescamos cuándo la hemos visto por última vez, su
-        # fecha de actualización y los datos económicos/fechas (pueden cambiar:
-        # correcciones de presupuesto, ampliaciones de plazo...). NO tocamos
-        # "primera_vez" ni "fuente" (el origen de una licitación no cambia; si
-        # apareciera en los dos feeds, se queda con el primero que la vio).
-        datos[clave]["ultima_vez"] = ahora
-        datos[clave]["fecha_actualizacion"] = lic["fecha_actualizacion"]
-        datos[clave]["presupuesto_con_iva"] = lic["presupuesto_con_iva"]
-        datos[clave]["presupuesto_sin_iva"] = lic["presupuesto_sin_iva"]
-        datos[clave]["valor_estimado"] = lic["valor_estimado"]
-        datos[clave]["fecha_fin_plazo"] = lic["fecha_fin_plazo"]
-        datos[clave]["fecha_publicacion"] = lic["fecha_publicacion"]
-        # Nº de expediente: lo refrescamos también (y rellena las entradas antiguas
-        # que aún no lo tuvieran, cuando se las vuelve a ver).
-        datos[clave]["num_expediente"] = lic["num_expediente"]
-        # Territorio: lo refrescamos también (y de paso rellena las entradas
-        # antiguas que aún no lo tuvieran, cuando se las vuelve a ver).
-        datos[clave]["organismo"] = lic["organismo"]
-        datos[clave]["plataforma"] = lic["plataforma"]
-        datos[clave]["region"] = lic["region"]
-        datos[clave]["region_codigo"] = lic["region_codigo"]
+# La elección de versión, la clasificación y la fusión ya están hechas arriba (2 bis):
+# aquí solo se completan las fichas antiguas, se poda y se escribe.
 
 # Migración: las entradas guardadas ANTES de existir estos campos no los tienen.
 # El "fuente" lo dejamos en "estatal" (hasta ahora el único feed era ese); los de
@@ -541,6 +491,8 @@ for registro_guardado in datos.values():
     registro_guardado.setdefault("plataforma", None)
     registro_guardado.setdefault("region", None)
     registro_guardado.setdefault("region_codigo", None)
+    registro_guardado.setdefault("version_snapshot", None)
+    registro_guardado.setdefault("estado_expediente", None)
 
 # --- Poda: quitar lo que YA NO encaja con la config ACTUAL -------------------
 # El archivo ACUMULA histórico (para conservar primera_vez), así que solo añadir no
