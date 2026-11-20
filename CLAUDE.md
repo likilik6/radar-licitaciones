@@ -208,7 +208,9 @@ Revisado el 30/10 contra el repo, GitHub y la base (con `claude_ro`); puesto al 
     1) `versiones_schema.sql` y `prueba_versiones.sql` en el SQL Editor; 2) mergear; 3) `radar.yml`
     a mano; 4) `reparacion.yml` por tramos, con `VACUUM` entre tramo y tramo; 5) refrescos.
     Cuando entre, el commit automático añadirá 2 claves a todas las fichas de
-    `data/licitaciones.json`.
+    `data/licitaciones.json`. A 20/11 el paso 1 sigue sin hacer (no hay `atom_updated` en la base).
+    Caso de prueba: expediente 1343/2024 (Valencia Clínico). Hoy tiene 0 adjudicaciones; tras el
+    paso 4 con «escribir» debe tener 1: Formalizado, 100.800 € sin IVA, 1 oferta, 25/03/2025.
 - **Perfiles:** migración a dos perfiles en curso; qué está ejecutado y qué falta se lleva fuera
   del repo. `sql/perfiles_migracion.sql` y `verificar_perfiles.py` (escribe en producción) están
   en la rama local `perfiles-migracion`, sin subir. No crees usuarios en Auth sin mi OK.
