@@ -295,7 +295,13 @@ abrir = lambda p: zip_sep if p == "202609" else None
 with Escena(None) as e:
     orig_ids = bc._ids_en_base
     base = {ID + "40"}
-    bc._ids_en_base = lambda s, u, h, ids, lote=80: {i for i in ids if i in base}
+    consultas = []
+    def ids_en_base_falso(s, u, h, ids, lote=80):
+        # La base de mentira ve también lo que la escena ha subido.
+        consultas.append(len(ids))
+        vista = base | {f["licitacion_id"] for _p, lote_ in e.subidas for f in lote_}
+        return {i for i in ids if i in vista}
+    bc._ids_en_base = ids_en_base_falso
     try:
         n = bc.menores_recuperar("20260926", "20260926", escribir=False, descargar=abrir,
                                  en_base=lambda ids: {i for i in ids if i in base})
@@ -306,6 +312,8 @@ with Escena(None) as e:
         comprueba(sorted(subidas) == [ID + "41", ID + "42"], "escribiendo: solo los que faltan (ni el presente ni el de fuera de rango)")
         comprueba(all(p.startswith("resolution=ignore-duplicates") for p, _l in e.subidas),
                   "y con ignore-duplicates: nunca pisa una fila que ya esté")
+        comprueba(n == 0, "tras insertar, «siguen faltando: 0»")
+        comprueba(consultas == [2], "la comprobación final es UNA consulta para todos, no una por menor")
     finally:
         bc._ids_en_base = orig_ids
 

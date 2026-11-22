@@ -1629,7 +1629,9 @@ def menores_recuperar(desde, hasta, escribir=False, descargar=None, en_base=None
     filas = [elector.filas[r] for r in faltan]
     for i in range(0, len(filas), 500):
         _sube_lote(sesion, endpoint, h, filas[i:i + 500])
-    quedan = [r for r in faltan if r not in _ids_en_base(sesion, url_base, headers, faltan)]
+    # Una sola consulta de presencia para todos (no una por menor: serían miles).
+    ya_estan = _ids_en_base(sesion, url_base, headers, faltan)
+    quedan = [r for r in faltan if r not in ya_estan]
     print(f"  Insertados: {len(faltan) - len(quedan):,}  ·  siguen faltando: {len(quedan):,}")
     refrescar_cobertura_menores(sesion, url_base, headers)
     return len(quedan)
