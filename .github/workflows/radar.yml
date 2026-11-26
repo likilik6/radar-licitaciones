@@ -32,8 +32,46 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # --- Job 0: baja los feeds UNA sola vez y guarda las páginas en bruto --------
+  # Antes «generar» y «catalogo» bajaban cada uno los mismos feeds (unas 100
+  # peticiones al día a la Plataforma). Ahora se bajan aquí una vez (643, 1044 y
+  # 1143 de menores), con un solo intento por página y sin reintentos, y los dos
+  # jobs las leen del artefacto. El artefacto «paginas-feed» se guarda 14 días:
+  # Radar Farma lo usa para su base sin pedir nada más a la Plataforma.
+  # Este job no falla si la Plataforma rechaza o corta (lo deja en el manifiesto):
+  # el Radar se publica igual con lo que haya, como hasta ahora.
+  descargar:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar librerías
+        run: pip install -r requirements.txt
+
+      - name: Bajar los feeds (una sola vez)
+        run: python descarga_paginas.py --salida paginas
+
+      - name: Guardar las páginas como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: paginas-feed
+          path: paginas
+          retention-days: 14
+          if-no-files-found: error
+
   # --- Job 1: genera la web, guarda el JSON y prepara el artefacto de Pages ---
   generar:
+    needs: descargar
+    # Corre aunque «descargar» falle por un error suyo: entonces lee en vivo, como antes.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     # Permiso para hacer push del JSON (la persistencia) al repositorio.
     permissions:
@@ -58,9 +96,18 @@ jobs:
       #    panel ⚙). Antes se leía con la clave pública, pero esa lectura se cierra
       #    al separar los perfiles. Si no puede leerla, el paso FALLA a propósito:
       #    publicar el radar con los criterios equivocados es peor que no publicarlo.
+      - name: Recuperar las páginas bajadas
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: paginas-feed
+          path: paginas
+
       - name: Filtrar licitaciones
         env:
           SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+          # Lee las páginas del job «descargar»; si no están, en vivo (feeds.descarga_entradas).
+          RADAR_PAGINAS: paginas
         run: python filtrar.py
 
       # 5. Regenera la web (docs/index.html) a partir del JSON.
@@ -110,15 +157,19 @@ jobs:
 
   # --- Job 3: catálogo del BUSCADOR (independiente del Radar) -----------------
   # Ingesta incremental diaria del feed a public.licitaciones + purga de la ventana
-  # de 3 años. NO tiene "needs": corre EN PARALELO a generar/desplegar, así que si
-  # falla NO impide que el Radar se publique. NO toca data/licitaciones.json ni la
+  # de 3 años. Solo depende de «descargar» (sus páginas): corre EN PARALELO a
+  # generar/desplegar, así que si falla NO impide que el Radar se publique.
+  # NO toca data/licitaciones.json ni la
   # cortina de login: es otro destino (la base consultable del buscador en Supabase).
   catalogo:
     # En la ejecución automática de cada mañana (schedule) se hace SIEMPRE.
     # Lanzándolo a mano solo si se marca la casilla: probar un cambio de la web no
     # tiene por qué disparar una segunda ingesta y una segunda purga del día sobre
     # la base de producción.
-    if: github.event_name != 'workflow_dispatch' || inputs.ejecutar_catalogo
+    # Lee las páginas del job «descargar»; corre aunque ese job falle por un error
+    # suyo (entonces lee en vivo, como antes).
+    needs: descargar
+    if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.ejecutar_catalogo) }}
     runs-on: ubuntu-latest
     # Solo lectura del repo (checkout). Las credenciales van por secrets, no por el repo.
     permissions:
@@ -142,10 +193,18 @@ jobs:
       #    Fase D2: al terminar, hace el cruce CIF de LODEPA -> public.decisiones
       #    (RPC automarcar_ganadas_lodepa, idempotente) para auto-marcar las GANADAS.
       #    Si esa RPC no está desplegada, avisa y sigue (no rompe la ingesta).
+      - name: Recuperar las páginas bajadas
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: paginas-feed
+          path: paginas
+
       - name: Ingesta diaria al catálogo
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+          RADAR_PAGINAS: paginas
         run: python backfill_catalogo.py --diario
 
       # 2) Purga de la ventana de 3 años (requiere haber creado la función

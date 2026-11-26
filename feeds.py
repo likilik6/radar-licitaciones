@@ -8,8 +8,13 @@
 # El MISMO extractor sirve para todos los feeds porque todos vienen en el mismo
 # formato (ATOM con el bloque CODICE donde está el CPV). Añadir un feed nuevo es
 # solo añadir una entrada a la lista FEEDS de abajo.
+import hashlib
+import json
+import os
 import re
 import time
+from pathlib import Path
+
 import requests
 from datetime import date, timedelta
 from lxml import etree
@@ -64,9 +69,121 @@ def _siguiente_pagina(raiz):
     return None
 
 
+# --- Páginas guardadas (26/11/2026) -----------------------------------------
+# Antes, cada ejecución de radar.yml bajaba los feeds DOS veces: el job «generar»
+# (filtrar.py) y el job «catalogo» (backfill_catalogo.py --diario), cada uno por su
+# lado. Ahora el job «descargar» los baja UNA vez (descarga_paginas.py), guarda las
+# páginas en bruto con un manifiesto y las sube como artefacto «paginas-feed»; los
+# otros dos jobs las leen de ahí poniendo RADAR_PAGINAS=<directorio>. Sin esa
+# variable (en local, o en fetch.py) todo sigue leyendo en vivo, como siempre.
+# El mismo artefacto lo usa Radar Farma (con su propio parser) sin pedirle nada más
+# a la Plataforma.
+MANIFIESTO = "manifiesto.json"
+_RX_SUPPORT_ID = re.compile(rb"support ID is:\s*<?(\d+)>?", re.I)
+
+
+def nombre_pagina(url):
+    """El nombre del fichero de una página del feed: el último trozo de su URL
+    (p. ej. 'licitacionesPerfilesContratanteCompleto3_20261123_202605_5.atom')."""
+    return url.split("?", 1)[0].split("#", 1)[0].rstrip("/").rsplit("/", 1)[-1]
+
+
+def _describe_fallo(url, n, respuesta, error):
+    """Qué pasó en la página que no se pudo leer, para el manifiesto: el tipo, el
+    código HTTP, el Content-Type, el tamaño y los primeros 300 caracteres (en una
+    línea), sin guardar el cuerpo entero."""
+    cuerpo = getattr(respuesta, "content", None) or b""
+    codigo = getattr(respuesta, "status_code", None)
+    if respuesta is None:
+        tipo = "sin_respuesta"            # corte, red, DNS, tiempo agotado
+    elif b"Request Rejected" in cuerpo[:2000] or b"was rejected" in cuerpo[:2000]:
+        tipo = "rechazo"                  # la página de bloqueo del cortafuegos
+    elif isinstance(codigo, int) and codigo >= 400:
+        tipo = "error_http"
+    else:
+        tipo = "no_feed"                  # respondió, pero no con un feed atom
+    m = _RX_SUPPORT_ID.search(cuerpo[:2000])
+    texto = cuerpo[:300].decode("utf-8", "replace")
+    return {
+        "url": url,
+        "pagina": n,
+        "tipo": tipo,
+        "codigo": codigo,
+        "content_type": (getattr(respuesta, "headers", None) or {}).get("Content-Type"),
+        "bytes": len(cuerpo) if respuesta is not None else None,
+        "inicio": " ".join(texto.split()) or None,
+        "support_id": m.group(1).decode() if m else None,
+        "error": f"{type(error).__name__}: {str(error)[:300]}",
+    }
+
+
+def baja_paginas(url, max_paginas=MAX_PAGINAS, pausa=PAUSA_ENTRE_PAGINAS):
+    """La parte de red: sigue rel="next" desde 'url' hasta agotarla o hasta
+    'max_paginas'. Devuelve (paginas, tope_alcanzado, fallo):
+      - paginas: [(url, bytes, raiz)] de las páginas leídas bien, en el orden del
+        feed (la cabecera primero);
+      - tope_alcanzado: True si se paró por el tope (quedaba 'next' sin leer);
+      - fallo: None o, si una página no se pudo leer, lo que pasó (_describe_fallo).
+        Ahí se para ESE feed, sin reintentar: si el servidor nos rechaza, no se
+        insiste."""
+    paginas = []
+    while url and len(paginas) < max_paginas:
+        respuesta = None
+        try:
+            respuesta = requests.get(url, headers=CABECERAS, timeout=60)
+            respuesta.raise_for_status()
+            raiz = etree.fromstring(respuesta.content)
+            if raiz.tag != f"{{{ATOM_NS['atom']}}}feed":
+                raise ValueError(f"la respuesta no es un feed atom (raíz {raiz.tag})")
+        except Exception as error:
+            # Fallo (red, 5xx, rechazo, XML corrupto...): avisamos y paramos este feed.
+            print(f"  AVISO: no se pudo leer una página ({error}); se deja de paginar este feed.")
+            return paginas, False, _describe_fallo(url, len(paginas), respuesta, error)
+        paginas.append((url, respuesta.content, raiz))
+        url = _siguiente_pagina(raiz)
+        # Pausa solo si vamos a pedir otra página.
+        if url and len(paginas) < max_paginas:
+            time.sleep(pausa)
+    # Si todavía queda un 'next' es que paramos por el tope, no porque se agotara.
+    return paginas, bool(url), None
+
+
+def lee_guardadas(directorio, url):
+    """(entradas, paginas_leidas, tope_alcanzado) del feed 'url' sacadas de las
+    páginas que guardó descarga_paginas.py en 'directorio', o None si allí no hay
+    manifiesto. Comprueba el SHA-256 de cada página. Si una no cuadra o falta, o si
+    la descarga se paró en un fallo, avisa igual que en vivo y devuelve lo leído
+    hasta ahí (no vuelve a pedir nada a la Plataforma)."""
+    directorio = Path(directorio)
+    ruta = directorio / MANIFIESTO
+    if not ruta.exists():
+        return None
+    feed = (json.loads(ruta.read_text(encoding="utf-8")).get("feeds") or {}).get(url)
+    if feed is None:
+        print(f"  AVISO: {nombre_pagina(url)} no está entre las páginas guardadas; este feed queda sin leer.")
+        return [], 0, False
+    entradas, leidas = [], 0
+    for pag in feed.get("paginas") or []:
+        try:
+            datos = (directorio / pag["fichero"]).read_bytes()
+            if hashlib.sha256(datos).hexdigest() != pag["sha256"]:
+                raise ValueError(f"{pag['fichero']} no cuadra con su SHA-256")
+            raiz = etree.fromstring(datos)
+        except Exception as error:
+            print(f"  AVISO: no se pudo leer una página guardada ({error}); se deja de paginar este feed.")
+            return entradas, leidas, False
+        entradas.extend(raiz.findall("atom:entry", ATOM_NS))
+        leidas += 1
+    fallo = feed.get("fallo")
+    if fallo:
+        print(f"  AVISO: no se pudo leer una página ({fallo.get('tipo')}: {fallo.get('error')}); "
+              f"se deja de paginar este feed.")
+    return entradas, leidas, bool(feed.get("tope"))
+
+
 def descarga_entradas(url, max_paginas=MAX_PAGINAS, pausa=PAUSA_ENTRE_PAGINAS):
     """Descarga un feed ATOM siguiendo la paginación rel="next" hasta agotarla o
-    hasta llegar a 'max_paginas'. Mantiene la cabecera de navegador en cada petición.
+    hasta llegar a 'max_paginas'.
 
     Devuelve una tupla (entradas, paginas_leidas, tope_alcanzado):
       - entradas:        lista de elementos <atom:entry> (lxml) de TODAS las páginas.
@@ -76,30 +193,20 @@ def descarga_entradas(url, max_paginas=MAX_PAGINAS, pausa=PAUSA_ENTRE_PAGINAS):
 
     Si una página falla (error de red o respuesta no válida), se avisa y se deja
     de paginar ESE feed con lo que se llevara descargado, para no tumbar todo el
-    trabajo por un fallo puntual."""
-    entradas = []
-    paginas_leidas = 0
-    while url and paginas_leidas < max_paginas:
-        try:
-            respuesta = requests.get(url, headers=CABECERAS, timeout=60)
-            respuesta.raise_for_status()
-            raiz = etree.fromstring(respuesta.content)
-        except Exception as error:
-            # Fallo puntual (red, 5xx, XML corrupto...): avisamos y paramos este feed.
-            print(f"  AVISO: no se pudo leer una página ({error}); se deja de paginar este feed.")
-            return entradas, paginas_leidas, False
+    trabajo por un fallo puntual.
 
-        entradas.extend(raiz.findall("atom:entry", ATOM_NS))
-        paginas_leidas += 1
-        url = _siguiente_pagina(raiz)
-
-        # Pausa solo si vamos a pedir otra página.
-        if url and paginas_leidas < max_paginas:
-            time.sleep(pausa)
-
-    # Si todavía queda un 'next' es que paramos por el tope, no porque se agotara.
-    tope_alcanzado = bool(url)
-    return entradas, paginas_leidas, tope_alcanzado
+    Con RADAR_PAGINAS=<directorio> (los jobs de radar.yml, 26/11/2026) no se pide
+    nada: se leen las páginas que bajó el job «descargar». Si ese directorio no tiene
+    manifiesto (el job «descargar» falló), se avisa y se lee en vivo como antes."""
+    guardadas = os.environ.get("RADAR_PAGINAS")
+    if guardadas:
+        leido = lee_guardadas(guardadas, url)
+        if leido is not None:
+            return leido
+        print(f"  AVISO: RADAR_PAGINAS={guardadas} no tiene {MANIFIESTO}; se lee el feed en vivo.")
+    paginas, tope, _ = baja_paginas(url, max_paginas, pausa)
+    entradas = [e for _, _, raiz in paginas for e in raiz.findall("atom:entry", ATOM_NS)]
+    return entradas, len(paginas), tope
 
 
 # ============================================================================
