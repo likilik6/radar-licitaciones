@@ -38,6 +38,11 @@ concurrency:
   group: mantenimiento
   cancel-in-progress: false
 
+# Correo de contacto del agente de usuario honesto (feeds.agente_de_usuario). Va en el
+# secreto RADAR_CONTACTO, nunca en el repo, que es público.
+env:
+  RADAR_CONTACTO: ${{ secrets.RADAR_CONTACTO }}
+
 jobs:
   # Diagnóstico: qué feed recibe GitHub. Si aquí llega contenido distinto o más viejo que en
   # un PC normal, el problema es desde dónde sale la petición (como con la Junta) y paginar

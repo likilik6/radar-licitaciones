@@ -1,27 +1,53 @@
 # Radar de licitaciones — ejecución automática en GitHub Actions.
-# Qué hace: cada mañana (L-V) descarga y filtra el feed, regenera la web y la
-# publica con el método oficial de GitHub Pages (Actions). La persistencia
-# (data/licitaciones.json) se sigue guardando con commit+push al repositorio.
+# Qué hace: todos los días baja los feeds y guarda las páginas (job «descargar»);
+# de lunes a viernes, además, filtra, regenera la web y la publica con el método
+# oficial de GitHub Pages (Actions) y pone al día el catálogo del Buscador. La
+# persistencia (data/licitaciones.json) se sigue guardando con commit+push.
 
 name: Radar de licitaciones
+# Las que lanza la tarea de las 5:00 del PC de Radar Farma (casilla «diaria») llevan
+# otro título, para que la programada de la tarde sepa que ya se hizo y no lo repita
+# (ya_lanzado_hoy.py busca este texto exacto: si lo cambias, cámbialo también allí).
+run-name: ${{ inputs.diaria && 'Radar de licitaciones (5:00, desde el PC)' || 'Radar de licitaciones' }}
 
 on:
-  # Horario: GitHub usa hora UTC. "0 6 * * 1-5" = 6:00 UTC, de lunes a viernes.
-  # En España eso son ~8:00 en verano y ~7:00 en invierno (GitHub no ajusta el
-  # cambio de hora). Las ejecuciones programadas pueden retrasarse algunos
-  # minutos cuando GitHub está cargado; es normal.
+  # Horario (26/11/2026): todos los días a las 4:07 UTC = 5:07 en España en invierno
+  # y 6:07 en verano (GitHub usa UTC y no ajusta el cambio de hora). A esa hora ya
+  # están los dos cortes del día de la Plataforma (estatal hacia las 20:20 del día
+  # anterior, agregada hacia las 3:00).
+  # OJO: es la hora a la que se PIDE, no a la que arranca. GitHub retrasa los
+  # programados de este repo: con "0 6" el run se CREABA de 4 h 28 min a 6 h 23 min
+  # tarde (22/09-02/10), y con "23 5", de 7 h 25 min a 10 h 46 min tarde (11/11-26/11),
+  # empeorando. No es un paso lento: startedAt == createdAt, es la cola de GitHub.
+  # Fuera del minuto 0, que es donde se junta todo el mundo.
+  # Por eso, desde el 26/11 el que manda es el PC de Radar Farma: lo lanza a mano a
+  # las 5:00 (workflow_dispatch con «diaria»). El cron queda de RESPALDO: si ese día
+  # la del PC acabó bien o sigue en marcha, la programada no hace nada (job
+  # «comprueba»); si el PC no la lanzó o falló, corre entera.
   schedule:
-    # Fuera del minuto 0: GitHub recomienda no programar en punto porque ahí se junta
-    # todo el mundo y los programados de repos públicos se retrasan. Medido del 22/09 al
-    # 02/10: con "0 6" el run se CREABA entre las 10:28 y las 12:23 UTC, o sea 4 h 28 min
-    # a 6 h 23 min tarde, y empeorando. Y no es un paso lento: startedAt == createdAt en
-    # los nueve runs, el retraso es íntegramente la cola de GitHub.
-    - cron: "23 5 * * 1-5"
+    # Lunes a viernes: el Radar entero.
+    - cron: "7 4 * * 1-5"
+    # Sábado y domingo: SOLO «descargar» (las páginas para Radar Farma; no toca la
+    # base ni la web). El resto sigue de lunes a viernes: el fin de semana es de
+    # menores_autonomicos.yml y mantenimiento.yml, que cuentan con que no corre la
+    # ingesta del catálogo (la base no aguanta las dos a la vez: 57014 del 21/09).
+    # Si cambias esta línea, cambia igual la condición de «generar» y «catalogo».
+    - cron: "7 4 * * 0,6"
   # Botón para lanzarlo a mano desde la pestaña "Actions" (útil para probar).
   workflow_dispatch:
     inputs:
       ejecutar_catalogo:
         description: "Ejecutar también el catálogo del Buscador (ingesta diaria + purga). Tarda 20-50 min y escribe en producción. Déjalo desmarcado para probar solo la publicación del Radar."
+        type: boolean
+        default: false
+        required: false
+      solo_paginas:
+        description: "Solo bajar y guardar las páginas (job «descargar»), sin web ni catálogo: como el sábado y el domingo."
+        type: boolean
+        default: false
+        required: false
+      diaria:
+        description: "La lanza la tarea de las 5:00 del PC de Radar Farma. Márcala solo si sustituye a la del día: la programada de la tarde no correrá."
         type: boolean
         default: false
         required: false
@@ -31,9 +57,77 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+# Correo de contacto del agente de usuario honesto (feeds.agente_de_usuario). Va en el
+# secreto RADAR_CONTACTO, nunca en el repo, que es público.
+env:
+  RADAR_CONTACTO: ${{ secrets.RADAR_CONTACTO }}
+
 jobs:
+  # --- Job previo: ¿ya lo lanzó hoy el PC? ------------------------------------
+  # Solo mira algo en las programadas (ya_lanzado_hoy.py). No falla nunca: si no
+  # puede consultar, deja saltar=false y el Radar corre, como antes.
+  comprueba:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      saltar: ${{ steps.mira.outputs.saltar }}
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: ¿Ya lo lanzó hoy el PC de Radar Farma?
+        id: mira
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 ya_lanzado_hoy.py || echo "saltar=false" >> "$GITHUB_OUTPUT"
+
+  # --- Job 0: baja los feeds UNA sola vez y guarda las páginas en bruto --------
+  # Antes «generar» y «catalogo» bajaban cada uno los mismos feeds (unas 100
+  # peticiones al día a la Plataforma). Ahora se bajan aquí una vez (643, 1044 y
+  # 1143 de menores), con un solo intento por página y sin reintentos, y los dos
+  # jobs las leen del artefacto. El artefacto «paginas-feed» se guarda 14 días:
+  # Radar Farma lo usa para su base sin pedir nada más a la Plataforma.
+  # Este job no falla si la Plataforma rechaza o corta (lo deja en el manifiesto):
+  # el Radar se publica igual con lo que haya, como hasta ahora.
+  descargar:
+    needs: comprueba
+    # Corre salvo que «comprueba» diga que el PC ya lo hizo hoy (también si «comprueba» falla).
+    if: ${{ !cancelled() && needs.comprueba.outputs.saltar != 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar librerías
+        run: pip install -r requirements.txt
+
+      - name: Bajar los feeds (una sola vez)
+        run: python descarga_paginas.py --salida paginas
+
+      - name: Guardar las páginas como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: paginas-feed
+          path: paginas
+          retention-days: 14
+          if-no-files-found: error
+
   # --- Job 1: genera la web, guarda el JSON y prepara el artefacto de Pages ---
   generar:
+    needs: [comprueba, descargar]
+    # Corre aunque «descargar» falle por un error suyo: entonces lee en vivo, como antes.
+    # No corre el sábado y el domingo (el cron "7 4 * * 0,6"), ni con «solo_paginas»
+    # marcado a mano, ni si el PC ya lo hizo hoy.
+    if: ${{ !cancelled() && needs.comprueba.outputs.saltar != 'true' && github.event.schedule != '7 4 * * 0,6' && !inputs.solo_paginas }}
     runs-on: ubuntu-latest
     # Permiso para hacer push del JSON (la persistencia) al repositorio.
     permissions:
@@ -58,9 +152,18 @@ jobs:
       #    panel ⚙). Antes se leía con la clave pública, pero esa lectura se cierra
       #    al separar los perfiles. Si no puede leerla, el paso FALLA a propósito:
       #    publicar el radar con los criterios equivocados es peor que no publicarlo.
+      - name: Recuperar las páginas bajadas
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: paginas-feed
+          path: paginas
+
       - name: Filtrar licitaciones
         env:
           SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+          # Lee las páginas del job «descargar»; si no están, en vivo (feeds.descarga_entradas).
+          RADAR_PAGINAS: paginas
         run: python filtrar.py
 
       # 5. Regenera la web (docs/index.html) a partir del JSON.
@@ -110,15 +213,21 @@ jobs:
 
   # --- Job 3: catálogo del BUSCADOR (independiente del Radar) -----------------
   # Ingesta incremental diaria del feed a public.licitaciones + purga de la ventana
-  # de 3 años. NO tiene "needs": corre EN PARALELO a generar/desplegar, así que si
-  # falla NO impide que el Radar se publique. NO toca data/licitaciones.json ni la
+  # de 3 años. Solo depende de «descargar» (sus páginas): corre EN PARALELO a
+  # generar/desplegar, así que si falla NO impide que el Radar se publique.
+  # NO toca data/licitaciones.json ni la
   # cortina de login: es otro destino (la base consultable del buscador en Supabase).
   catalogo:
     # En la ejecución automática de cada mañana (schedule) se hace SIEMPRE.
     # Lanzándolo a mano solo si se marca la casilla: probar un cambio de la web no
     # tiene por qué disparar una segunda ingesta y una segunda purga del día sobre
     # la base de producción.
-    if: github.event_name != 'workflow_dispatch' || inputs.ejecutar_catalogo
+    # Lee las páginas del job «descargar»; corre aunque ese job falle por un error
+    # suyo (entonces lee en vivo, como antes).
+    needs: [comprueba, descargar]
+    # Tampoco el sábado y el domingo (el cron "7 4 * * 0,6"), ni con «solo_paginas», ni
+    # si el PC ya lo hizo hoy.
+    if: ${{ !cancelled() && needs.comprueba.outputs.saltar != 'true' && github.event.schedule != '7 4 * * 0,6' && !inputs.solo_paginas && (github.event_name != 'workflow_dispatch' || inputs.ejecutar_catalogo) }}
     runs-on: ubuntu-latest
     # Solo lectura del repo (checkout). Las credenciales van por secrets, no por el repo.
     permissions:
@@ -142,10 +251,18 @@ jobs:
       #    Fase D2: al terminar, hace el cruce CIF de LODEPA -> public.decisiones
       #    (RPC automarcar_ganadas_lodepa, idempotente) para auto-marcar las GANADAS.
       #    Si esa RPC no está desplegada, avisa y sigue (no rompe la ingesta).
+      - name: Recuperar las páginas bajadas
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: paginas-feed
+          path: paginas
+
       - name: Ingesta diaria al catálogo
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+          RADAR_PAGINAS: paginas
         run: python backfill_catalogo.py --diario
 
       # 2) Purga de la ventana de 3 años (requiere haber creado la función
