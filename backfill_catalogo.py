@@ -21,12 +21,14 @@ MODOS
   · purga (--purgar): borra del catálogo lo más viejo que la ventana, salvo lo
     abierto y lo que esté en public.contratos o public.decisiones (vía RPC
     purga_catalogo). --simular solo cuenta lo que se borraría. --ventana-anios N.
-  · carga (--cargar): upsert idempotente por licitacion_id (conserva primera_vez,
-    actualiza ultima_vez; tsv lo pone el trigger). En STREAMING (baja un ZIP →
-    parsea → upsert → borra el ZIP antes del siguiente, para no llenar el disco) y
-    REANUDABLE por checkpoint (unidad + .atom). Si el job se acerca a su límite de
-    tiempo, se trocea por año/fuente con --periodos/--solo (los upserts son
-    idempotentes, re-lanzar un trozo no duplica).
+  · carga (--cargar): manda cada versión a la RPC carga_versiones, que solo la
+    escribe si es MÁS NUEVA que la guardada y sustituye sus adjudicaciones en la
+    misma transacción (conserva primera_vez; tsv lo pone el trigger). Requisito:
+    haber ejecutado versiones_schema.sql. En STREAMING (baja un ZIP → parsea →
+    manda → borra el ZIP antes del siguiente, para no llenar el disco) y REANUDABLE
+    por checkpoint (unidad + .atom, y las bajas pendientes aparte). Si el job se
+    acerca a su límite de tiempo, se trocea por año/fuente con --periodos/--solo: en
+    cualquier orden, porque la guarda de la base impide que lo viejo pise lo nuevo.
 
 SEGURIDAD: la service_role y la URL se leen de variables de entorno
 SUPABASE_SERVICE_ROLE y SUPABASE_URL (en local/secret). NUNCA en el repo ni en el
@@ -46,9 +48,11 @@ en disco a la vez.
 """
 
 import os
+import re
 import sys
 import json
 import time
+import hashlib
 import zipfile
 import tempfile
 import argparse
@@ -62,7 +66,8 @@ from lxml import etree
 # Reutilizamos del radar: la cabecera de navegador (obligatoria), el namespace
 # ATOM para localizar las <entry> y el EXTRACTOR de campos CODICE (único punto de
 # extracción del proyecto). Nada de esto se duplica aquí.
-from feeds import CABECERAS, ATOM_NS, FEEDS, descarga_entradas, extrae_entrada, normaliza_cif
+from feeds import (CABECERAS, ATOM_NS, FEEDS, descarga_entradas, descarga_feed, extrae_entrada,
+                   normaliza_cif, elige_versiones, es_mas_nueva, instante, lee_pagina)
 # Traduce el código territorial del CODICE a (ccaa, lugar_ejecucion). Ver nuts.py.
 import nuts
 
@@ -184,14 +189,41 @@ def descarga_zip(url, destino):
 
 
 # --- Recorrido de .atom dentro del ZIP (incl. ZIP anidados) -----------------
-def itera_atoms(zip_path):
+# Nombre de un snapshot fechado: ..._AAAAMMDD_HHMMSS.atom o ..._AAAAMMDD_HHMMSS_N.atom.
+_RX_SNAPSHOT = re.compile(r"_(\d{8})_(\d{6})(?:_(\d+))?\.atom$", re.IGNORECASE)
+
+
+def orden_atoms(nombres):
+    """Ordena los .atom de un ZIP de Datos Abiertos de MÁS NUEVO a MÁS VIEJO.
+
+    Dentro de los ZIP vienen así: el fichero base (sin fecha, el más reciente) y luego
+    los snapshots por día en orden ASCENDENTE; algunos traen páginas sueltas delante
+    (agregadas_2024 empieza por _20241029_080034_8) o ficheros viejos de 2021. Dentro
+    de una misma marca, _1, _2... van de más nuevo a más viejo, y el número se compara
+    como número (_2 antes que _10). Leerlos en este orden hace que la PRIMERA versión
+    que se ve de cada expediente sea casi siempre la buena (la guarda de la base
+    corrige el resto), y evita escribir la misma licitación varias veces."""
+    def clave(nombre):
+        m = _RX_SNAPSHOT.search(nombre)
+        if not m:
+            return (1, "", 0)                       # el fichero base: el más reciente
+        return (0, m.group(1) + m.group(2), -int(m.group(3) or 0))
+    return sorted(nombres, key=clave, reverse=True)
+
+
+def itera_atoms(zip_path, ordenar=False):
     """Genera (nombre, bytes) de cada .atom del ZIP. Entra también en ZIP anidados
     (algunos anuales contienen mensuales). Memoria acotada: procesa un miembro cada
-    vez; los ZIP anidados se vuelcan a un temporal en disco, no a RAM."""
+    vez; los ZIP anidados se vuelcan a un temporal en disco, no a RAM.
+    ordenar=True: de más nuevo a más viejo (ver orden_atoms); si no, el orden del ZIP."""
     with zipfile.ZipFile(zip_path) as z:
-        for info in z.infolist():
-            if info.is_dir():
-                continue
+        infos = [i for i in z.infolist() if not i.is_dir()]
+        if ordenar:
+            atoms = {i.filename: i for i in infos if i.filename.lower().endswith(".atom")}
+            anidados = [i for i in infos if i.filename.lower().endswith(".zip")]
+            infos = ([atoms[n] for n in orden_atoms(list(atoms))]
+                     + sorted(anidados, key=lambda i: i.filename, reverse=True))
+        for info in infos:
             low = info.filename.lower()
             if low.endswith(".atom"):
                 yield info.filename, z.read(info)
@@ -200,7 +232,7 @@ def itera_atoms(zip_path):
                     tf.write(z.read(info))
                     tmp = tf.name
                 try:
-                    yield from itera_atoms(tmp)
+                    yield from itera_atoms(tmp, ordenar)
                 finally:
                     os.unlink(tmp)
 
@@ -236,7 +268,9 @@ def fila_para_tabla(reg):
       (0% medido) y donde viene está sucio. Ver la cabecera de nuts.py.
     - tsv lo calcula el trigger de la tabla (no se envía).
     - primera_vez NO se envía: en INSERT toma el default now(); en UPDATE queda intacto.
-    - ultima_vez = ahora (se actualiza siempre).
+    - ultima_vez = ahora. OJO: carga() y diario() ya no la mandan (licitacion_para_rpc
+      la quita); la pone carga_versiones SOLO cuando escribe una versión nueva, así que
+      ahora significa «la última vez que se escribió», no «la última vez que la vimos».
     """
     ccaa, lugar_ejecucion, nuts_codigo = nuts.traduce(reg.get("region_codigo"))
     return {
@@ -387,39 +421,77 @@ def _informe(vistos, por_fuente, por_fuente_anio, sum_tabla, sum_idx_tsv, sum_id
 
 
 # --- CARGA (upsert idempotente, en STREAMING y reanudable) ------------------
+def _ruta_bajas():
+    """Fichero de las bajas pendientes, junto al checkpoint (backfill_estado_bajas.json)."""
+    return ESTADO_LOAD.with_name(ESTADO_LOAD.stem + "_bajas.json")
+
+
 def _carga_estado():
-    """Checkpoint de carga. Devuelve (unidades_ok, atoms_ok):
+    """Checkpoint de carga. Devuelve (unidades_ok, atoms_ok, bajas):
       - unidades_ok: claves 'fuente_periodo' de ZIP ya procesados POR COMPLETO
         (en una reanudación NO se vuelven a descargar).
       - atoms_ok: claves 'fuente_periodo::nombre.atom' ya subidos, para reanudar a
-        media unidad si el job se cortó. Al cerrar una unidad sus .atom se podan."""
+        media unidad si el job se cortó. Al cerrar una unidad sus .atom se podan.
+      - bajas: {atom:id: [cuando, tipo]} leídas y AÚN NO mandadas (van en su propio
+        fichero, ver _guarda_bajas). Se mandan al final de la ejecución (ver carga): si
+        se perdieran al reanudar, nadie las volvería a leer, porque sus ZIP ya están
+        marcados como completos."""
+    unidades, atoms, bajas = set(), set(), {}
     if ESTADO_LOAD.exists():
         d = json.loads(ESTADO_LOAD.read_text(encoding="utf-8"))
         if isinstance(d, dict):
-            return set(d.get("unidades", [])), set(d.get("atoms", []))
-    return set(), set()
+            unidades, atoms = set(d.get("unidades", [])), set(d.get("atoms", []))
+    if _ruta_bajas().exists():
+        d = json.loads(_ruta_bajas().read_text(encoding="utf-8"))
+        if isinstance(d, dict):
+            bajas = d
+    return unidades, atoms, bajas
+
+
+def _escribe_atomico(ruta, texto):
+    """Escribe de forma ATÓMICA (fichero temporal + os.replace): un corte a mitad de
+    escritura no deja un JSON roto. Reintenta un fallo pasajero del disco (en Windows, el
+    antivirus bloquea a veces un fichero que se reescribe muy seguido)."""
+    temporal = ruta.with_name(ruta.name + ".tmp")
+    for intento in range(1, 6):
+        try:
+            temporal.write_text(texto, encoding="utf-8")
+            os.replace(temporal, ruta)
+            return
+        except OSError:
+            if intento == 5:
+                raise
+            time.sleep(0.2 * intento)
 
 
 def _guarda_estado(unidades_ok, atoms_ok):
-    ESTADO_LOAD.write_text(
-        json.dumps({"unidades": sorted(unidades_ok), "atoms": sorted(atoms_ok)}, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    """Checkpoint de unidades y .atom (pequeño: se escribe tras cada .atom)."""
+    _escribe_atomico(ESTADO_LOAD, json.dumps({"unidades": sorted(unidades_ok), "atoms": sorted(atoms_ok)},
+                                             ensure_ascii=False))
 
 
-def construir_unidades(solo=None, periodos=None):
+def _guarda_bajas(bajas):
+    """Bajas pendientes, en su PROPIO fichero: pueden ser decenas de miles y solo se
+    escriben al cerrar cada unidad (no tras cada .atom). Las de una unidad a medias se
+    releen al reanudar (ver carga)."""
+    _escribe_atomico(_ruta_bajas(), json.dumps(bajas, ensure_ascii=False))
+
+
+def construir_unidades(solo=None, periodos=None, hoy=None):
     """Lista ordenada de (fuente, periodo) a procesar. POR DEFECTO, la ventana de
     2 años: años previos COMPLETOS por ZIP ANUAL (p.ej. '2024','2025') + año en
     curso por ficheros MENSUALES ('202601'..mes actual). Los tokens de 'periodos'
-    (4 dígitos = anual, 6 = mensual) y 'solo' permiten TROCEAR por año/fuente."""
+    (4 dígitos = anual, 6 = mensual) y 'solo' permiten TROCEAR por año/fuente.
+    'hoy': la fecha de la que sale la ventana (por defecto, ahora)."""
     fuentes = [solo] if solo else list(FUENTES)
     if periodos:
         usar = list(periodos)
     else:
         # Orden de MÁS NUEVO a MÁS ANTIGUO: meses del año en curso (descendente) y
-        # luego los dos años previos anuales. Procesar así, con dedup por ejecución,
-        # deja en la tabla el snapshot MÁS RECIENTE de cada licitación.
-        hoy = datetime.now()
+        # luego los dos años previos anuales. Ya NO es lo que decide la versión (eso lo
+        # hacen es_mas_nueva y la guarda de carga_versiones; carga() además reordena):
+        # solo ahorra escribir dos veces lo mismo.
+        hoy = hoy or datetime.now()
         a = hoy.year
         usar = [f"{a}{m:02d}" for m in range(hoy.month, 0, -1)] + [str(a - 1), str(a - 2)]
     return [(f, p) for f in fuentes for p in usar]
@@ -597,6 +669,202 @@ def sube_adjudicaciones(sesion, url_base, headers, filas, reemplazar):
     for i in range(0, len(filas), 500):
         _sube_lote(sesion, endpoint, headers, filas[i:i + 500])
     return len(filas)
+
+
+# --- VERSIONES · escritura con GUARDA (public.carga_versiones) ---------------
+# Desde el PASO 0 del 15/10/2026 la ingesta ya NO escribe a ciegas con merge-duplicates:
+# manda cada versión a la RPC carga_versiones (versiones_schema.sql), que solo la escribe
+# si gana a la guardada y, en ese caso, SUSTITUYE sus adjudicaciones en la misma
+# transacción. Así da igual en qué orden se lean los ZIP o se lancen las ejecuciones.
+RPC_CARGA_VERSIONES = "carga_versiones"
+LOTE_RPC = 500                     # expedientes por llamada (~0,6 MB de JSON)
+# Errores en los que reintentar partiendo el lote: bloqueo (55P03), tiempo (57014) e
+# interbloqueo (40P01). La llamada hereda el lock_timeout de 8 s y el statement_timeout
+# de 120 s.
+_ERRORES_PASAJEROS = ("55P03", "57014", "40P01")
+# Lo que NO entra en la huella: la hora de carga (cambia en cada pasada) y los propios
+# datos de versión (se comparan aparte). Si entrara la hora, todo se reescribiría cada día.
+_FUERA_DE_HUELLA = ("ultima_vez", "updated_at", "atom_updated", "version_snapshot", "version_huella")
+
+
+def huella_version(licitacion):
+    """md5 del CONTENIDO de una versión (licitación + sus adjudicaciones): claves
+    ordenadas y separadores fijos, sin la hora de carga ni los datos de versión. Con la
+    misma marca y snapshot, la base solo reescribe si la huella cambia (p. ej. porque un
+    extractor mejorado saca una columna nueva o una adjudicación que antes no veía)."""
+    contenido = {k: v for k, v in licitacion.items() if k not in _FUERA_DE_HUELLA}
+    contenido["adjudicaciones"] = [
+        {k: v for k, v in a.items() if k not in _FUERA_DE_HUELLA}
+        for a in licitacion.get("adjudicaciones", [])
+    ]
+    texto = json.dumps(contenido, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.md5(texto.encode("utf-8")).hexdigest()
+
+
+def licitacion_para_rpc(reg, snapshot):
+    """Una versión extraída (feeds.extrae_entrada) -> el objeto que espera
+    carga_versiones: las columnas de public.licitaciones (fila_para_tabla, sin
+    ultima_vez, que la pone la base), los datos de versión y, DENTRO, la lista de sus
+    adjudicaciones (vacía si la versión no trae ninguna: así la base sabe que tiene
+    que borrar las de una versión anterior)."""
+    fila = fila_para_tabla(reg)
+    fila.pop("ultima_vez", None)
+    # Misma clave repetida (lote, CIF), p. ej. el par «adjudicado 8 + formalizado 9»: la
+    # tabla solo admite una fila por clave. Se elige SIN depender del orden del XML (la
+    # de contenido mayor, comparado como JSON ordenado) y se ordena por clave, para que la
+    # fila guardada y la huella sean las mismas lea quien lea el expediente.
+    adjs = {}
+    for a in reg["adjudicaciones"]:
+        f = fila_adjudicacion(reg["id"], a)
+        for k in ("licitacion_id", "updated_at"):
+            f.pop(k, None)
+        clave = (f["lote"], f["cif_adjudicatario"])
+        if clave not in adjs or (json.dumps(f, sort_keys=True, ensure_ascii=False)
+                                 > json.dumps(adjs[clave], sort_keys=True, ensure_ascii=False)):
+            adjs[clave] = f
+    fila.update(
+        atom_updated=reg["fecha_actualizacion"],
+        version_snapshot=snapshot,
+        estado_expediente=reg.get("estado_expediente"),
+        adjudicaciones=[adjs[k] for k in sorted(adjs)],
+    )
+    fila["version_huella"] = huella_version(fila)
+    return fila
+
+
+def bajas_para_rpc(bajas):
+    """{atom:id: [cuando, tipo]} o lista de dicts {id, cuando, tipo} -> lo que espera la
+    RPC. De varias bajas del mismo expediente vale la más reciente (lo resuelve también
+    la base); las que no traen fecha legible se descartan."""
+    if isinstance(bajas, dict):
+        bajas = [{"id": i, "cuando": c, "tipo": t} for i, (c, t) in bajas.items()]
+    mejores = {}
+    for b in bajas:
+        if not b.get("id") or instante(b.get("cuando")) is None:
+            continue
+        actual = mejores.get(b["id"])
+        if actual is None or instante(b["cuando"]) > instante(actual["cuando"]):
+            mejores[b["id"]] = b
+    return [{"licitacion_id": i, "baja_en": b["cuando"], "baja_tipo": b.get("tipo")}
+            for i, b in sorted(mejores.items())]
+
+
+def anota_baja(pendientes, baja):
+    """Guarda en 'pendientes' ({atom:id: [cuando, tipo]}) la baja si es la más reciente
+    de su expediente. Las bajas se mandan al FINAL de la ejecución: la carga va de lo
+    más nuevo a lo más viejo y la baja suele estar en un fichero MÁS NUEVO que la última
+    versión de su expediente; si se mandara antes, el expediente aún no existiría."""
+    cuando = instante(baja.get("cuando"))
+    if not baja.get("id") or cuando is None:
+        return
+    actual = pendientes.get(baja["id"])
+    if actual is None or cuando > instante(actual[0]):
+        pendientes[baja["id"]] = [baja["cuando"], baja.get("tipo")]
+
+
+def _suma(a, b):
+    return {k: a.get(k, 0) + b.get(k, 0) for k in set(a) | set(b)}
+
+
+def _sin_prefer(headers):
+    """Las cabeceras de upsert llevan «Prefer: resolution=merge-duplicates,return=minimal»;
+    a una función no se le pasan (con return=minimal no devolvería sus contadores)."""
+    return {k: v for k, v in headers.items() if k.lower() != "prefer"}
+
+
+def _comprueba_carga_versiones(sesion, url_base, headers):
+    """Sondeo ANTES de descargar nada: una llamada vacía a carga_versiones (no escribe).
+    Si la función no existe (falta ejecutar versiones_schema.sql) o el robot no tiene
+    permiso (freno de emergencia: revoke ... from service_role), para con un mensaje
+    claro en vez de fallar a mitad de la ingesta."""
+    url = f"{url_base}/rest/v1/rpc/{RPC_CARGA_VERSIONES}"
+    try:
+        r = sesion.post(url, headers=_sin_prefer(headers), json={"p_lote": {"licitaciones": [], "bajas": []}},
+                        timeout=60)
+    except requests.RequestException as e:
+        print(f"  AVISO: no pude sondear carga_versiones ({e}); sigo (los envíos reintentan).")
+        return
+    texto = r.text or ""
+    if r.status_code == 404 or "PGRST202" in texto:
+        raise SystemExit("carga_versiones NO existe en Supabase: hay que ejecutar ANTES versiones_schema.sql "
+                         "(ver su ORDEN DE DESPLIEGUE). No se ha escrito nada.")
+    if r.status_code in (401, 403) or "42501" in texto:
+        raise SystemExit(f"Sin permiso para ejecutar carga_versiones (HTTP {r.status_code}): ¿freno de "
+                         f"emergencia activo? No se ha escrito nada. {texto[:200]}")
+    if r.status_code not in (200, 201):
+        print(f"  AVISO: el sondeo de carga_versiones respondió HTTP {r.status_code}; sigo. {texto[:200]}")
+
+
+def _llama_carga_versiones(sesion, url_base, headers, p_lote, reintentos=4):
+    """Una llamada a la RPC con reintentos. Ante un error pasajero (bloqueo, tiempo,
+    5xx, 429, red) reintenta y, si el lote tiene más de una versión (o, si no lleva
+    versiones, más de una baja), lo parte en dos. Un 4xx de datos para en seco:
+    reintentarlo no lo arregla."""
+    url = f"{url_base}/rest/v1/rpc/{RPC_CARGA_VERSIONES}"
+    h = _sin_prefer(headers)
+    ultimo = None
+    for intento in range(1, reintentos + 1):
+        try:
+            r = sesion.post(url, headers=h, json={"p_lote": p_lote}, timeout=180)
+        except requests.RequestException as e:
+            ultimo = e
+        else:
+            if r.status_code in (200, 201):
+                return r.json() or {}
+            texto = r.text or ""
+            pasajero = (r.status_code >= 500 or r.status_code == 429
+                        or any(c in texto for c in _ERRORES_PASAJEROS))
+            if not pasajero:
+                raise SystemExit(f"carga_versiones: HTTP {r.status_code}: {texto[:300]}")
+            ultimo = RuntimeError(f"HTTP {r.status_code}: {texto[:200]}")
+        lics, bajas = p_lote.get("licitaciones", []), p_lote.get("bajas", [])
+        clave = "licitaciones" if len(lics) > 1 else ("bajas" if not lics and len(bajas) > 1 else None)
+        if clave:
+            lista = p_lote[clave]
+            mitad = len(lista) // 2
+            print(f"      carga_versiones: {ultimo}; parto en dos el lote de {len(lista)} {clave}")
+            primera = {**p_lote, clave: lista[:mitad]}
+            segunda = {**p_lote, clave: lista[mitad:]}
+            if clave == "licitaciones":
+                primera["bajas"] = []           # las bajas, siempre detrás de sus versiones
+            return _suma(_llama_carga_versiones(sesion, url_base, headers, primera, reintentos),
+                         _llama_carga_versiones(sesion, url_base, headers, segunda, reintentos))
+        espera = 2 ** intento
+        print(f"      reintento {intento}/{reintentos} en {espera}s (carga_versiones: {ultimo})")
+        time.sleep(espera)
+    raise SystemExit(f"Fallo en carga_versiones tras {reintentos} intentos: {ultimo}")
+
+
+LOTE_BAJAS = 5000                  # bajas por llamada (solo son id, fecha y tipo)
+
+
+def sube_versiones(sesion, url_base, headers, licitaciones, bajas=(), lote=LOTE_RPC):
+    """Manda versiones (objetos de licitacion_para_rpc) y bajas (de bajas_para_rpc) a
+    carga_versiones, en lotes. Las bajas van DESPUÉS de todas las versiones, en sus
+    propias llamadas. Devuelve los contadores sumados de la RPC.
+
+    Para en seco si la RPC DESCARTA algo: significa que el cliente le ha mandado una
+    versión sin marca, sin snapshot, sin huella o sin su lista de adjudicaciones, y
+    seguir ocultaría un fallo."""
+    totales = {}
+    bajas = list(bajas)
+    lotes = ([{"licitaciones": licitaciones[i:i + lote], "bajas": []} for i in range(0, len(licitaciones), lote)]
+             + [{"licitaciones": [], "bajas": bajas[i:i + LOTE_BAJAS]} for i in range(0, len(bajas), LOTE_BAJAS)])
+    for p_lote in lotes:
+        res = _llama_carga_versiones(sesion, url_base, headers, p_lote)
+        if res.get("descartadas"):
+            raise SystemExit(f"carga_versiones DESCARTÓ {res['descartadas']} versiones mal formadas: "
+                             f"es un fallo del cliente (ver licitacion_para_rpc). Respuesta: {res}")
+        totales = _suma(totales, res)
+    return totales
+
+
+def _informe_versiones(etiqueta, t):
+    """Una línea legible con los contadores de carga_versiones."""
+    print(f"  {etiqueta}: {t.get('aplicadas', 0):,} escritas · {t.get('rechazadas', 0):,} sin cambios "
+          f"(versión igual o más vieja) · adjudicaciones {t.get('adj_borradas', 0):,} borradas / "
+          f"{t.get('adj_insertadas', 0):,} insertadas · bajas {t.get('bajas_marcadas', 0):,} marcadas "
+          f"de {t.get('bajas_recibidas', 0):,} ({t.get('bajas_sin_fila', 0):,} de expedientes que no están)")
 
 
 def _resumen_adjudicaciones(sesion, url_base, headers):
@@ -1095,42 +1363,54 @@ def menores_incremental(sesion, url_base, headers):
     return len(filas)
 
 
+def _clave_periodo(unidad):
+    """Para recorrer las unidades de la más NUEVA a la más VIEJA: '202610' > '202601' >
+    '2025' (un año cuenta como su último mes) > '2024'."""
+    _fuente, periodo = unidad
+    return periodo + ("13" if len(periodo) == 4 else "")
+
+
 def carga(unidades, limpiar=True, solo_catalogo=False):
     """Procesa las unidades (fuente, periodo) en STREAMING: descarga un ZIP →
-    parsea sus .atom → upsert → libera el ZIP antes del siguiente, para no llenar
-    el disco del runner. Reanudable por checkpoint (unidad y .atom).
+    parsea sus .atom → manda las versiones a la RPC con guarda → libera el ZIP antes
+    del siguiente, para no llenar el disco del runner. Reanudable por checkpoint
+    (unidad, .atom y bajas pendientes).
 
-    solo_catalogo=True escribe SOLO public.licitaciones: ni adjudicaciones, ni
-    automarcar, ni el rebuild de competidores, ni el bucle de desiertas. Es para
-    re-backfills que solo buscan rellenar columnas del catálogo (p. ej. el de
-    ccaa/lugar_ejecucion): reescribir 600.975 adjudicaciones ya verificadas no
-    aporta nada y es buena parte de las ~3 h que tarda un backfill completo.
+    VERSIONES (PASO 0 del 15/10/2026): antes se quedaba con la PRIMERA versión que
+    veía de cada expediente, y como los .atom del ZIP van del día más VIEJO al más
+    nuevo, casi siempre era la vieja (y en un ZIP anual, la de enero: así se perdieron
+    196.732 adjudicaciones). Ahora:
+      · las unidades y los .atom se leen de lo más NUEVO a lo más VIEJO (orden_atoms);
+      · de cada expediente se manda una versión solo si gana a la ya mandada en esta
+        ejecución (es_mas_nueva);
+      · la base (carga_versiones) solo la escribe si gana a la GUARDADA, así que da
+        igual el orden de las ejecuciones o que se trocee con --periodos;
+      · las bajas se acumulan (también en el checkpoint) y se mandan AL FINAL.
+
+    solo_catalogo=True: ya NO evita escribir adjudicaciones, porque la RPC sustituye
+    las de cada versión que escribe y mandarle una lista vacía las BORRARÍA. Ahora solo
+    se salta los refrescos de después (automarcar, competidores y desiertas). Como la
+    base no reescribe lo que no cambia, un re-backfill solo toca las filas que avanzan.
     """
     sesion, headers, endpoint, url_base = _preparar_upsert()
-    unidades_ok, atoms_ok = _carga_estado()
+    unidades_ok, atoms_ok, bajas_pendientes = _carga_estado()
+    _comprueba_carga_versiones(sesion, url_base, headers)
+    unidades = sorted(unidades, key=_clave_periodo, reverse=True)
 
     print("=" * 78)
-    print("CARGA a Supabase (upsert idempotente por licitacion_id, en streaming)")
+    print("CARGA a Supabase (carga_versiones: solo escribe versiones más nuevas, en streaming)")
     print(f"Unidades: {len(unidades)}  ·  ya completas: {len(unidades_ok)}  ·  "
-          f"borrar ZIP tras procesar: {limpiar}")
+          f"borrar ZIP tras procesar: {limpiar}  ·  bajas pendientes del checkpoint: {len(bajas_pendientes)}")
     if solo_catalogo:
-        print("MODO --solo-catalogo: se escribe SOLO public.licitaciones.")
-        print("  NO se tocan adjudicaciones, ni automarcar, ni competidores, ni desiertas.")
+        print("MODO --solo-catalogo: no se lanzan automarcar, competidores ni desiertas al final.")
     print("=" * 78)
 
-    # Dedup por EJECUCIÓN: como las unidades van de más nueva a más antigua, la
-    # primera vez que vemos un licitacion_id es su snapshot más reciente; las
-    # reapariciones posteriores (re-publicaciones antiguas) se saltan. Recorta los
-    # upserts redundantes (~2-3×) sin cambiar el resultado en las columnas que
-    # guardamos (estables; el estado, que no guardamos, es lo que varía).
-    vistos_run = set()
-    # ¿Está creada public.adjudicaciones? Si no, se ingiere el catálogo igual y solo
-    # se salta la parte de adjudicaciones (defensa para el orden de despliegue).
-    # Con --solo-catalogo ni siquiera se pregunta: no se van a escribir.
-    escribir_adj = (not solo_catalogo) and _tabla_adjudicaciones_lista(sesion, url_base, headers)
-
-    total = 0
-    total_adj = 0
+    # Lo ya mandado en ESTA ejecución: atom:id -> (atom_updated, snapshot). Sirve para no
+    # mandar una versión más vieja que otra ya mandada (la base la rechazaría igual, pero
+    # así se ahorran llamadas). Tras una reanudación empieza vacío: la base lo cubre.
+    mandadas = {}
+    totales = {}
+    leidas = sin_fecha = saltadas = 0
     for fuente, periodo in unidades:
         clave_u = f"{fuente}_{periodo}"
         if clave_u in unidades_ok:
@@ -1143,43 +1423,39 @@ def carga(unidades, limpiar=True, solo_catalogo=False):
             print(f"  AVISO: no pude descargar {clave_u} ({e}); salto.")
             continue
 
-        filas_unidad = 0
-        for nombre, blob in itera_atoms(destino):
+        tot_unidad = {}
+        for nombre, blob in itera_atoms(destino, ordenar=True):
             clave_a = f"{clave_u}::{nombre}"
-            if clave_a in atoms_ok:
-                continue
             try:
-                entradas = entradas_de(blob)
+                raiz = etree.fromstring(blob)
             except Exception as e:
                 print(f"    AVISO: .atom ilegible {nombre} ({e}); salto.")
                 continue
-            # Dedup DENTRO del .atom (un mismo licitacion_id no puede ir dos veces en
-            # el mismo lote: Postgres no deja afectar dos veces la misma fila en ON
-            # CONFLICT) Y entre unidades de esta ejecución (vistos_run).
-            por_id = {}
-            adj_por_id = {}
-            for entrada in entradas:
-                reg = extrae_entrada(entrada, fuente)
-                rid = reg["id"]
-                if rid in vistos_run:
+            entradas, bajas, snapshot = lee_pagina(raiz)
+            # Las bajas se anotan SIEMPRE, también de un .atom ya subido en una ejecución
+            # cortada: su fichero solo se escribe al cerrar cada unidad (escribirlo tras
+            # cada .atom reescribiría megas de JSON miles de veces), así que al reanudar
+            # a media unidad hay que volver a leerlas.
+            for b in bajas:
+                anota_baja(bajas_pendientes, b)
+            if clave_a in atoms_ok:
+                continue
+            leidas += len(entradas)
+            lics = []
+            for idu, (entrada, snap) in elige_versiones((e, snapshot) for e in entradas).items():
+                marca = entrada.findtext("atom:updated", default="", namespaces=ATOM_NS).strip()
+                version = (marca, snap)
+                if instante(marca) is None or instante(snap) is None:
+                    sin_fecha += 1                  # sin marca o sin snapshot legibles: no se adivina
                     continue
-                por_id[rid] = fila_para_tabla(reg)
-                # Adjudicaciones del snapshot más reciente de este expediente (las de
-                # reapariciones antiguas se saltan con el mismo dedup por licitacion_id).
-                if reg["adjudicaciones"]:
-                    adj_por_id[rid] = [fila_adjudicacion(rid, a) for a in reg["adjudicaciones"]]
-            filas = list(por_id.values())
-            for i in range(0, len(filas), 500):
-                lote = filas[i:i + 500]
-                _sube_lote(sesion, endpoint, headers, lote)
-                total += len(lote)
-                filas_unidad += len(lote)
-            # Adjudicaciones: upsert idempotente (sin borrar en el re-backfill; ver
-            # sube_adjudicaciones). Aditivo al upsert del catálogo, no lo cambia.
-            if escribir_adj:
-                adj_filas = [r for filas_id in adj_por_id.values() for r in filas_id]
-                total_adj += sube_adjudicaciones(sesion, url_base, headers, adj_filas, reemplazar=False)
-            vistos_run.update(por_id.keys())
+                if idu in mandadas and not es_mas_nueva(version, mandadas[idu]):
+                    saltadas += 1                   # ya se mandó una más nueva en esta ejecución
+                    continue
+                mandadas[idu] = version
+                lics.append(licitacion_para_rpc(extrae_entrada(entrada, fuente), snap))
+            if lics:
+                res = sube_versiones(sesion, url_base, headers, lics)
+                tot_unidad = _suma(tot_unidad, res)
             atoms_ok.add(clave_a)
             _guarda_estado(unidades_ok, atoms_ok)
 
@@ -1187,8 +1463,12 @@ def carga(unidades, limpiar=True, solo_catalogo=False):
         # no hacen falta) y liberamos el ZIP para no llenar el disco del runner.
         unidades_ok.add(clave_u)
         atoms_ok = {a for a in atoms_ok if not a.startswith(clave_u + "::")}
+        # Primero las bajas y luego la unidad: si se corta entre medias, la unidad se
+        # repite al reanudar (sin volver a subir sus .atom) y sus bajas se releen.
+        _guarda_bajas(bajas_pendientes)
         _guarda_estado(unidades_ok, atoms_ok)
-        print(f"  {clave_u}: COMPLETO · {filas_unidad:,} filas (acumulado {total:,})")
+        _informe_versiones(f"{clave_u}: COMPLETO", tot_unidad)
+        totales = _suma(totales, tot_unidad)
         if limpiar:
             for p in (destino, destino.with_name(destino.name + ".part")):
                 try:
@@ -1196,23 +1476,34 @@ def carga(unidades, limpiar=True, solo_catalogo=False):
                 except OSError:
                     pass
 
+    # BAJAS, al final: ya están escritas todas las versiones de esta ejecución.
+    if bajas_pendientes:
+        res = sube_versiones(sesion, url_base, headers, [], bajas_para_rpc(bajas_pendientes))
+        totales = _suma(totales, res)
+        bajas_pendientes = {}
+        _guarda_bajas(bajas_pendientes)
+
     print("=" * 78)
-    print(f"Carga terminada. Filas upsertadas (con repeticiones entre .atom): {total:,}")
-    print(f"Filas de adjudicaciones upsertadas: {total_adj:,}")
+    print(f"Carga terminada. Versiones leídas: {leidas:,} · mandadas: {len(mandadas):,} · "
+          f"saltadas (ya había una más nueva en esta ejecución): {saltadas:,} · sin fecha legible: {sin_fecha:,}")
+    _informe_versiones("Total", totales)
     _resumen_post_carga(sesion, url_base, headers)
-    if escribir_adj:
-        _resumen_adjudicaciones(sesion, url_base, headers)
-        # Fase D2: tras poblar adjudicaciones, cruza los CIF de LODEPA -> decisiones.
-        # Idempotente y O(un puñado) por el índice del CIF; re-lanzar el backfill no
-        # duplica marcas. Aditivo: no toca lo ya ingerido si la RPC no está desplegada.
-        automarcar_ganadas(sesion, url_base, headers)
-        # Fase E: reconstruye el agregado por CIF (public.competidores) con lo recién
-        # backfilleado. Rebuild completo (~3.5 s); salta con aviso si la RPC no existe.
-        refrescar_competidores(sesion, url_base, headers)
-        # DESIERTAS: pone al día licitaciones.estado_adjudicacion con lo recién cargado.
-        # Tras un backfill GRANDE puede haber muchas filas que actualizar y una sola
-        # llamada se quedaría corta, así que aquí va EN BUCLE (como el one-shot).
-        refrescar_desiertas_bucle(sesion, url_base, headers)
+    if solo_catalogo and not (totales.get("adj_borradas") or totales.get("adj_insertadas")):
+        return
+    if solo_catalogo:
+        print("  --solo-catalogo, pero han cambiado adjudicaciones: lanzo igualmente los refrescos.")
+    _resumen_adjudicaciones(sesion, url_base, headers)
+    # Fase D2: tras poblar adjudicaciones, cruza los CIF de LODEPA -> decisiones.
+    # Idempotente y O(un puñado) por el índice del CIF; re-lanzar el backfill no
+    # duplica marcas. OJO: nunca DESMARCA (ver versiones_schema.sql, bloque 4).
+    automarcar_ganadas(sesion, url_base, headers)
+    # Fase E: reconstruye el agregado por CIF (public.competidores) con lo recién
+    # backfilleado. Rebuild completo (~3.5 s); salta con aviso si la RPC no existe.
+    refrescar_competidores(sesion, url_base, headers)
+    # DESIERTAS: pone al día licitaciones.estado_adjudicacion con lo recién cargado.
+    # Tras un backfill GRANDE puede haber muchas filas que actualizar y una sola
+    # llamada se quedaría corta, así que aquí va EN BUCLE (como el one-shot).
+    refrescar_desiertas_bucle(sesion, url_base, headers)
 
 
 def _cuenta(sesion, base_tabla, headers, filtro="?select=licitacion_id"):
@@ -1260,53 +1551,43 @@ def _resumen_post_carga(sesion, url_base, headers):
 # --- INGESTA DIARIA (incremental, desde el feed EN VIVO) --------------------
 def diario(fuentes):
     """Ingesta incremental DIARIA para el cron: lee los feeds EN VIVO (estatal +
-    agregadas) con la MISMA descarga del radar (feeds.descarga_entradas) y hace
-    UPSERT en el catálogo de TODAS las licitaciones (no solo las de interés),
-    conservando primera_vez y actualizando ultima_vez (el tsv lo pone el trigger).
-    Reutiliza el extractor feeds.extrae_entrada y la maquinaria de upsert."""
+    agregadas) con la MISMA descarga del radar (feeds.descarga_feed) y manda a la RPC
+    carga_versiones TODAS las licitaciones (no solo las de interés), con sus
+    adjudicaciones y las bajas del feed.
+
+    VERSIONES (PASO 0 del 15/10/2026): las ~20 páginas traen varias versiones del mismo
+    expediente. Antes se quedaba con la ÚLTIMA aparición, que es la más VIEJA (el
+    comentario decía lo contrario), y las adjudicaciones podían salir de otra versión.
+    Ahora elige_versiones se queda con la buena y la base solo la escribe si es más
+    nueva que la guardada, con sus adjudicaciones en la misma transacción."""
     sesion, headers, endpoint, url_base = _preparar_upsert()
     print("=" * 78)
-    print("INGESTA DIARIA del catálogo (upsert de TODO el feed en vivo)")
+    print("INGESTA DIARIA del catálogo (carga_versiones con TODO el feed en vivo)")
     print(f"Fuentes: {fuentes}")
     print("=" * 78)
+    _comprueba_carga_versiones(sesion, url_base, headers)
 
-    total = 0
-    total_adj = 0
-    escribir_adj = _tabla_adjudicaciones_lista(sesion, url_base, headers)
-    vistos = set()   # dedup por ejecución: el feed trae cada licitación en varias páginas
+    totales = {}
     for feed in FEEDS:
         if feed["fuente"] not in fuentes:
             continue
-        entradas, paginas, tope = descarga_entradas(feed["url"])
+        versiones, bajas, paginas, tope = descarga_feed(feed["url"])
         aviso = "  [TOPE de páginas: puede faltar histórico reciente]" if tope else ""
-        print(f"feed «{feed['fuente']}»: {len(entradas):,} entradas en {paginas} pág{aviso}")
-        # La primera aparición de un id es su snapshot más reciente (el feed va de lo
-        # más nuevo a lo más viejo): nos quedamos con esa.
-        por_id = {}
-        adj_por_id = {}
-        for entrada in entradas:
+        elegidas = elige_versiones(versiones)
+        print(f"feed «{feed['fuente']}»: {len(versiones):,} versiones de {len(elegidas):,} expedientes "
+              f"y {len(bajas):,} bajas en {paginas} pág{aviso}")
+        lics, sin_fecha = [], 0
+        for _idu, (entrada, snap) in elegidas.items():
             reg = extrae_entrada(entrada, feed["fuente"])
-            rid = reg["id"]
-            if rid in vistos:
+            if instante(reg["fecha_actualizacion"]) is None or instante(snap) is None:
+                sin_fecha += 1                      # sin marca o sin snapshot legibles: no se adivina
                 continue
-            por_id[rid] = fila_para_tabla(reg)
-            if reg["adjudicaciones"]:
-                adj_por_id[rid] = [fila_adjudicacion(rid, a) for a in reg["adjudicaciones"]]
-        filas = list(por_id.values())
-        for i in range(0, len(filas), 500):
-            lote = filas[i:i + 500]
-            _sube_lote(sesion, endpoint, headers, lote)
-            total += len(lote)
-        # Adjudicaciones: delete+insert por licitacion_id (reemplazar=True), para que un
-        # expediente re-publicado con el adjudicatario corregido reemplace sus filas.
-        n_adj = 0
-        if escribir_adj:
-            adj_filas = [r for filas_id in adj_por_id.values() for r in filas_id]
-            n_adj = sube_adjudicaciones(sesion, url_base, headers, adj_filas, reemplazar=True)
-            total_adj += n_adj
-        vistos.update(por_id.keys())
-        print(f"  upsert «{feed['fuente']}»: {len(filas):,} filas (acumulado {total:,})"
-              f"  ·  adjudicaciones: {n_adj:,}")
+            lics.append(licitacion_para_rpc(reg, snap))
+        if sin_fecha:
+            print(f"  AVISO: {sin_fecha:,} versiones sin fecha legible (con zona horaria): no se mandan.")
+        res = sube_versiones(sesion, url_base, headers, lics, bajas_para_rpc(bajas))
+        _informe_versiones(f"«{feed['fuente']}»", res)
+        totales = _suma(totales, res)
 
     # FASE M: volcado diario de menores del feed en vivo (1143). Independiente del
     # catálogo (otra tabla, otra fuente); guardado y no fatal (salta si no existe).
@@ -1325,24 +1606,24 @@ def diario(fuentes):
               f"sigo con el catálogo.")
 
     print("=" * 78)
-    print(f"Ingesta diaria terminada. Filas upsertadas: {total:,}  ·  adjudicaciones: {total_adj:,}")
+    print("Ingesta diaria terminada.")
+    _informe_versiones("Total", totales)
     _resumen_post_carga(sesion, url_base, headers)
-    if escribir_adj:
-        _resumen_adjudicaciones(sesion, url_base, headers)
-        # Fase D2: mismo cruce idempotente que en la carga. Corre la pasada COMPLETA
-        # (no solo lo nuevo): es O(un puñado) por el índice del CIF y así se auto-cura
-        # si un día se saltó. Marca en decisiones cualquier nueva GANADA de LODEPA.
-        automarcar_ganadas(sesion, url_base, headers)
-        # Fase E: reconstruye el agregado por CIF (public.competidores) con las
-        # adjudicaciones nuevas del día. Rebuild completo (~3.5 s); salta si no existe.
-        refrescar_competidores(sesion, url_base, headers)
-        # DESIERTAS: pone al día licitaciones.estado_adjudicacion con los resultados nuevos
-        # del día, SIEMPRE por la ventana de días (7,6 s en frío; 0,3-1,0 s después). Aquí
-        # NO se hace nunca el repaso completo: se probó los lunes y, con la ingesta recién
-        # terminada, sus 17 s se convirtieron en más de los 120 s del rol y murió
-        # (21/09/2026, error 57014). El repaso completo vive en su propio hueco, los
-        # domingos de madrugada (.github/workflows/mantenimiento.yml). Salta si no existe.
-        refrescar_desiertas_bucle(sesion, url_base, headers, dias=DIAS_DESIERTAS)
+    _resumen_adjudicaciones(sesion, url_base, headers)
+    # Fase D2: mismo cruce idempotente que en la carga. Corre la pasada COMPLETA
+    # (no solo lo nuevo): es O(un puñado) por el índice del CIF y así se auto-cura
+    # si un día se saltó. Marca en decisiones cualquier nueva GANADA de LODEPA.
+    automarcar_ganadas(sesion, url_base, headers)
+    # Fase E: reconstruye el agregado por CIF (public.competidores) con las
+    # adjudicaciones nuevas del día. Rebuild completo (~3.5 s); salta si no existe.
+    refrescar_competidores(sesion, url_base, headers)
+    # DESIERTAS: pone al día licitaciones.estado_adjudicacion con los resultados nuevos
+    # del día, SIEMPRE por la ventana de días (7,6 s en frío; 0,3-1,0 s después). Aquí
+    # NO se hace nunca el repaso completo: se probó los lunes y, con la ingesta recién
+    # terminada, sus 17 s se convirtieron en más de los 120 s del rol y murió
+    # (21/09/2026, error 57014). El repaso completo vive en su propio hueco, los
+    # domingos de madrugada (.github/workflows/mantenimiento.yml). Salta si no existe.
+    refrescar_desiertas_bucle(sesion, url_base, headers, dias=DIAS_DESIERTAS)
 
 
 # --- PURGA de la ventana (vía RPC en Supabase) ------------------------------
@@ -1566,9 +1847,10 @@ def main():
     ap.add_argument("--solo", choices=list(FUENTES), default=None,
                     help="Procesar solo una fuente (por defecto: las dos). Sirve para trocear.")
     ap.add_argument("--solo-catalogo", action="store_true",
-                    help="Escribir SOLO public.licitaciones: ni adjudicaciones, ni automarcar, "
-                         "ni competidores, ni desiertas. Para re-backfills que solo rellenan "
-                         "columnas del catalogo (p. ej. ccaa/lugar_ejecucion).")
+                    help="No lanzar automarcar, competidores ni desiertas al final. OJO: desde "
+                         "carga_versiones las adjudicaciones de cada version escrita SE "
+                         "SUSTITUYEN siempre (mandarlas vacias las borraria). Para "
+                         "re-backfills que rellenan columnas del catalogo.")
     ap.add_argument("--conservar-zip", action="store_true",
                     help="No borrar los ZIP tras procesarlos (por defecto se borran en --cargar "
                          "para no llenar el disco del runner).")
