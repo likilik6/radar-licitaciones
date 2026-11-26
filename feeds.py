@@ -2,7 +2,7 @@
 #
 # Aquí vive lo que comparten filtrar.py y fetch.py para NO duplicarlo:
 #   - la LISTA de feeds ATOM/CODICE que procesa el radar (cada uno con su "fuente"),
-#   - la cabecera de navegador (sin ella el WAF del servidor bloquea la petición),
+#   - el agente de usuario (honesto, con contacto: CABECERAS),
 #   - la función que descarga un feed siguiendo la paginación (atom:link rel="next").
 #
 # El MISMO extractor sirve para todos los feeds porque todos vienen en el mismo
@@ -24,13 +24,20 @@ from lxml import etree
 # El resto de namespaces (CPV, presupuesto...) los usa filtrar.py al extraer.
 ATOM_NS = {"atom": "http://www.w3.org/2005/Atom"}
 
-# El servidor rechaza las peticiones que no parezcan de un navegador, así que
-# enviamos una cabecera "User-Agent" que imita a un navegador real. OBLIGATORIO.
-CABECERAS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                  "AppleWebKit/537.36 (KHTML, like Gecko) "
-                  "Chrome/120.0.0.0 Safari/537.36"
-}
+# Agente de usuario HONESTO (decisión de Alejandro del 26/11/2026): quién lee, para
+# qué y cómo contactar, sin hacerse pasar por un navegador (hasta el 26/11 se
+# enviaba el de Chrome 120). Lo usa todo lo que pide algo por HTTP con CABECERAS:
+# los feeds, los ZIP, diagnostico_feed, actualizar_cpv/nuts y menores_autonomicos.
+# El correo de contacto va en el secreto RADAR_CONTACTO de GitHub (o en esa variable
+# de entorno en local), nunca en el repo, que es público; sin él, va sin correo.
+# Si un servidor rechaza este agente, no se disfraza: se para y se habla con él.
+def agente_de_usuario():
+    contacto = (os.environ.get("RADAR_CONTACTO") or "").strip()
+    return ("RadarLicitaciones/1.1 (lectura diaria de los datos abiertos de la PLACSP para seguimiento de "
+            "licitaciones" + (f"; contacto: {contacto}" if contacto else "") + f") python-requests/{requests.__version__}")
+
+
+CABECERAS = {"User-Agent": agente_de_usuario()}
 
 # La LISTA de feeds que vigila el radar. Cada uno lleva su etiqueta de ORIGEN
 # ("fuente") para poder distinguir de dónde salió cada licitación:

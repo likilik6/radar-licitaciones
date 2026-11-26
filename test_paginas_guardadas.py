@@ -224,9 +224,33 @@ def test_feeds_a_guardar():
     print("  OK test_feeds_a_guardar")
 
 
+def test_agente_honesto():
+    antes = os.environ.get("RADAR_CONTACTO")
+    try:
+        os.environ.pop("RADAR_CONTACTO", None)
+        sin = feeds.agente_de_usuario()
+        os.environ["RADAR_CONTACTO"] = "contacto@ejemplo.test"
+        con = feeds.agente_de_usuario()
+    finally:
+        if antes is None:
+            os.environ.pop("RADAR_CONTACTO", None)
+        else:
+            os.environ["RADAR_CONTACTO"] = antes
+    for ua in (sin, con, feeds.CABECERAS["User-Agent"]):
+        check(ua.startswith("RadarLicitaciones/") and "Mozilla" not in ua and "Chrome" not in ua,
+              f"no se hace pasar por un navegador: {ua}")
+    check("contacto" not in sin and "contacto: contacto@ejemplo.test" in con, "el contacto, solo si está")
+    srv = Servidor(PAGINAS)
+    with entorno(srv):
+        feeds.descarga_entradas(CABECERA)
+    check(set(srv.agentes) == {feeds.CABECERAS["User-Agent"]}, "cada petición lleva el agente honesto")
+    print("  OK test_agente_honesto")
+
+
 TESTS = [test_guardadas_igual_que_en_vivo, test_tope_se_guarda, test_rechazo_se_para_sin_reintentar,
          test_rechazo_a_media_cadena_guarda_lo_anterior, test_sin_respuesta, test_sha_que_no_cuadra_para,
-         test_sin_manifiesto_lee_en_vivo, test_feed_que_no_esta_en_el_manifiesto, test_feeds_a_guardar]
+         test_sin_manifiesto_lee_en_vivo, test_feed_que_no_esta_en_el_manifiesto, test_feeds_a_guardar,
+         test_agente_honesto]
 
 
 def main():

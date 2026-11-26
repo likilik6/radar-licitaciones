@@ -69,6 +69,11 @@ concurrency:
   group: menores-autonomicos
   cancel-in-progress: false
 
+# Correo de contacto del agente de usuario honesto (feeds.agente_de_usuario). Va en el
+# secreto RADAR_CONTACTO, nunca en el repo, que es público.
+env:
+  RADAR_CONTACTO: ${{ secrets.RADAR_CONTACTO }}
+
 jobs:
   andalucia:
     # Programado solo con la variable activada; a mano, siempre.
