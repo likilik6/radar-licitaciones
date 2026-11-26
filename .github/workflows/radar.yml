@@ -5,6 +5,10 @@
 # persistencia (data/licitaciones.json) se sigue guardando con commit+push.
 
 name: Radar de licitaciones
+# Las que lanza la tarea de las 5:00 del PC de Radar Farma (casilla «diaria») llevan
+# otro título, para que la programada de la tarde sepa que ya se hizo y no lo repita
+# (ya_lanzado_hoy.py busca este texto exacto: si lo cambias, cámbialo también allí).
+run-name: ${{ inputs.diaria && 'Radar de licitaciones (5:00, desde el PC)' || 'Radar de licitaciones' }}
 
 on:
   # Horario (26/11/2026): todos los días a las 4:07 UTC = 5:07 en España en invierno
@@ -16,6 +20,10 @@ on:
   # tarde (22/09-02/10), y con "23 5", de 7 h 25 min a 10 h 46 min tarde (11/11-26/11),
   # empeorando. No es un paso lento: startedAt == createdAt, es la cola de GitHub.
   # Fuera del minuto 0, que es donde se junta todo el mundo.
+  # Por eso, desde el 26/11 el que manda es el PC de Radar Farma: lo lanza a mano a
+  # las 5:00 (workflow_dispatch con «diaria»). El cron queda de RESPALDO: si ese día
+  # la del PC acabó bien o sigue en marcha, la programada no hace nada (job
+  # «comprueba»); si el PC no la lanzó o falló, corre entera.
   schedule:
     # Lunes a viernes: el Radar entero.
     - cron: "7 4 * * 1-5"
@@ -38,6 +46,11 @@ on:
         type: boolean
         default: false
         required: false
+      diaria:
+        description: "La lanza la tarea de las 5:00 del PC de Radar Farma. Márcala solo si sustituye a la del día: la programada de la tarde no correrá."
+        type: boolean
+        default: false
+        required: false
 
 # Concurrency recomendada por GitHub Pages: no cancelar un despliegue en curso.
 concurrency:
@@ -50,6 +63,26 @@ env:
   RADAR_CONTACTO: ${{ secrets.RADAR_CONTACTO }}
 
 jobs:
+  # --- Job previo: ¿ya lo lanzó hoy el PC? ------------------------------------
+  # Solo mira algo en las programadas (ya_lanzado_hoy.py). No falla nunca: si no
+  # puede consultar, deja saltar=false y el Radar corre, como antes.
+  comprueba:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      saltar: ${{ steps.mira.outputs.saltar }}
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: ¿Ya lo lanzó hoy el PC de Radar Farma?
+        id: mira
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 ya_lanzado_hoy.py || echo "saltar=false" >> "$GITHUB_OUTPUT"
+
   # --- Job 0: baja los feeds UNA sola vez y guarda las páginas en bruto --------
   # Antes «generar» y «catalogo» bajaban cada uno los mismos feeds (unas 100
   # peticiones al día a la Plataforma). Ahora se bajan aquí una vez (643, 1044 y
@@ -59,6 +92,9 @@ jobs:
   # Este job no falla si la Plataforma rechaza o corta (lo deja en el manifiesto):
   # el Radar se publica igual con lo que haya, como hasta ahora.
   descargar:
+    needs: comprueba
+    # Corre salvo que «comprueba» diga que el PC ya lo hizo hoy (también si «comprueba» falla).
+    if: ${{ !cancelled() && needs.comprueba.outputs.saltar != 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -87,11 +123,11 @@ jobs:
 
   # --- Job 1: genera la web, guarda el JSON y prepara el artefacto de Pages ---
   generar:
-    needs: descargar
+    needs: [comprueba, descargar]
     # Corre aunque «descargar» falle por un error suyo: entonces lee en vivo, como antes.
-    # No corre el sábado y el domingo (el cron "7 4 * * 0,6") ni con
-    # «solo_paginas» marcado a mano.
-    if: ${{ !cancelled() && github.event.schedule != '7 4 * * 0,6' && !inputs.solo_paginas }}
+    # No corre el sábado y el domingo (el cron "7 4 * * 0,6"), ni con «solo_paginas»
+    # marcado a mano, ni si el PC ya lo hizo hoy.
+    if: ${{ !cancelled() && needs.comprueba.outputs.saltar != 'true' && github.event.schedule != '7 4 * * 0,6' && !inputs.solo_paginas }}
     runs-on: ubuntu-latest
     # Permiso para hacer push del JSON (la persistencia) al repositorio.
     permissions:
@@ -188,9 +224,10 @@ jobs:
     # la base de producción.
     # Lee las páginas del job «descargar»; corre aunque ese job falle por un error
     # suyo (entonces lee en vivo, como antes).
-    needs: descargar
-    # Tampoco el sábado y el domingo (el cron "7 4 * * 0,6") ni con «solo_paginas».
-    if: ${{ !cancelled() && github.event.schedule != '7 4 * * 0,6' && !inputs.solo_paginas && (github.event_name != 'workflow_dispatch' || inputs.ejecutar_catalogo) }}
+    needs: [comprueba, descargar]
+    # Tampoco el sábado y el domingo (el cron "7 4 * * 0,6"), ni con «solo_paginas», ni
+    # si el PC ya lo hizo hoy.
+    if: ${{ !cancelled() && needs.comprueba.outputs.saltar != 'true' && github.event.schedule != '7 4 * * 0,6' && !inputs.solo_paginas && (github.event_name != 'workflow_dispatch' || inputs.ejecutar_catalogo) }}
     runs-on: ubuntu-latest
     # Solo lectura del repo (checkout). Las credenciales van por secrets, no por el repo.
     permissions:
