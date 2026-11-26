@@ -240,6 +240,9 @@ def test_agente_honesto():
         check(ua.startswith("RadarLicitaciones/") and "Mozilla" not in ua and "Chrome" not in ua,
               f"no se hace pasar por un navegador: {ua}")
     check("contacto" not in sin and "contacto: contacto@ejemplo.test" in con, "el contacto, solo si está")
+    check(all("python-requests" not in ua for ua in (sin, con, feeds.CABECERAS["User-Agent"])),
+          "sin la marca de la librería (la Plataforma la rechaza desde el 25/11)")
+    check(con.endswith("; contacto: contacto@ejemplo.test)"), f"acaba en el contacto: {con}")
     srv = Servidor(PAGINAS)
     with entorno(srv):
         feeds.descarga_entradas(CABECERA)
