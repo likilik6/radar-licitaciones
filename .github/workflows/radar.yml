@@ -1,27 +1,40 @@
 # Radar de licitaciones — ejecución automática en GitHub Actions.
-# Qué hace: cada mañana (L-V) descarga y filtra el feed, regenera la web y la
-# publica con el método oficial de GitHub Pages (Actions). La persistencia
-# (data/licitaciones.json) se sigue guardando con commit+push al repositorio.
+# Qué hace: todos los días baja los feeds y guarda las páginas (job «descargar»);
+# de lunes a viernes, además, filtra, regenera la web y la publica con el método
+# oficial de GitHub Pages (Actions) y pone al día el catálogo del Buscador. La
+# persistencia (data/licitaciones.json) se sigue guardando con commit+push.
 
 name: Radar de licitaciones
 
 on:
-  # Horario: GitHub usa hora UTC. "0 6 * * 1-5" = 6:00 UTC, de lunes a viernes.
-  # En España eso son ~8:00 en verano y ~7:00 en invierno (GitHub no ajusta el
-  # cambio de hora). Las ejecuciones programadas pueden retrasarse algunos
-  # minutos cuando GitHub está cargado; es normal.
+  # Horario (26/11/2026): todos los días a las 4:07 UTC = 5:07 en España en invierno
+  # y 6:07 en verano (GitHub usa UTC y no ajusta el cambio de hora). A esa hora ya
+  # están los dos cortes del día de la Plataforma (estatal hacia las 20:20 del día
+  # anterior, agregada hacia las 3:00).
+  # OJO: es la hora a la que se PIDE, no a la que arranca. GitHub retrasa los
+  # programados de este repo: con "0 6" el run se CREABA de 4 h 28 min a 6 h 23 min
+  # tarde (22/09-02/10), y con "23 5", de 7 h 25 min a 10 h 46 min tarde (11/11-26/11),
+  # empeorando. No es un paso lento: startedAt == createdAt, es la cola de GitHub.
+  # Fuera del minuto 0, que es donde se junta todo el mundo.
   schedule:
-    # Fuera del minuto 0: GitHub recomienda no programar en punto porque ahí se junta
-    # todo el mundo y los programados de repos públicos se retrasan. Medido del 22/09 al
-    # 02/10: con "0 6" el run se CREABA entre las 10:28 y las 12:23 UTC, o sea 4 h 28 min
-    # a 6 h 23 min tarde, y empeorando. Y no es un paso lento: startedAt == createdAt en
-    # los nueve runs, el retraso es íntegramente la cola de GitHub.
-    - cron: "23 5 * * 1-5"
+    # Lunes a viernes: el Radar entero.
+    - cron: "7 4 * * 1-5"
+    # Sábado y domingo: SOLO «descargar» (las páginas para Radar Farma; no toca la
+    # base ni la web). El resto sigue de lunes a viernes: el fin de semana es de
+    # menores_autonomicos.yml y mantenimiento.yml, que cuentan con que no corre la
+    # ingesta del catálogo (la base no aguanta las dos a la vez: 57014 del 21/09).
+    # Si cambias esta línea, cambia igual la condición de «generar» y «catalogo».
+    - cron: "7 4 * * 0,6"
   # Botón para lanzarlo a mano desde la pestaña "Actions" (útil para probar).
   workflow_dispatch:
     inputs:
       ejecutar_catalogo:
         description: "Ejecutar también el catálogo del Buscador (ingesta diaria + purga). Tarda 20-50 min y escribe en producción. Déjalo desmarcado para probar solo la publicación del Radar."
+        type: boolean
+        default: false
+        required: false
+      solo_paginas:
+        description: "Solo bajar y guardar las páginas (job «descargar»), sin web ni catálogo: como el sábado y el domingo."
         type: boolean
         default: false
         required: false
@@ -76,7 +89,9 @@ jobs:
   generar:
     needs: descargar
     # Corre aunque «descargar» falle por un error suyo: entonces lee en vivo, como antes.
-    if: ${{ !cancelled() }}
+    # No corre el sábado y el domingo (el cron "7 4 * * 0,6") ni con
+    # «solo_paginas» marcado a mano.
+    if: ${{ !cancelled() && github.event.schedule != '7 4 * * 0,6' && !inputs.solo_paginas }}
     runs-on: ubuntu-latest
     # Permiso para hacer push del JSON (la persistencia) al repositorio.
     permissions:
@@ -174,7 +189,8 @@ jobs:
     # Lee las páginas del job «descargar»; corre aunque ese job falle por un error
     # suyo (entonces lee en vivo, como antes).
     needs: descargar
-    if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.ejecutar_catalogo) }}
+    # Tampoco el sábado y el domingo (el cron "7 4 * * 0,6") ni con «solo_paginas».
+    if: ${{ !cancelled() && github.event.schedule != '7 4 * * 0,6' && !inputs.solo_paginas && (github.event_name != 'workflow_dispatch' || inputs.ejecutar_catalogo) }}
     runs-on: ubuntu-latest
     # Solo lectura del repo (checkout). Las credenciales van por secrets, no por el repo.
     permissions:
