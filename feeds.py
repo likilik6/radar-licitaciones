@@ -31,10 +31,14 @@ ATOM_NS = {"atom": "http://www.w3.org/2005/Atom"}
 # El correo de contacto va en el secreto RADAR_CONTACTO de GitHub (o en esa variable
 # de entorno en local), nunca en el repo, que es público; sin él, va sin correo.
 # Si un servidor rechaza este agente, no se disfraza: se para y se habla con él.
+# Sin la marca «python-requests/x» al final (26/11/2026): desde el 25/11 el cortafuegos de la Plataforma rechaza
+# los agentes que la llevan (el Radar, desde GitHub, el 26/11 a las 17:20 y 17:38 UTC, en las tres fuentes).
+# Alejandro lo consultó por teléfono con el soporte, que le dijo que probara sin ella, y ese mismo día a las 21:04
+# la Plataforma sirvió el feed de la 1044 a Radar Farma con su agente honesto sin la marca.
 def agente_de_usuario():
     contacto = (os.environ.get("RADAR_CONTACTO") or "").strip()
     return ("RadarLicitaciones/1.1 (lectura diaria de los datos abiertos de la PLACSP para seguimiento de "
-            "licitaciones" + (f"; contacto: {contacto}" if contacto else "") + f") python-requests/{requests.__version__}")
+            "licitaciones" + (f"; contacto: {contacto}" if contacto else "") + ")")
 
 
 CABECERAS = {"User-Agent": agente_de_usuario()}
