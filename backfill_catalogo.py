@@ -18,6 +18,13 @@ MODOS
     fechas y estima el tamaño. (Para sondear sin bajar años: --muestra.)
   · diaria (--diario): ingesta incremental. Lee los feeds EN VIVO (como el radar) y
     hace UPSERT de TODAS las licitaciones (no solo las de interés). Para el cron.
+    Los MENORES ya no van aquí (ver la siguiente).
+  · menores diaria (--menores-diario): menores estatales (1143) con cursor por página
+    fechada; si no llega al cursor, sigue la cadena en el ZIP mensual y acaba en rojo
+    para avisar. La corre menores_diario.yml todos los días.
+  · menores recuperación (--menores-recuperar DESDE HASTA [--escribir]): lee los ZIP
+    mensuales de esos cortes; simula por defecto y, con --escribir, SOLO INSERTA los
+    menores que faltan.
   · purga (--purgar): borra del catálogo lo más viejo que la ventana, salvo lo
     abierto y lo que esté en public.contratos o public.decisiones (vía RPC
     purga_catalogo). --simular solo cuenta lo que se borraría. --ventana-anios N.
@@ -46,6 +53,7 @@ en disco a la vez.
 """
 
 import os
+import re
 import sys
 import json
 import time
@@ -62,7 +70,8 @@ from lxml import etree
 # Reutilizamos del radar: la cabecera de navegador (obligatoria), el namespace
 # ATOM para localizar las <entry> y el EXTRACTOR de campos CODICE (único punto de
 # extracción del proyecto). Nada de esto se duplica aquí.
-from feeds import CABECERAS, ATOM_NS, FEEDS, descarga_entradas, extrae_entrada, normaliza_cif
+from feeds import (CABECERAS, ATOM_NS, FEEDS, PAUSA_ENTRE_PAGINAS, descarga_entradas,
+                   extrae_entrada, normaliza_cif)
 # Traduce el código territorial del CODICE a (ccaa, lugar_ejecucion). Ver nuts.py.
 import nuts
 
@@ -1021,11 +1030,97 @@ def _periodos_menores():
     return [f"{a}{m:02d}" for m in range(hoy.month, 0, -1)] + [str(a - 1), str(a - 2)]
 
 
+# ----------------------------------------------------------------------------
+# VERSIONES DE UN MENOR: siempre la más nueva
+# ----------------------------------------------------------------------------
+# DECIDIDO el 15/10/2026: en menores se sigue SIEMPRE la versión más nueva (la de
+# atom:updated más reciente), aunque enmascare el CIF. Antes se quedaba la ÚLTIMA que se
+# leía: en la diaria (el feed va de nuevo a viejo) era la más VIEJA de las 20 páginas, y
+# en el backfill (periodos de nuevo a viejo) la del periodo más viejo.
+# Medido el 22/11/2026 en los ZIP de agosto a noviembre: de 1.733 menores con más de una
+# versión, en NINGUNO la última publicada es más vieja que otra. Por eso basta con elegir
+# bien DENTRO de cada ejecución y la base no necesita una guarda propia, siempre que el
+# backfill se lance entero (ver carga_menores).
+_SIN_VER = object()     # «este menor aún no ha salido en esta ejecución»
+
+
+def _marca_menor(texto):
+    """atom:updated ('2026-11-21T03:10:03.701+01:00') -> segundos desde 1970 (float).
+    Se compara como INSTANTE: con el cambio de hora, comparar el texto ordena mal
+    ('...02:30+02:00' es ANTES que '...02:10+01:00'). None si viene vacía, sin zona o mal
+    formada. Misma regla que feeds.instante del PR #43: cuando se mergee, usar esa."""
+    if not texto:
+        return None
+    texto = str(texto).strip()
+    if texto[-1:] in ("Z", "z"):
+        texto = texto[:-1] + "+00:00"
+    try:
+        momento = datetime.fromisoformat(texto)
+    except ValueError:
+        return None
+    return momento.timestamp() if momento.tzinfo is not None else None
+
+
+def _gana(nueva, previa):
+    """¿La versión con marca 'nueva' sustituye a la ya elegida (marca 'previa')?
+      · Si no había ninguna (_SIN_VER), sí.
+      · Una versión sin marca nunca gana a otra; una con marca gana a una sin ella.
+      · A igual marca, NO: se queda la primera que salió, que en la cadena del feed es la
+        de la página más nueva."""
+    if previa is _SIN_VER:
+        return True
+    if nueva is None:
+        return False
+    if previa is None:
+        return True
+    return nueva > previa
+
+
+class EligeMenores:
+    """Recibe páginas de menores (listas de <atom:entry>) en el orden en que se leen y se
+    queda con la versión más nueva de cada uno. Guarda filas (dicts), no el XML: se le
+    pueden pasar cientos de páginas sin que la memoria crezca con ellas."""
+
+    def __init__(self):
+        self.marcas = {}    # licitacion_id -> marca (float) o None
+        self.filas = {}     # licitacion_id -> fila_menor
+        self.origen = {}    # licitacion_id -> nombre de la página de la versión elegida
+
+    def mete(self, entradas, pagina=None):
+        for entrada in entradas:
+            reg = extrae_entrada(entrada, "estatal")
+            rid = reg["id"]
+            marca = _marca_menor(reg.get("fecha_actualizacion"))
+            if _gana(marca, self.marcas.get(rid, _SIN_VER)):
+                self.marcas[rid] = marca
+                self.filas[rid] = fila_menor(reg)
+                self.origen[rid] = pagina
+
+
+def _solo_lo_que_gana(elector, vistas):
+    """Filas del elector que ganan a lo ya mandado en ESTA ejecución ('vistas':
+    {id: marca}), que se actualiza. Así el backfill no manda una versión más vieja que
+    otra que ya mandó, sea cual sea el orden de los ZIP y de sus páginas."""
+    filas = []
+    for rid, fila in elector.filas.items():
+        marca = elector.marcas[rid]
+        if _gana(marca, vistas.get(rid, _SIN_VER)):
+            vistas[rid] = marca
+            filas.append(fila)
+    return filas
+
+
 def carga_menores(periodos=None, limpiar=True):
     """Backfill de menores en STREAMING: por cada periodo, descarga el ZIP, parsea sus
     .atom uno a uno (memoria acotada), upserta a public.menores (idempotente por PK
     licitacion_id) y libera el ZIP. AVISA del coste; es lo que POBLA la tabla (~1,1M
-    en 2 años). Necesita service_role. Reanudable a nivel de fichero por el caché de ZIP."""
+    en 2 años). Necesita service_role. Reanudable a nivel de fichero por el caché de ZIP.
+
+    VERSIONES: de cada menor se manda solo la versión más nueva de las vistas en la
+    ejecución (_solo_lo_que_gana). Si una versión más vieja sale después (en un periodo
+    más viejo), ya no se manda. OJO: eso vale DENTRO de una ejecución. Un backfill de un
+    año suelto (--periodos 2025) no ve las versiones nuevas que están en otros periodos
+    y podría pisarlas: lánzalo entero (sin --periodos) salvo que sepas lo que haces."""
     sesion, headers, _ep, url_base = _preparar_upsert()
     if not _tabla_menores_lista(sesion, url_base, headers):
         sys.exit("Ingesta de menores no ejecutada: falta public.menores (menores_schema.sql).")
@@ -1037,22 +1132,21 @@ def carga_menores(periodos=None, limpiar=True):
     print("AVISO: descarga ~24 ZIP mensuales (~580 MB) y parsea ~1,1M entradas (~30-60 min).")
     print("=" * 78)
     total = 0
+    vistas = {}     # id -> marca de la versión ya mandada en esta ejecución
     for periodo in periodos:
         destino = CACHE_DIR / f"menores_{periodo}.zip"
         try:
             descarga_zip(url_zip_menores(periodo), destino)
-        except SystemExit:
-            print(f"  AVISO: no pude descargar el ZIP de menores {periodo}; salto ese periodo.")
+        except (SystemExit, Exception) as e:  # noqa: BLE001
+            print(f"  AVISO: no pude descargar el ZIP de menores {periodo} ({e}); salto ese periodo.")
             continue
         n_periodo = 0
-        # Un .atom (página) cada vez: dedup DENTRO de la página y upsert -> memoria
-        # acotada aunque el ZIP anual traiga cientos de miles de entradas.
-        for _nom, blob in itera_atoms(destino):
-            por_id = {}
-            for entrada in entradas_de(blob):
-                reg = extrae_entrada(entrada, "estatal")
-                por_id[reg["id"]] = fila_menor(reg)
-            filas = list(por_id.values())
+        # Un .atom (página) cada vez -> memoria acotada aunque el ZIP anual traiga
+        # cientos de miles de entradas.
+        for nom, blob in itera_atoms(destino):
+            elector = EligeMenores()
+            elector.mete(entradas_de(blob), nom)
+            filas = _solo_lo_que_gana(elector, vistas)
             for i in range(0, len(filas), 500):
                 _sube_lote(sesion, endpoint, headers, filas[i:i + 500])
             n_periodo += len(filas)
@@ -1064,35 +1158,483 @@ def carga_menores(periodos=None, limpiar=True):
             except OSError:
                 pass
     print("=" * 78)
-    print(f"Backfill de menores terminado. Filas upsertadas (con repeticiones entre .atom): {total:,}")
+    print(f"Backfill de menores terminado. Filas upsertadas: {total:,}  ·  menores distintos: {len(vistas):,}")
     print("RECUERDA (una vez, en el SQL Editor): analyze public.menores;")
     # Con la tabla recién cargada, la cobertura de la web se queda vieja del todo si no se
     # refresca aquí mismo (no fatal: si la RPC no existe, avisa y sigue).
     refrescar_cobertura_menores(sesion, url_base, headers)
 
 
-def menores_incremental(sesion, url_base, headers):
-    """Volcado DIARIO de menores: lee el feed .atom EN VIVO (como el Radar) y upserta
-    los menores recientes. Ligero (no rebaja el ZIP mensual). NO es fatal: si la tabla
-    no existe, avisa y salta. Se llama desde diario()."""
-    if not _tabla_menores_lista(sesion, url_base, headers):
-        return 0
-    endpoint = f"{url_base}/rest/v1/{TABLA_MENORES}?on_conflict=licitacion_id"
+# ============================================================================
+# FASE M · DIARIA DE MENORES CON CURSOR (22/11/2026)
+# ----------------------------------------------------------------------------
+# POR QUÉ: la diaria leía un número FIJO de páginas (20). Tocar ese tope era lo normal
+# (lo tocaban 70 de 71 pasadas) y no perdía nada mientras entre dos pasadas no se
+# acumularan más de 19 páginas nuevas. El sábado 26/09/2026 la Plataforma republicó
+# septiembre (un corte de 17 páginas), ese día no había pasada, y el lunes 28/09 esas
+# páginas quedaron más allá de la 20: se perdieron 1.143 menores.
+#
+# CÓMO VA AHORA:
+#   · Cada página lleva en el nombre la fecha de su CORTE:
+#       contratosMenoresPerfilesContratantes_20261121_031003_2.atom
+#     = corte del 21/11/2026 a las 03:10:03, página 2 de ese corte (la primera no lleva
+#     número). La cabecera (…Contratantes.atom) no lleva fecha. La cadena rel="next" va
+#     del corte más nuevo al más viejo, y el texto AAAAMMDD_HHMMSS se ordena igual que
+#     el tiempo.
+#   · CURSOR = el corte más nuevo que la última pasada buena leyó ENTERO. Se guarda en
+#     public.refrescos (clave menores_diario, detalle->>'corte'): tabla que ya existe.
+#   · Cada pasada lee hasta llegar al cursor. Un día normal son 4-5 páginas, no 20.
+#   · Si no llega (tope o fallo de red), sigue la MISMA cadena dentro del ZIP mensual,
+#     que guarda esas mismas páginas con su rel="next".
+#   · Verde solo si leyó en vivo hasta el cursor. Si tuvo que tirar del ZIP (aunque lo
+#     recuperara todo) o falta algo, el job acaba en ROJO para que avise.
+# Lo corre .github/workflows/menores_diario.yml todos los días (también en fin de semana).
+# ============================================================================
+CLAVE_CURSOR_MENORES = "menores_diario"     # fila de public.refrescos con el cursor
+MENORES_TOPE_PAGINAS = 20                   # páginas en vivo; más allá, el ZIP del mes
+MENORES_TOPE_ZIP = 600                      # páginas del ZIP (~4 meses): más es un hueco enorme
+_RE_CORTE = re.compile(r"_(\d{8}_\d{6})(?:_(\d+))?\.atom$")
+_RE_CURSOR = re.compile(r"^\d{8}_\d{6}$")
+
+
+def corte_de(url):
+    """'…_20261121_031003_2.atom' -> ('20261121_031003', 2); la primera página de un corte
+    da 0. None si no lleva fecha (la cabecera) o no es una página .atom."""
+    m = _RE_CORTE.search(str(url or "").split("?")[0])
+    return (m.group(1), int(m.group(2) or 0)) if m else None
+
+
+def _nombre(url):
+    return str(url or "").split("?")[0].rsplit("/", 1)[-1]
+
+
+def _siguiente(raiz):
+    for link in raiz.findall("atom:link", ATOM_NS):
+        if link.get("rel") == "next":
+            return link.get("href")
+    return None
+
+
+def recorre_menores(url, cursor, trae, con_pagina, tope=None, pausa=0.0):
+    """Sigue la cadena rel="next" desde 'url' hasta el CURSOR: para ANTES de pedir una
+    página de un corte igual o más viejo que el cursor, porque esa ya se leyó entera.
+    Sin cursor (None) lee hasta el tope o hasta el final de la cadena.
+
+      trae(url)             -> bytes de la página; None si no está (en el ZIP); lanza si
+                               falla la red.
+      con_pagina(entradas, nombre) se llama con cada página leída, en orden (de nuevo a viejo).
+      tope                  máximo de páginas a pedir (None = sin tope).
+
+    Devuelve un dict:
+      paginas, entradas  cuántas se leyeron
+      llego              True si alcanzó el cursor o se acabó la cadena
+      pendiente          URL de la primera página que quedó SIN leer (None si llegó)
+      motivo             '' si llegó; si no, 'tope', 'error en …' o 'falta …'
+      primer_corte       el corte de la primera página fechada leída (None si ninguna)
+      corte_entero       el corte más nuevo leído ENTERO (None si ninguno)"""
+    cortes = []
+    paginas = n_entradas = 0
+    motivo = ""
+    while url:
+        corte = corte_de(url)
+        if cursor and corte and corte[0] <= cursor:
+            break                                       # ya leída en la pasada anterior
+        if tope is not None and paginas >= tope:
+            motivo = "tope"
+            break
+        try:
+            blob = trae(url)
+            raiz = etree.fromstring(blob) if blob is not None else None
+        except Exception as error:  # noqa: BLE001 — red, HTTP o XML roto: se apunta y se para
+            motivo = f"error en {_nombre(url)}: {type(error).__name__}: {error}"[:300]
+            break
+        if raiz is None:
+            motivo = f"falta {_nombre(url)}"
+            break
+        entradas = raiz.findall("atom:entry", ATOM_NS)
+        con_pagina(entradas, _nombre(url))
+        paginas += 1
+        n_entradas += len(entradas)
+        if corte:
+            cortes.append(corte[0])
+        url = _siguiente(raiz)
+        if url and pausa:
+            time.sleep(pausa)
+    llego = not motivo
+    # Un corte está ENTERO si la cadena ya pasó a otro más viejo, o si se llegó al final.
+    if llego:
+        enteros = cortes
+    else:
+        pend = corte_de(url)
+        enteros = [c for c in cortes if pend and c > pend[0]]
+    return {
+        "paginas": paginas,
+        "entradas": n_entradas,
+        "llego": llego,
+        "pendiente": None if llego else url,
+        "motivo": motivo,
+        "primer_corte": cortes[0] if cortes else None,
+        "corte_entero": enteros[0] if enteros else None,
+    }
+
+
+def _trae_pagina_viva(url, reintentos=3):
+    """Una página del feed en vivo, con la cabecera de navegador y 3 intentos (el 02/11 un
+    timeout en la página 16 dejó la pasada en 15 páginas)."""
+    ultimo = None
+    for intento in range(1, reintentos + 1):
+        try:
+            r = requests.get(url, headers=CABECERAS, timeout=60)
+            r.raise_for_status()
+            return r.content
+        except requests.RequestException as e:
+            ultimo = e
+            if intento < reintentos:
+                time.sleep(5 * intento)
+    raise ultimo
+
+
+def _mes(anio, mes):
+    while mes < 1:
+        anio, mes = anio - 1, mes + 12
+    while mes > 12:
+        anio, mes = anio + 1, mes - 12
+    return f"{anio}{mes:02d}"
+
+
+class PaginasZip:
+    """trae(url) que busca la página por su NOMBRE dentro de los ZIP mensuales de la 1143.
+    Esos ZIP guardan las mismas páginas que el feed, con su rel="next". El ZIP del mes M
+    lleva los cortes de M y el del día 1 de M+1 (medido: el de 202609 acaba en el corte
+    20261001_030812 y el de 202611 empieza en el 20261102). Cada ZIP se baja la primera
+    vez que hace falta. descargar(periodo 'AAAAMM') -> ruta del ZIP, o None."""
+
+    def __init__(self, descargar):
+        self._descargar = descargar
+        self._zips = {}         # periodo -> (ZipFile, {nombre: miembro}) o None
+        self.periodos = []      # los que se han podido abrir, para el informe
+
+    @staticmethod
+    def meses_candidatos(corte):
+        anio, mes, dia = int(corte[:4]), int(corte[4:6]), corte[6:8]
+        actual, previo, siguiente = _mes(anio, mes), _mes(anio, mes - 1), _mes(anio, mes + 1)
+        return [previo, actual, siguiente] if dia == "01" else [actual, previo, siguiente]
+
+    def _abre(self, periodo):
+        if periodo not in self._zips:
+            ruta = self._descargar(periodo)
+            if ruta is None:
+                self._zips[periodo] = None
+            else:
+                z = zipfile.ZipFile(ruta)
+                indice = {_nombre(n): n for n in z.namelist() if n.lower().endswith(".atom")}
+                self._zips[periodo] = (z, indice)
+                self.periodos.append(periodo)
+        return self._zips[periodo]
+
+    def __call__(self, url):
+        nombre = _nombre(url)
+        corte = corte_de(nombre)
+        if not corte:
+            return None
+        for periodo in self.meses_candidatos(corte[0]):
+            abierto = self._abre(periodo)
+            if abierto and nombre in abierto[1]:
+                return abierto[0].read(abierto[1][nombre])
+        return None
+
+    def cierra(self):
+        for abierto in self._zips.values():
+            if abierto:
+                abierto[0].close()
+
+
+def _descarga_zip_menores(periodo, limpiar_al_bajar=True):
+    """Baja el ZIP mensual de menores a la caché y devuelve su ruta (None si no se pudo o
+    si el mes aún no ha empezado). El del mes en curso y el anterior se bajan siempre de
+    nuevo, porque crecen cada día; los meses cerrados se reutilizan."""
+    ahora = datetime.now()
+    actual, previo = _mes(ahora.year, ahora.month), _mes(ahora.year, ahora.month - 1)
+    if periodo > actual:
+        return None
+    destino = CACHE_DIR / f"menores_{periodo}.zip"
     try:
-        entradas, paginas, tope = descarga_entradas(MENORES_ATOM)
-    except Exception as e:
-        print(f"  AVISO: no pude leer el feed de menores ({e}); salto (se reintenta mañana).")
-        return 0
-    por_id = {}
-    for entrada in entradas:
-        reg = extrae_entrada(entrada, "estatal")
-        por_id[reg["id"]] = fila_menor(reg)
-    filas = list(por_id.values())
+        if limpiar_al_bajar and destino.exists() and periodo >= previo:
+            destino.unlink()
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        return descarga_zip(url_zip_menores(periodo), destino)
+    except Exception as e:  # noqa: BLE001
+        print(f"  AVISO: no pude bajar el ZIP de menores {periodo} ({type(e).__name__}: {e}).")
+        return None
+
+
+def lee_cursor_menores(sesion, url_base, headers, reintentos=3):
+    """Cursor de la diaria: el corte más nuevo que la última pasada BUENA leyó entero.
+    Vive en public.refrescos (clave menores_diario, detalle->>'corte'). Un intento fallido
+    de refresco_marca NO borra el detalle, así que el cursor sobrevive a una pasada mala.
+    Devuelve (cursor, consultado):
+      (corte, True)  si lo hay;
+      (None, True)   si aún no hay fila (primera pasada con cursor);
+      (None, False)  si no se pudo consultar: entonces no hay forma de saber si hay hueco."""
+    url = f"{url_base}/rest/v1/refrescos"
+    h = {k: v for k, v in headers.items() if k != "Prefer"}
+    params = {"clave": f"eq.{CLAVE_CURSOR_MENORES}", "select": "detalle"}
+    ultimo = None
+    for intento in range(1, reintentos + 1):
+        try:
+            r = sesion.get(url, headers=h, params=params, timeout=30)
+        except requests.RequestException as e:
+            ultimo = e
+        else:
+            if r.status_code == 200:
+                try:
+                    filas = r.json() or []
+                except ValueError:
+                    filas = []
+                detalle = (filas[0].get("detalle") if filas else None) or {}
+                corte = detalle.get("corte") if isinstance(detalle, dict) else None
+                if corte and _RE_CURSOR.match(str(corte)):
+                    return str(corte), True
+                if filas:
+                    print(f"  AVISO: la fila «{CLAVE_CURSOR_MENORES}» de refrescos no trae un "
+                          f"cursor válido ({str(corte)[:40]!r}); la trato como primera pasada.")
+                return None, True
+            ultimo = RuntimeError(f"HTTP {r.status_code}: {r.text[:200]}")
+        if intento < reintentos:
+            time.sleep(2 ** intento)
+    print(f"  AVISO: no pude leer el cursor de menores ({ultimo}).")
+    return None, False
+
+
+def _anota(nivel, texto):
+    """Línea en el log y anotación de GitHub Actions (::warning:: / ::error::), que sale en
+    el resumen de la ejecución. Una sola línea: GitHub corta la anotación en el salto."""
+    texto = " ".join(str(texto).split())
+    print(f"::{nivel} title=Menores::{texto}")
+
+
+def menores_diario(trae_vivo=None, descargar=None, limpiar=True):
+    """--menores-diario: carga diaria de menores estatales con cursor (ver la cabecera de
+    esta sección). Devuelve el código de salida del job:
+      0  leyó en vivo hasta el cursor (o era la primera pasada y dejó el cursor puesto);
+      1  tuvo que tirar del ZIP (aunque lo recuperara todo) o falta algo.
+    Lo que se lee se sube SIEMPRE (son las versiones más nuevas), llegue o no al cursor;
+    el cursor solo avanza cuando no queda hueco."""
+    sesion, headers, _ep, url_base = _preparar_upsert()
+    if not _tabla_menores_lista(sesion, url_base, headers):
+        _anota("error", "falta public.menores (menores_schema.sql): no se ha cargado nada.")
+        return 1
+    endpoint = f"{url_base}/rest/v1/{TABLA_MENORES}?on_conflict=licitacion_id"
+    cursor, consultado = lee_cursor_menores(sesion, url_base, headers)
+    print("=" * 78)
+    print("MENORES · carga diaria (estatal, sindicación 1143) con cursor por página fechada")
+    print(f"  Cursor: {cursor or '(ninguno)'}  ·  tope en vivo: {MENORES_TOPE_PAGINAS} páginas")
+    print("=" * 78)
+
+    elector = EligeMenores()
+    vivo = recorre_menores(MENORES_ATOM, cursor, trae_vivo or _trae_pagina_viva, elector.mete,
+                           tope=MENORES_TOPE_PAGINAS, pausa=PAUSA_ENTRE_PAGINAS)
+    print(f"  En vivo: {vivo['paginas']} páginas, {vivo['entradas']:,} entradas · "
+          + ("llegó al cursor." if vivo["llego"] else f"NO llegó al cursor ({vivo['motivo']})."))
+
+    rescate, zips = None, None
+    if not vivo["llego"] and cursor:
+        print(f"  HUECO: sigo la cadena en el ZIP mensual desde {_nombre(vivo['pendiente'])} "
+              f"hasta el corte {cursor}.")
+        zips = PaginasZip(descargar or _descarga_zip_menores)
+        try:
+            rescate = recorre_menores(vivo["pendiente"], cursor, zips, elector.mete,
+                                      tope=MENORES_TOPE_ZIP)
+        finally:
+            zips.cierra()
+        print(f"  Del ZIP ({', '.join(zips.periodos) or 'ninguno'}): {rescate['paginas']} páginas, "
+              f"{rescate['entradas']:,} entradas · "
+              + ("llegó al cursor." if rescate["llego"] else f"NO llegó ({rescate['motivo']})."))
+        if limpiar:
+            for periodo in zips.periodos:
+                try:
+                    (CACHE_DIR / f"menores_{periodo}.zip").unlink()
+                except OSError:
+                    pass
+
+    filas = list(elector.filas.values())
     for i in range(0, len(filas), 500):
         _sube_lote(sesion, endpoint, headers, filas[i:i + 500])
-    aviso = "  [TOPE de páginas: puede faltar histórico reciente]" if tope else ""
-    print(f"  Menores (diario): {len(filas):,} upsertados de {paginas} pág{aviso}")
-    return len(filas)
+    print(f"  Menores upsertados: {len(filas):,} (de cada uno, su versión más nueva).")
+
+    detalle = {
+        "corte": None,
+        "paginas": vivo["paginas"],
+        "paginas_zip": rescate["paginas"] if rescate else 0,
+        "zip": zips.periodos if zips else [],
+        "hueco": bool(rescate),
+    }
+    codigo = 0
+    if not consultado:
+        # Sin cursor no se sabe si hay hueco: se ha leído como antes (hasta el tope) y el
+        # cursor guardado no se toca. Un fallo NO borra el detalle (refresco_marca).
+        marca_refresco(sesion, url_base, headers, CLAVE_CURSOR_MENORES, False,
+                       error="no se pudo leer el cursor")
+        _anota("error", f"No pude leer el cursor en public.refrescos. He leído {vivo['paginas']} "
+                        f"páginas como antes, sin poder saber si falta algo.")
+        codigo = 1
+    elif cursor is None:
+        # Primera pasada con cursor: se lee hasta el tope, como antes, y se deja puesto.
+        nuevo = vivo["corte_entero"]
+        if vivo["motivo"].startswith(("error", "falta")) or nuevo is None:
+            marca_refresco(sesion, url_base, headers, CLAVE_CURSOR_MENORES, False,
+                           error=vivo["motivo"] or "sin cortes enteros")
+            _anota("error", f"Primera pasada con cursor sin terminar ({vivo['motivo']}). "
+                            f"No queda cursor: la próxima vuelve a empezar.")
+            codigo = 1
+        else:
+            detalle["corte"] = nuevo
+            marca_refresco(sesion, url_base, headers, CLAVE_CURSOR_MENORES, True,
+                           filas=len(filas), detalle=detalle)
+            print(f"  Primera pasada con cursor: queda en {nuevo}.")
+    elif vivo["llego"] or (rescate and rescate["llego"]):
+        detalle["corte"] = max(cursor, vivo["primer_corte"] or cursor)
+        marca_refresco(sesion, url_base, headers, CLAVE_CURSOR_MENORES, True,
+                       filas=len(filas), detalle=detalle)
+        print(f"  Cursor: {cursor} -> {detalle['corte']}.")
+        if rescate:
+            _anota("warning", f"HUECO RECUPERADO: en vivo no llegué al corte {cursor} "
+                              f"({vivo['motivo']}); saqué {rescate['paginas']} páginas del ZIP "
+                              f"{', '.join(zips.periodos)}. No hay que hacer nada: el job sale "
+                              f"en rojo solo para avisar.")
+            codigo = 1
+    else:
+        motivo = (rescate or vivo)["motivo"]
+        marca_refresco(sesion, url_base, headers, CLAVE_CURSOR_MENORES, False,
+                       error=f"hueco sin recuperar hasta {cursor}: {motivo}")
+        _anota("error", f"FALTAN MENORES: no llegué al corte {cursor} ni en vivo ni con el ZIP "
+                        f"({motivo}). El cursor no avanza: la próxima pasada lo reintenta. Si se "
+                        f"repite, lanza la recuperación de menores_diario.yml para esas fechas.")
+        codigo = 1
+    # Con los menores del día ya dentro, se recalcula la cobertura (hasta qué fecha llega
+    # cada fuente). Si no, la web enseñaría una foto vieja. No es fatal.
+    refrescar_cobertura_menores(sesion, url_base, headers)
+    return codigo
+
+
+# --- Recuperación a mano desde los ZIP (solo inserta lo que falta) ----------
+def normaliza_rango(desde, hasta):
+    """'AAAAMMDD' o 'AAAAMMDD_HHMMSS' -> (desde, hasta) como cortes; 'desde' empieza a las
+    00:00:00 y 'hasta' acaba a las 23:59:59. Lanza ValueError si no tienen esa forma o si
+    'desde' va después de 'hasta'."""
+    def una(valor, final):
+        valor = str(valor or "").strip()
+        if re.fullmatch(r"\d{8}", valor):
+            valor += "_235959" if final else "_000000"
+        if not _RE_CURSOR.match(valor):
+            raise ValueError(f"fecha no válida: {valor!r} (usa AAAAMMDD o AAAAMMDD_HHMMSS)")
+        datetime.strptime(valor, "%Y%m%d_%H%M%S")
+        return valor
+    d, h = una(desde, False), una(hasta, True)
+    if d > h:
+        raise ValueError(f"'desde' ({d}) va después de 'hasta' ({h})")
+    return d, h
+
+
+def periodos_de_rango(desde, hasta):
+    """Meses cuyos ZIP pueden traer cortes entre 'desde' y 'hasta', del más nuevo al más
+    viejo. Un corte del día 1 va en el ZIP del mes anterior."""
+    anio, mes = int(desde[:4]), int(desde[4:6])
+    if desde[6:8] == "01":
+        mes -= 1
+    primero, ultimo = _mes(anio, mes), hasta[:6]
+    periodos = []
+    while primero <= ultimo:
+        periodos.append(primero)
+        anio, mes = int(primero[:4]), int(primero[4:6]) + 1
+        primero = _mes(anio, mes)
+    return list(reversed(periodos))
+
+
+def lee_rango_zip(abrir, periodos, desde, hasta, elector):
+    """Mete en 'elector' las páginas de los ZIP cuyo corte cae entre 'desde' y 'hasta'
+    (ambos incluidos), de la más nueva a la más vieja, cada una una sola vez.
+    abrir(periodo) -> ruta del ZIP o None. Devuelve (paginas leídas, periodos abiertos)."""
+    leidas, abiertos = set(), []
+    for periodo in periodos:
+        ruta = abrir(periodo)
+        if ruta is None:
+            print(f"  AVISO: sin ZIP de {periodo}; si caían cortes ahí, faltarán.")
+            continue
+        abiertos.append(periodo)
+        with zipfile.ZipFile(ruta) as z:
+            miembros = []
+            for n in z.namelist():
+                corte = corte_de(n)
+                if corte and desde <= corte[0] <= hasta and _nombre(n) not in leidas:
+                    miembros.append(((corte[0], -corte[1]), n))
+            for _orden, n in sorted(miembros, reverse=True):
+                elector.mete(entradas_de(z.read(n)), _nombre(n))
+                leidas.add(_nombre(n))
+    return len(leidas), abiertos
+
+
+def _ids_en_base(sesion, url_base, headers, ids, lote=80):
+    """Cuáles de 'ids' están ya en public.menores (consulta en tandas por la PK)."""
+    h = {k: v for k, v in headers.items() if k != "Prefer"}
+    url = f"{url_base}/rest/v1/{TABLA_MENORES}"
+    presentes = set()
+    for i in range(0, len(ids), lote):
+        valores = ",".join('"' + x.replace('"', "") + '"' for x in ids[i:i + lote])
+        params = {"select": "licitacion_id", "licitacion_id": f"in.({valores})"}
+        r = _con_reintentos(lambda: sesion.get(url, headers=h, params=params, timeout=60),
+                            "consultar menores", 4)
+        presentes.update(f["licitacion_id"] for f in r.json())
+    return presentes
+
+
+def menores_recuperar(desde, hasta, escribir=False, descargar=None, en_base=None):
+    """--menores-recuperar DESDE HASTA [--escribir]: recupera los menores de los cortes
+    entre DESDE y HASTA leyendo los ZIP mensuales. Por defecto SIMULA (cuenta y no
+    escribe). Con --escribir SOLO INSERTA los que faltan (resolution=ignore-duplicates):
+    recargar un corte viejo entero pisaría con versiones viejas las filas que se han
+    actualizado después. Pensado para el hueco del 26/09/2026:
+        python backfill_catalogo.py --menores-recuperar 20260901 20260930"""
+    desde, hasta = normaliza_rango(desde, hasta)
+    sesion, headers, _ep, url_base = _preparar_upsert()
+    if not _tabla_menores_lista(sesion, url_base, headers):
+        sys.exit("Recuperación no ejecutada: falta public.menores (menores_schema.sql).")
+    periodos = periodos_de_rango(desde, hasta)
+    print("=" * 78)
+    print(f"MENORES · recuperación desde los ZIP · cortes {desde} a {hasta}")
+    print(f"  ZIP: {', '.join(periodos)}  ·  "
+          + ("ESCRIBE: solo inserta los que faltan." if escribir else "SIMULACIÓN: no escribe nada."))
+    print("=" * 78)
+    elector = EligeMenores()
+    abrir = descargar or (lambda p: _descarga_zip_menores(p))
+    n_paginas, abiertos = lee_rango_zip(abrir, periodos, desde, hasta, elector)
+    ids = list(elector.filas)
+    print(f"  Páginas leídas: {n_paginas:,}  ·  menores distintos: {len(ids):,}")
+    presentes = (en_base or (lambda xs: _ids_en_base(sesion, url_base, headers, xs)))(ids)
+    faltan = [rid for rid in ids if rid not in presentes]
+    importe = sum(float(elector.filas[r].get("importe_sin_iva") or 0) for r in faltan)
+    print(f"  Ya en la base: {len(ids) - len(faltan):,}  ·  FALTAN: {len(faltan):,} "
+          f"({importe:,.2f} € sin IVA)")
+    por_pagina = Counter(elector.origen[r] for r in faltan)
+    for pagina, n in sorted(por_pagina.items()):
+        print(f"    {pagina}: {n:,}")
+    por_anio = Counter(str(elector.filas[r].get("fecha_adjudicacion") or "s/f")[:4] for r in faltan)
+    print(f"  Faltan por año de adjudicación: {dict(sorted(por_anio.items()))}")
+    if not escribir:
+        print("SIMULACIÓN terminada: no se ha escrito nada.")
+        return len(faltan)
+    h = dict(headers)
+    h["Prefer"] = "resolution=ignore-duplicates,return=minimal"
+    endpoint = f"{url_base}/rest/v1/{TABLA_MENORES}?on_conflict=licitacion_id"
+    filas = [elector.filas[r] for r in faltan]
+    for i in range(0, len(filas), 500):
+        _sube_lote(sesion, endpoint, h, filas[i:i + 500])
+    # Una sola consulta de presencia para todos (no una por menor: serían miles).
+    ya_estan = _ids_en_base(sesion, url_base, headers, faltan)
+    quedan = [r for r in faltan if r not in ya_estan]
+    print(f"  Insertados: {len(faltan) - len(quedan):,}  ·  siguen faltando: {len(quedan):,}")
+    refrescar_cobertura_menores(sesion, url_base, headers)
+    return len(quedan)
 
 
 def carga(unidades, limpiar=True, solo_catalogo=False):
@@ -1308,21 +1850,10 @@ def diario(fuentes):
         print(f"  upsert «{feed['fuente']}»: {len(filas):,} filas (acumulado {total:,})"
               f"  ·  adjudicaciones: {n_adj:,}")
 
-    # FASE M: volcado diario de menores del feed en vivo (1143). Independiente del
-    # catálogo (otra tabla, otra fuente); guardado y no fatal (salta si no existe).
-    # El bloque de menores NO puede tumbar la ingesta del catálogo (es otra tabla y otra
-    # fuente): un 4xx suyo dejaba sin correr la purga, el automarcado, competidores y
-    # desiertas. Se avisa y se sigue.
-    try:
-        menores_incremental(sesion, url_base, headers)
-        # Y, con los menores del día ya dentro, se recalcula la cobertura (hasta qué fecha
-        # llega cada fuente). Si no, la web enseñaría la foto del fin de semana de L a V.
-        refrescar_cobertura_menores(sesion, url_base, headers)
-    except SystemExit:
-        raise
-    except Exception as e:  # noqa: BLE001
-        print(f"  AVISO: el bloque de menores falló ({type(e).__name__}: {e}); "
-              f"sigo con el catálogo.")
+    # FASE M: los menores YA NO se cargan aquí. Desde el 22/11/2026 tienen su propio
+    # workflow (menores_diario.yml -> --menores-diario), que corre también en fin de semana
+    # y lee con cursor hasta donde se quedó la pasada anterior. Así un fallo de menores ya
+    # no comparte job con el catálogo, y el job de menores puede acabar en rojo para avisar.
 
     print("=" * 78)
     print(f"Ingesta diaria terminada. Filas upsertadas: {total:,}  ·  adjudicaciones: {total_adj:,}")
@@ -1547,6 +2078,17 @@ def main():
                     help="FASE M: backfill de contratos MENORES (estatal, sind. 1143) a public.menores "
                          "(ventana de 2 años, ~1,1M filas; usa --periodos para trocear). Necesita "
                          "service_role; AVISA del coste. Requiere menores_schema.sql ejecutado.")
+    ap.add_argument("--menores-diario", action="store_true",
+                    help="FASE M: carga diaria de menores estatales con cursor por página "
+                         "fechada; si no llega al cursor, sigue la cadena en el ZIP mensual. "
+                         "Sale con código 1 (job en rojo) si tuvo que tirar del ZIP o falta "
+                         "algo. Lo corre menores_diario.yml.")
+    ap.add_argument("--menores-recuperar", nargs=2, metavar=("DESDE", "HASTA"), default=None,
+                    help="FASE M: recupera de los ZIP mensuales los menores de los cortes entre "
+                         "DESDE y HASTA (AAAAMMDD o AAAAMMDD_HHMMSS). SIMULA salvo con "
+                         "--escribir, y entonces SOLO INSERTA los que faltan.")
+    ap.add_argument("--escribir", action="store_true",
+                    help="Con --menores-recuperar: escribir (solo inserta lo que falta).")
     ap.add_argument("--simular", action="store_true",
                     help="Con --purgar: solo CUENTA lo que se borraría. Con --automarcar: previsualiza (no escribe).")
     ap.add_argument("--ventana-anios", type=int, default=3,
@@ -1599,6 +2141,16 @@ def main():
         refrescar_desiertas_oneshot(args.lote)
     elif args.cargar_menores:
         carga_menores(args.periodos, limpiar=not args.conservar_zip)
+    elif args.menores_diario:
+        sys.exit(menores_diario(limpiar=not args.conservar_zip))
+    elif args.menores_recuperar:
+        try:
+            desde, hasta = normaliza_rango(*args.menores_recuperar)
+        except ValueError as e:
+            sys.exit(f"ERROR en --menores-recuperar: {e}")
+        quedan = menores_recuperar(desde, hasta, escribir=args.escribir)
+        # Simulando, que falten es el resultado esperado; escribiendo, no debe quedar ninguno.
+        sys.exit(1 if (args.escribir and quedan) else 0)
     elif args.purgar:
         purgar(args.ventana_anios, args.simular, args.lote)
     elif args.cargar:

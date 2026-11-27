@@ -1,0 +1,137 @@
+# Menores ESTATALES (sindicación 1143) — carga diaria a public.menores, con cursor.
+#
+# Qué hace: python backfill_catalogo.py --menores-diario
+#   · Lee el feed en vivo hasta llegar al corte que la pasada anterior leyó entero (el
+#     cursor, guardado en public.refrescos, clave menores_diario). Un día normal son 4-5
+#     páginas.
+#   · Si no llega (tope de 20 páginas o fallo de red), sigue la misma cadena de páginas
+#     dentro del ZIP mensual de la 1143, que las guarda todas.
+#   · De cada menor sube su versión más nueva y luego refresca la cobertura de la web.
+#
+# VERDE = leyó en vivo hasta el cursor. ROJO = tuvo que tirar del ZIP (aunque lo
+# recuperara todo: el resumen dice «HUECO RECUPERADO» y no hay que hacer nada) o falta
+# algo («FALTAN MENORES»: el cursor no avanza y la pasada siguiente lo reintenta).
+#
+# POR QUÉ APARTE DEL RADAR: antes esto iba dentro de radar.yml (lunes a viernes). El
+# sábado 26/09/2026 la Plataforma republicó septiembre, no había pasada, y el lunes esas
+# páginas quedaron más allá de la 20: se perdieron 1.143 menores. Aquí corre TODOS los
+# días, y su fallo no comparte job con el catálogo.
+#
+# A MANO (workflow_dispatch): por defecto hace la carga diaria. Rellenando
+# «recuperar_desde» y «recuperar_hasta» hace en su lugar la RECUPERACIÓN de esos cortes
+# desde los ZIP: SIMULA salvo que marques «escribir», y entonces SOLO INSERTA los
+# menores que faltan (nunca pisa los que ya están).
+#
+# El log es PÚBLICO (repo público): el script solo imprime recuentos e importes totales.
+
+name: Menores estatales (diario)
+
+on:
+  schedule:
+    # Todos los días. Fuera del minuto 0 y de la hora del Radar (23 5 * * 1-5): GitHub
+    # retrasa los programados de este repo varias horas y la espera de abajo evita
+    # escribir a la vez que la ingesta del catálogo en el Micro.
+    - cron: "41 4 * * *"
+  workflow_dispatch:
+    inputs:
+      recuperar_desde:
+        description: "RECUPERACIÓN: primer día de los cortes a recuperar (AAAAMMDD). Vacío = carga diaria normal."
+        required: false
+        default: ""
+      recuperar_hasta:
+        description: "RECUPERACIÓN: último día (AAAAMMDD)."
+        required: false
+        default: ""
+      escribir:
+        description: "RECUPERACIÓN: escribir (solo inserta los que faltan). Sin marcar, SIMULA."
+        required: false
+        type: boolean
+        default: false
+
+# Dos pasadas a la vez leerían el mismo cursor y la segunda repetiría trabajo. NO se
+# comparte el grupo 'pages' del Radar: GitHub cancela los pendientes de un mismo grupo.
+concurrency:
+  group: menores-estatal
+  cancel-in-progress: false
+
+jobs:
+  menores:
+    runs-on: ubuntu-latest
+    # Un día normal tarda 1-2 min. Con hueco, baja uno o dos ZIP de ~25-50 MB.
+    timeout-minutes: 120
+    # Solo lee: el repo (checkout) y la lista de ejecuciones de otros workflows (paso de
+    # espera). Las credenciales van por secrets.
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar librerías
+        run: pip install -r requirements.txt
+
+      # Misma cortesía que menores_autonomicos.yml: no escribir a la vez que el Radar
+      # (ingesta del catálogo) o un backfill. 18 vueltas de 5 min = 90 min, más que el
+      # Radar más largo medido (85 min). Si gh no responde, se avisa y se sigue.
+      - name: Esperar a que no corra el Radar ni un backfill
+        if: github.event_name == 'schedule' || inputs.recuperar_desde == '' || inputs.escribir
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for vuelta in $(seq 1 18); do
+            ocupados=0
+            for wf in radar.yml backfill.yml; do
+              for st in in_progress queued; do
+                if ! n=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$wf" --status "$st" \
+                           --limit 5 --json databaseId --jq 'length' 2>/dev/null); then
+                  echo "AVISO: no pude consultar $wf ($st); sigo sin esperar."
+                  n=0
+                fi
+                ocupados=$((ocupados + n))
+              done
+            done
+            if [ "$ocupados" -eq 0 ]; then
+              echo "Ni Radar ni backfill en marcha: adelante."
+              exit 0
+            fi
+            echo "Radar o backfill en marcha ($ocupados); espero 5 min (vuelta $vuelta de 18)."
+            sleep 300
+          done
+          echo "Tras 90 min siguen el Radar o un backfill: no cargo a la vez. Relánzalo después." >&2
+          exit 1
+
+      - name: Cargar menores estatales
+        env:
+          # Vienen de los SECRETS del repo. GitHub los enmascara en el log.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+          EVENTO: ${{ github.event_name }}
+          DESDE: ${{ inputs.recuperar_desde }}
+          HASTA: ${{ inputs.recuperar_hasta }}
+          ESCRIBIR: ${{ inputs.escribir }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE" ]; then
+            echo "Faltan los secrets SUPABASE_URL y/o SUPABASE_SERVICE_ROLE." >&2
+            exit 1
+          fi
+          # En los programados no hay inputs: siempre la carga diaria.
+          if [ "$EVENTO" = "schedule" ] || [ -z "$DESDE" ]; then
+            echo "Ejecutando: python backfill_catalogo.py --menores-diario"
+            python backfill_catalogo.py --menores-diario
+            exit $?
+          fi
+          if [ -z "$HASTA" ]; then
+            echo "Para recuperar hacen falta las dos fechas (recuperar_desde y recuperar_hasta)." >&2
+            exit 1
+          fi
+          # Las fechas las valida el script (AAAAMMDD); van entre comillas, nunca sueltas.
+          args=(--menores-recuperar "$DESDE" "$HASTA")
+          if [ "$ESCRIBIR" = "true" ]; then args+=(--escribir); fi
+          echo "Ejecutando: python backfill_catalogo.py ${args[*]}"
+          python backfill_catalogo.py "${args[@]}"
